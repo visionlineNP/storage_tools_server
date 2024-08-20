@@ -1,0 +1,89 @@
+#
+# Storage Tools Config file 
+# 
+
+# ----------------------------------------------
+# Required updates
+# ----------------------------------------------
+
+# set server name to a unique id
+source: server_name
+
+# Set the upload_dir to a path that is read/write for
+# the user running the server.  
+# When running as Docker, make sure the docker user
+# has read/write permissions for the directory
+upload_dir: "/media/norm/Extreme SSD/uploads/"
+
+
+# ----------------------------------------------
+# Optional updates
+# ----------------------------------------------
+
+# The port that the server will run on
+port: 8091
+
+# How many parallel processing threads to run per connection at a time. 
+threads: 4
+
+# Preloads the database with project, robot names and sites.
+# This is optional because the Config interface will allow 
+# for the addition of new entries. 
+projects:
+ - chiron
+ - dsta
+
+robots:
+ - RC_car
+ - wheelchair
+ - spot
+
+sites:
+ - data_workshop
+ - sqi
+ - shelter
+
+
+# ----------------------------------------------
+# Server Optional updates
+# ----------------------------------------------
+
+# The access keys for each device and server
+# This will be replaced with some other mechanism
+# in the future.  
+keys:
+  "device_1_key_101201" : "Device 1"
+  "device_2_key_Af1180" : "Device 2"
+  "server_1_key_asfaa9" : "Server 1"
+  "server_2_key_@#$%as" : "Server 2"
+  "reporter_1_key_&%$#" : "Report 1"
+  "node_1_key_&%$#" : "Node 1"
+  "user_key_1234" : "admin"
+  "airlib_share_01_key_*a$1@f": "Airlab Share 01"
+
+
+# ----------------------------------------------
+# Remote mode configuration
+# ----------------------------------------------
+
+# Look for the main servers at these address
+# Can be a host name, or a remote tunnel
+# Uncomment when running this server in the field
+# or when syncing with main server
+
+# remote:
+#   - "airlab-share-01.andrew.cmu.edu:8091"
+#   - "localhost:8092"
+
+# The server key to use when acting as remote
+# uncomment the next line and set it to the 
+# correct API key.  
+
+# API_KEY_TOKEN: "server_1_key_asfaa9"
+
+
+
+
+
+# # how long to wait before checking again
+# wait_s: 2
