@@ -8,10 +8,10 @@ import time
 
 class SocketIOTQDM(tqdm):
     def __init__(self, *args, **kwargs):
-        self.room = kwargs.pop('room', None)
-        self.event = kwargs.pop('event', 'progress_update')
-        self.sio = kwargs.pop('socket', None)
-        self.source = kwargs.pop('source', None)
+        self.room = kwargs.pop("room", None)
+        self.event = kwargs.pop("event", "progress_update")
+        self.sio = kwargs.pop("socket", None)
+        self.source = kwargs.pop("source", None)
         self.position = kwargs.get("position", None)
         self.emit_interval = kwargs.get("emit_interval", 1)
         self.last_emit_time = time.time()
@@ -23,7 +23,7 @@ class SocketIOTQDM(tqdm):
                 "desc": self.desc,
                 "progress": self.n,
                 "total": self.total,
-                "position": self.position
+                "position": self.position,
             }
 
             try:
@@ -65,7 +65,7 @@ class SocketIOTQDM(tqdm):
             "total": self.total,
             "position": self.position,
             "rate": humanfriendly.format_size(rate) + "/S",
-            "remaining": remaining
+            "remaining": remaining,
         }
 
         try:
@@ -89,5 +89,5 @@ class SocketIOTQDM(tqdm):
             else:
                 self.sio.emit(self.event, msg)
         except socketio.exceptions.BadNamespaceError as e:
-            # got disconnected.  
+            # got disconnected.
             pass

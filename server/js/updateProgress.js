@@ -63,7 +63,7 @@ function updateProgress(msg, container) {
   if (!sourceDiv) {
     sourceDiv = document.createElement('div');
     sourceDiv.id = 'source_' + source;
-    sourceDiv.className = "card-body"
+    // sourceDiv.className = "card-body"
     statusContainer.appendChild(sourceDiv);
   }
 
