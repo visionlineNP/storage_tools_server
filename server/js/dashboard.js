@@ -40,6 +40,12 @@ $(document).ready(function () {
     updateDeviceStatus(data);
   });
 
+  socket.on('device_revise_stats', function(data) {
+    $.each(data, function( source_name, stats) {
+      updateDeviceStats(source_name, stats);
+    })
+  })
+
   socket.on('device_status_tqdm', function (msg) {
     updateProgress(msg, 'device-status-tqdm');
   });

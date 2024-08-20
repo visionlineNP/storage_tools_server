@@ -1157,6 +1157,7 @@ def handle_file(source: str, upload_id: str):
         socketio.emit("dashboard_file", data)
 
     g_remote_entries[source][upload_id]["localpath"] = filepath
+    g_remote_entries[source][upload_id]["on_server"] = True
 
     metadata_filename = filepath + ".metadata"
     with open(metadata_filename, "w") as fid:
@@ -1166,8 +1167,29 @@ def handle_file(source: str, upload_id: str):
     g_database.estimate_runs()
     g_database.commit()
     send_server_data()
+    device_revise_stats()
 
     return jsonify({"message": f"File {filename} chunk uploaded successfully"})
+
+
+def device_revise_stats():
+    stats = {}
+
+    for source in g_remote_entries:
+        if source in g_sources["devices"]:
+            stats[source] = {
+                "total_size": 0,
+                "count": 0,
+                "start_datetime": None,
+                "end_datetime": None,
+                "datatype": {},
+                "on_server_size": 0,
+                "on_server_count": 0,
+            }
+            for uid in g_remote_entries[source]:
+                update_stat(source, uid, stats[source])
+
+    socketio.emit( "device_revise_stats", stats )
 
 
 def send_device_data():
@@ -1197,7 +1219,20 @@ def send_device_data():
                 ][date].get(relpath, [])
                 device_data[source]["entries"][date][relpath].append(entry)
 
-                device_data[source]["stats"] = device_data[source].get("stats", {})
+                device_data[source]["stats"] = device_data[source].get(
+                    "stats",
+                    {
+                        "total": {
+                            "total_size": 0,
+                            "count": 0,
+                            "start_datetime": None,
+                            "end_datetime": None,
+                            "datatype": {},
+                            "on_server_size": 0,
+                            "on_server_count": 0,
+                        }
+                    },
+                )
                 device_data[source]["stats"][date] = device_data[source]["stats"].get(
                     date,
                     {
@@ -1211,48 +1246,66 @@ def send_device_data():
                     },
                 )
 
-                size = g_remote_entries[source][uid]["size"]
-                start_time = g_remote_entries[source][uid]["start_datetime"]
-                end_time = g_remote_entries[source][uid]["end_datetime"]
-                datatype = g_remote_entries[source][uid]["datatype"]
-
-                stat = device_data[source]["stats"][date]
-                stat["total_size"] += size
-                stat["htotal_size"] = humanfriendly.format_size(stat["total_size"])
-                stat["count"] += 1
-
-                if stat["start_datetime"]:
-                    stat["start_datetime"] = min(start_time, stat["start_datetime"])
-                else:
-                    stat["start_datetime"] = start_time
-
-                if stat["end_datetime"]:
-                    stat["end_datetime"] = max(end_time, stat["end_datetime"])
-                else:
-                    stat["end_datetime"] = end_time
-
-                duration = datetime.strptime(
-                    stat["end_datetime"], "%Y-%m-%d %H:%M:%S"
-                ) - datetime.strptime(stat["start_datetime"], "%Y-%m-%d %H:%M:%S")
-                assert isinstance(duration, timedelta)
-                stat["duration"] = duration.seconds
-                stat["hduration"] = humanfriendly.format_timespan(duration.seconds)
-
-                stat["datatype"][datatype] = stat["datatype"].get(
-                    datatype, {"total_size": 0, "count": 0}
-                )
-                stat["datatype"][datatype]["total_size"] += size
-                stat["datatype"][datatype]["htotal_size"] = humanfriendly.format_size(
-                    stat["datatype"][datatype]["total_size"]
-                )
-
-                stat["datatype"][datatype]["count"] += 1
-
-                device_data[source]["stats"][date] = stat
+                update_stat(source, uid, device_data[source]["stats"][date])
+                update_stat(source, uid, device_data[source]["stats"]["total"])
 
     debug_print("send_device_data")
     # debug_print(json.dumps(device_data, indent=True))
     socketio.emit("device_data", device_data)
+
+
+def update_stat(source, uid, stat):
+    filename = get_file_path(source, uid)
+    on_server = os.path.exists(filename)
+
+    size = g_remote_entries[source][uid]["size"]
+    start_time = g_remote_entries[source][uid]["start_datetime"]
+    end_time = g_remote_entries[source][uid]["end_datetime"]
+    datatype = g_remote_entries[source][uid]["datatype"]
+
+    stat["total_size"] += size
+    stat["htotal_size"] = humanfriendly.format_size(stat["total_size"])
+    stat["count"] += 1
+
+    if on_server:
+        stat["on_server_size"] += size
+        stat["on_server_count"] += 1
+
+    stat["on_server_hsize"] = humanfriendly.format_size(stat["on_server_size"])
+
+    if stat["start_datetime"]:
+        stat["start_datetime"] = min(start_time, stat["start_datetime"])
+    else:
+        stat["start_datetime"] = start_time
+
+    if stat["end_datetime"]:
+        stat["end_datetime"] = max(end_time, stat["end_datetime"])
+    else:
+        stat["end_datetime"] = end_time
+
+    duration = datetime.strptime(
+        stat["end_datetime"], "%Y-%m-%d %H:%M:%S"
+    ) - datetime.strptime(stat["start_datetime"], "%Y-%m-%d %H:%M:%S")
+    assert isinstance(duration, timedelta)
+    stat["duration"] = duration.seconds
+    stat["hduration"] = humanfriendly.format_timespan(duration.seconds)
+
+    stat["datatype"][datatype] = stat["datatype"].get(
+        datatype,
+        {"total_size": 0, "count": 0, "on_server_size": 0, "on_server_count": 0},
+    )
+    stat["datatype"][datatype]["total_size"] += size
+    stat["datatype"][datatype]["htotal_size"] = humanfriendly.format_size(
+        stat["datatype"][datatype]["total_size"]
+    )
+    stat["datatype"][datatype]["count"] += 1
+
+    if on_server:
+        stat["datatype"][datatype]["on_server_size"] += size
+        stat["datatype"][datatype]["on_server_count"] += 1
+    stat["datatype"][datatype]["on_server_hsize"] = humanfriendly.format_size(
+        stat["datatype"][datatype]["on_server_size"]
+    )
 
     # on_device_status({"source": source})
 

@@ -105,6 +105,9 @@ function updateDeviceData(data) {
 
   source_tabs = create_tabs(source_names, container, "devices");
 
+  // save the source tabs to allow for easy updating. 
+  window.source_tabs = source_tabs;
+
   $.each(source_tabs, function (source_name, source_tab) {
     const source_item = data[source_name];
 
@@ -155,6 +158,9 @@ function updateDeviceData(data) {
       listItem.innerHTML = `${info[0]} : <b>${info[1]}%</b> free`;
       fs_info_list.appendChild(listItem);
     });
+
+    // display top level stats
+    updateDeviceStats(source_name, source_item.stats["total"]);
 
     // create to level global buttons 
     {
@@ -273,19 +279,20 @@ function updateDeviceData(data) {
       duration = stats["hduration"];
       total_size = stats["htotal_size"];
 
+      
       let stats_ul = document.createElement("ul");
       ymd_stats_col_1.appendChild(stats_ul)
 
       let li = document.createElement("li");
-      li.innerHTML = "<b>start</b>: " + start_time;
+      li.innerHTML = "<b>Start</b>: " + start_time;
       stats_ul.appendChild(li);
 
       li = document.createElement("li");
-      li.innerHTML = "<b>duration</b>: " + duration;
+      li.innerHTML = "<b>Duration</b>: " + duration;
       stats_ul.appendChild(li);
 
       li = document.createElement("li");
-      li.innerHTML = "<b>size</b>: " + total_size
+      li.innerHTML = "<b>Size</b>: " + total_size
       stats_ul.appendChild(li);
 
       let dtable = document.createElement("table");
@@ -684,5 +691,85 @@ function updateDeviceData(data) {
   $('[data-bs-toggle="tooltip"]').tooltip();
 
 
+}
+
+function updateDeviceStats(source_name, stats) {
+  const source_tab = window.source_tabs[source_name];
+
+  let div = document.getElementById(source_name + "_device_file_stats");
+
+  if (div == null) {
+    div = document.createElement("div");
+    div.id = source_name + "_device_file_stats";
+    source_tab.append(div);
+  } else {
+    div.innerHTML = "";
+  }
+
+  const dtable = document.createElement("table");
+  div.appendChild(dtable);
+
+  dtable.className = "table table-striped";
+
+  let dhead = document.createElement("thead");
+  dtable.appendChild(dhead);
+
+  let drow = document.createElement("tr");
+  dhead.appendChild(drow);
+
+
+  drow.appendChild(document.createElement("td"));
+
+  let td = document.createElement("td");
+  drow.appendChild(td);
+  td.innerHTML = "Total";
+
+  datatypes = Object.entries(stats["datatype"]);
+  datatypes.sort((a, b) => a[0].localeCompare(b[0]));
+
+  for ([datatype_name, _] of datatypes) {
+    let td = document.createElement("td");
+    drow.appendChild(td);
+    td.innerHTML = datatype_name;
+  }
+
+  let dbody = document.createElement("tbody");
+  dtable.appendChild(dbody);
+
+  drow = document.createElement("tr");
+  dbody.appendChild(drow);
+
+  td = document.createElement("td");
+  td.innerHTML = "<b>Size</b>";
+  drow.appendChild(td);
+
+  td = document.createElement("td");
+
+  td.innerHTML = stats["on_server_hsize"] + " / " + stats["htotal_size"];
+  drow.appendChild(td);
+
+  for ([_, datatype_entry] of datatypes) {
+    let td = document.createElement("td");
+    drow.appendChild(td);
+    td.innerHTML = datatype_entry["on_server_hsize"] + " / " + datatype_entry["htotal_size"];
+  }
+
+  drow = document.createElement("tr");
+  dbody.appendChild(drow);
+
+  td = document.createElement("td");
+  td.innerHTML = "<b>Count</b>";
+  drow.appendChild(td);
+
+  td = document.createElement("td");
+  td.innerHTML = stats["on_server_count"] + " / " + stats["count"];
+  drow.appendChild(td);
+
+
+  for ([_, datatype_entry] of datatypes) {
+    let td = document.createElement("td");
+    drow.appendChild(td);
+    td.innerHTML = datatype_entry["on_server_count"] + " / " + datatype_entry["count"];
+  }
 }
 
