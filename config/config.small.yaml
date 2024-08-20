@@ -1,0 +1,41 @@
+port: 8091
+
+threads: 4
+
+remote:
+  - "airlab-share-01.andrew.cmu.edu:8091"
+  - "localhost:8092"
+
+# how long to wait before checking again
+wait_s: 2
+
+keys:
+  "device_1_key_101201" : "Device 1"
+  "device_2_key_Af1180" : "Device 2"
+  "server_1_key_asfaa9" : "Server 1"
+  "server_2_key_@#$%as" : "Server 2"
+  "reporter_1_key_&%$#" : "Report 1"
+  "node_1_key_&%$#" : "Node 1"
+  "user_key_1234" : "admin"
+  "airlib_share_01_key_*a$1@f": "Airlab Share 01"
+
+
+projects:
+ - chiron
+ - dsta
+
+robots:
+ - RC_car
+ - wheelchair
+ - spot
+
+sites:
+ - data_workshop
+ - sqi
+ - shelter
+
+source: remote_server
+
+API_KEY_TOKEN: "server_1_key_asfaa9"
+
+upload_dir: "/media/norm/Extreme SSD/uploads_small/"

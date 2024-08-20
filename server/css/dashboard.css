@@ -1,0 +1,166 @@
+body {
+    font-family: Arial, sans-serif;
+}
+
+.sidebar {
+    height: 100vh;
+    width: 200px;
+    background-color: #f0f0f0;
+    padding: 20px;
+    border-right: 1px solid #ddd;
+}
+
+.main-content {
+    padding: 20px;
+}
+
+.btn-group {
+    flex-grow: 0;
+    /* Prevents flex items from growing */
+    flex-shrink: 0;
+    /* Prevents flex items from shrinking */
+}
+
+.btn-group button {
+    width: fit-content;
+    /* Ensures button width is based on its text content */
+    padding: 5px 15px;
+    /* Adjust padding to ensure buttons are not too large or small */
+}
+
+#connection_status {
+    padding: 0.5em;
+    color: white;
+    background-color: green;
+    /* Default to 'online' status */
+    flex-grow: 0;
+}
+
+#connection_status.offline {
+    background-color: red;
+    /* Changes background color to red if offline */
+    flex-grow: 0;
+}
+
+#logoff-button {
+    align-items: center;
+}
+
+.btn-group * {
+    flex-shrink: 0;
+    /* Prevents shrinking */
+    margin: 0;
+    /* Reset margin */
+}
+
+.btn-group input[type="checkbox"] {
+    margin-right: 4px;
+    /* Small margin right to the checkbox */
+}
+
+.btn-group label {
+    display: flex;
+    align-items: center;
+    /* Aligns the label text with the checkbox vertically */
+}
+
+.btn-group button {
+    padding: 5px 10px;
+    /* Adequate padding */
+}
+
+#connection_status {
+    padding: 5px 10px;
+    color: black;
+    background-color: white;
+    /* 'Online' status */
+    text-align: center;
+    border-radius: 5px;
+    /* Rounded corners for aesthetics */
+    border: none;
+    /* No border for a flat appearance */
+    cursor: default;
+    /* Default cursor to indicate non-interactivity */
+    box-shadow: none;
+    /* No shadow to flatten the appearance */
+}
+
+#connection_status.offline {
+    color: red;
+    background-color: white;
+    /* 'Online' status */
+}
+
+
+
+
+.progress-container {
+    margin-bottom: 10px;
+}
+
+.progress-text {
+    margin-bottom: 5px;
+    color: #000;
+}
+
+.dropdown {
+    display: inline-block;
+    position: relative;
+}
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    background-color: #f9f9f9;
+    box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+}
+
+.dropdown-menu span {
+    color: black;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+}
+
+.dropdown-menu span:hover {
+    background-color: #f1f1f1;
+}
+
+.dropdown:hover .dropdown-menu {
+    display: block;
+}
+
+.dropdown-menu .dropdown-menu {
+    left: 100%;
+    top: 0;
+    margin-left: 1px;
+}
+
+.dropdown-item.dropdown-toggle::after {
+    content: '\25B6';
+    float: right;
+}
+
+dt {
+    font-weight: bold;
+}
+
+dd {
+    margin-left: 2em;
+    /* indent the dd element */
+}
+
+.grayed-out {
+    opacity: 0.33; /* Gray out by reducing opacity */
+}
+
+.tooltip {
+    max-width: none;
+    width: fit-content; 
+}
+
+.bs-tooltip-auto[data-popper-placement^="right"],
+.bs-tooltip-auto[data-popper-placement^="left"] {
+    width: fit-content;
+}

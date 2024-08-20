@@ -1,0 +1,10 @@
+pyjwt
+hvac
+xmltodict
+pyyaml
+tqdm
+requests_toolbelt
+flask
+flask-socketio 
+humanfriendly
+zeroconf
