@@ -8,3 +8,5 @@ flask
 flask-socketio 
 humanfriendly
 zeroconf
+gunicorn
+gevent

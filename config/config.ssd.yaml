@@ -15,6 +15,22 @@ source: server_name
 # has read/write permissions for the directory
 upload_dir: "/media/norm/Extreme SSD/uploads/"
 
+# production should just be "/"
+volume_root: "/media/norm/Extreme SSD/uploads/"
+
+
+volume_map: 
+  aerialmanipulation: /volume1/aerialmanipulation/datasets
+  aist: /volume5/aist/datasets
+  asnr: /volume6/asnr/datasets
+  chiron: /volume3/chiron/datasets
+  dsta: /volume4/dsta/datasets
+  icwerx: /volume5/icwerx/datasets
+  multidronecoordination: /volume6/multidronecoordination/datasets
+  offroad: /volume3/offroad/datasets
+  wildfire: /volume3/wildfire/datasets
+
+
 
 # ----------------------------------------------
 # Optional updates

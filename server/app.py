@@ -16,28 +16,17 @@ from flask_socketio import SocketIO, disconnect, join_room, leave_room
 import os
 import yaml
 import json
-from debug_print import debug_print
-from speed import FileSpeedEstimate
-from database import Database, get_upload_id
+from .debug_print import debug_print
+from .speed import FileSpeedEstimate
+from .database import Database, get_upload_id
 import argparse
 import humanfriendly
 from zeroconf import Zeroconf, ServiceInfo
 import socket
 import fcntl
 import struct
-from remoteConnection import RemoteConnection
+from .remoteConnection import RemoteConnection
 
-
-parser = argparse.ArgumentParser()
-parser.add_argument(
-    "-c",
-    "--config",
-    type=str,
-    required=False,
-    default="config.yaml",
-    help="Config file for this instance",
-)
-args = parser.parse_args()
 
 
 # prepare the app
@@ -94,12 +83,14 @@ g_upload_dir = None
 g_database = None
 
 
-config_filename = args.config
+# config_filename = args.config
+config_filename = os.environ.get("CONFIG", "config/config.yaml")
+
 debug_print(f"Using {config_filename}")
 with open(config_filename, "r") as f:
     g_config = yaml.safe_load(f)
 
-    debug_print(json.dumps(g_config, indent=True))
+#     debug_print(json.dumps(g_config, indent=True))
 
     g_upload_dir = g_config["upload_dir"]
     os.makedirs(g_upload_dir, exist_ok=True)
@@ -108,7 +99,8 @@ with open(config_filename, "r") as f:
 
     # this is optional. We can preload projects, sites, and robots
     # based on the config.
-    for project_name in g_config.get("projects", []):
+    for project_name in sorted(g_config.get("volume_map", [])):
+    # for project_name in g_config.get("projects", []):
         g_database.add_project(project_name, "")
 
     for robot_name in g_config.get("robots", []):
@@ -1005,16 +997,16 @@ def get_file_path(source: str, upload_id: str) -> str:
     Returns:
     str: The full path of the file.
     """
-    project = g_remote_entries[source][upload_id].get("project", None)
-    project = project if project else "None"
-    date = g_remote_entries[source][upload_id]["datetime"].split()[0]
+    project = g_remote_entries[source][upload_id].get("project")
+    root = g_config.get("volume_root", "/")
+    volume = g_config["volume_map"].get(project).strip("/")
 
     relpath = g_remote_entries[source][upload_id]["relpath"]
     filename = g_remote_entries[source][upload_id]["basename"]
     try:
-        filedir = os.path.join(g_upload_dir, project, date, relpath)
+        filedir = os.path.join(root, volume, relpath)
     except TypeError as e:
-        debug_print((g_upload_dir, project, date, relpath))
+        debug_print((root, volume, relpath))
         raise e
 
     filepath = os.path.join(filedir, filename)
@@ -1356,6 +1348,11 @@ def send_report_node_data():
     socketio.emit("report_node_data", msg)
 
 
+setup_zeroconf()
+
+
+# run with CONFIG=$PWD/config/config.ssd.yaml gunicorn -k gevent -w 1 -b "0.0.0.0:8091" "server.app:app"
+
 if __name__ == "__main__":
-    setup_zeroconf()
-    app.run(debug=False, host="0.0.0.0", port=g_config["port"])
+    debug_print("enter")
+    socketio.run(debug=False, host="0.0.0.0", port=g_config["port"])

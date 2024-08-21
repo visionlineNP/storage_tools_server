@@ -4,9 +4,9 @@ import socketio
 import queue 
 import requests
 from threading import Thread
-from database import Database, get_upload_id
-from SocketIOTQDM import SocketIOTQDM
-from debug_print import debug_print
+from .database import Database, get_upload_id
+from .SocketIOTQDM import SocketIOTQDM
+from .debug_print import debug_print
 
 
 def count_elements(d):

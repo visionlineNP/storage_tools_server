@@ -3,20 +3,12 @@ services:
   storage_tools_server:
     build:
       context: .
-      args:
-        CUSTOM_UID: ${CUSTOM_UID}
-        CUSTOM_GID: ${CUSTOM_GID}
-        CUSTOM_USERNAME: ${CUSTOM_USERNAME}
+      network: host
     image: storage_tools_server
     container_name: storage_tools_server
     network_mode: host
-    environment:
-      - CUSTOM_UID=${CUSTOM_UID}
-      - CUSTOM_GID=${CUSTOM_GID}
-      - CUSTOM_USERNAME=${CUSTOM_USERNAME}
     volumes:
-      - ${UPLOAD_DIR}:${UPLOAD_DIR}
-      - ${CONFIG_FILE}:/home/${CUSTOM_USERNAME}/app/config/config.yaml
+      - ${UPLOAD_DIR}:/mnt/uploads
     tty: true
     stdin_open: true
     restart: always
