@@ -7,7 +7,7 @@
 # ----------------------------------------------
 
 # set server name to a unique id
-source: server_name
+source: home_server
 
 # Set the upload_dir to a path that is read/write for
 # the user running the server.  
@@ -87,15 +87,15 @@ keys:
 # Uncomment when running this server in the field
 # or when syncing with main server
 
-# remote:
-#   - "airlab-share-01.andrew.cmu.edu:8091"
+remote:
+  - "airlab-share-02.andrew.cmu.edu:8091"
 #   - "localhost:8092"
 
 # The server key to use when acting as remote
 # uncomment the next line and set it to the 
 # correct API key.  
 
-# API_KEY_TOKEN: "server_1_key_asfaa9"
+API_KEY_TOKEN: "server_1_key_asfaa9"
 
 
 
