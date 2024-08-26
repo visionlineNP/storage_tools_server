@@ -88,7 +88,7 @@ class RemoteConnection:
 
         except Exception as e:
             if self.m_verbose:
-                debug_print(e)
+                debug_print(f"Caught error {e}")
         return rtn
 
     def _on_connect(self):

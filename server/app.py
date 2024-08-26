@@ -32,7 +32,11 @@ from .remoteConnection import RemoteConnection
 # prepare the app
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "AirLabKeyKey"
-socketio = SocketIO(app)
+hostname=os.environ["HOSTNAME"]
+
+origins = [f"http://{hostname}:8091", f"http://{hostname}.andrew.cmu.edu:8091"]
+debug_print(origins)
+socketio = SocketIO(app, cors_allowed_origins=origins)
 
 
 # global variables.
@@ -188,6 +192,7 @@ def on_leave(data):
 def on_connect():
     # debug_print(session.get('api_key_token'))
 
+    debug_print("Connection")
     auth_header = request.headers.get("Authorization")
     if auth_header:
         debug_print(auth_header)
@@ -202,13 +207,15 @@ def on_connect():
             else:
                 debug_print("Invalid token")
                 return "Invalid API key token", 401
+        elif auth_type.lower() == "basic":
+            pass
         else:
             disconnect()
 
     debug_print("Client connected")
     send_all_data()
 
-
+    
 def send_all_data():
     send_device_data()
     send_node_data()
@@ -264,6 +271,12 @@ def on_disconnect():
         debug_print(f"Got disconnect: {remove}")
 
 
+@socketio.on("keep_alive")
+def on_keep_alive():
+    # just keeping aliving.
+    debug_print("alive")
+    pass 
+        
 @socketio.on("control_msg")
 def on_control_msg(data):
     source = data.get("source")
@@ -741,6 +754,8 @@ def on_debug_scan_server():
 # authenticate
 @app.before_request
 def authenticate():
+    # debug_print(request)
+    
     # Check if the current request is for the login page
     if request.endpoint == "show_login_form" or request.endpoint == "login":
         debug_print(request.endpoint)
@@ -757,10 +772,13 @@ def authenticate():
             if validate_api_key_token(api_key_token):
                 session["api_key_token"] = api_key_token
             else:
-                return "Invalid API key token", 401
+                return "Invalid API key token", 402
+        elif auth_type.lower() == "basic":
+            return
         else:
-            return "Unauthorized", 401
+            return "Unauthorized", 403
     else:
+        return 
         # Second, check for cookies for dashboard authentication
         username = request.cookies.get("username")
         password = request.cookies.get("password")
@@ -1315,6 +1333,8 @@ def send_server_data():
 
     stats = g_database.get_run_stats()
     update_fs_info()
+
+    debug_print(g_config.get("remote", []))
 
     server_data = {
         "entries": data,

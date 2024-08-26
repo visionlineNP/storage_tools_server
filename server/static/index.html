@@ -289,20 +289,21 @@
 
     <script type="text/javascript" charset="utf-8">
 
-        let username = getCookie('username')
-        let api_key = getCookie('api_key_token');
-        console.log("api_key:", api_key, ", Username: ", username);
+      var socket = io.connect('http://' + document.domain + ':' + location.port);
+      //  let username = getCookie('username')
+     //  let api_key = getCookie('api_key_token');
+     //  console.log("api_key:", api_key, ", Username: ", username);
 
-
-        var socket = io.connect('http://' + document.domain + ':' + location.port, {
-            transportOptions: {
-                polling: {
-                    extraHeaders: {
-                        "Authorization": 'Bearer ' + api_key
-                    }
-                }
-            }
-        });
+      
+       // var socket = io.connect('http://' + document.domain + ':' + location.port, {
+       //     transportOptions: {
+       //         polling: {
+       //             extraHeaders: {
+       //                 "Authorization": 'Bearer ' + api_key
+       //             }
+       //         }
+       //     }
+       // });
 
     </script>
 </body>
