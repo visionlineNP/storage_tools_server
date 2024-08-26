@@ -26,13 +26,17 @@ import socket
 import fcntl
 import struct
 from .remoteConnection import RemoteConnection
-
+import jwt
 
 
 # prepare the app
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "AirLabKeyKey"
-socketio = SocketIO(app)
+hostname=os.environ["HOSTNAME"]
+
+origins = [f"http://{hostname}:8091", f"http://{hostname}.andrew.cmu.edu:8091"]
+debug_print(origins)
+socketio = SocketIO(app, cors_allowed_origins=origins)
 
 
 # global variables.
@@ -153,6 +157,17 @@ def setup_zeroconf():
 
     zeroconf.register_service(info)
 
+## 
+# user auth token 
+## 
+def generate_token(user):
+    payload = {
+        'user': user,
+        'iss': 'storage_tool_server',
+    }
+    return jwt.encode(payload, app.config["SECRET_KEY"], algorithm='HS256')
+
+
 
 ###############################################################################
 # socket io connectons
@@ -188,6 +203,7 @@ def on_leave(data):
 def on_connect():
     # debug_print(session.get('api_key_token'))
 
+    debug_print("Connection")
     auth_header = request.headers.get("Authorization")
     if auth_header:
         debug_print(auth_header)
@@ -202,13 +218,15 @@ def on_connect():
             else:
                 debug_print("Invalid token")
                 return "Invalid API key token", 401
+        elif auth_type.lower() == "basic":
+            pass
         else:
             disconnect()
 
     debug_print("Client connected")
     send_all_data()
 
-
+    
 def send_all_data():
     send_device_data()
     send_node_data()
@@ -264,6 +282,12 @@ def on_disconnect():
         debug_print(f"Got disconnect: {remove}")
 
 
+@socketio.on("keep_alive")
+def on_keep_alive():
+    # just keeping aliving.
+    debug_print("alive")
+    pass 
+        
 @socketio.on("control_msg")
 def on_control_msg(data):
     source = data.get("source")
@@ -741,10 +765,13 @@ def on_debug_scan_server():
 # authenticate
 @app.before_request
 def authenticate():
+    # debug_print(request)
+    
     # Check if the current request is for the login page
     if request.endpoint == "show_login_form" or request.endpoint == "login":
         debug_print(request.endpoint)
         return  # Skip authentication for login page to avoid loop
+
 
     auth_header = request.headers.get("Authorization")
     if auth_header:
@@ -757,11 +784,32 @@ def authenticate():
             if validate_api_key_token(api_key_token):
                 session["api_key_token"] = api_key_token
             else:
-                return "Invalid API key token", 401
+                return "Invalid API key token", 402
+        elif auth_type.lower() == "basic":
+
+            user = request.headers.get('X-Authenticated-User')  # Header set by Nginx after LDAP auth
+            if not user:
+                return jsonify({'error': 'Unauthorized'}), 401
+
+            # Generate a token for the authenticated user
+            token = generate_token(user)
+
+
+            response = make_response()
+            response.set_cookie(
+                "username", user
+            )  
+            response.set_cookie(
+                "token", token, 
+            )  
+
         else:
-            return "Unauthorized", 401
+            return jsonify({'error': 'Unauthorized'}), 401
+
     else:
-        # Second, check for cookies for dashboard authentication
+        if g_config.get("use_ldap", True):
+            return jsonify({'error': 'Unauthorized'}), 401
+
         username = request.cookies.get("username")
         password = request.cookies.get("password")
         if username and password and validate_user_credentials(username, password):
@@ -774,6 +822,44 @@ def authenticate():
         return redirect(
             url_for("show_login_form")
         )  # Redirect to login if no valid session or cookies
+
+    # # Check if the current request is for the login page
+    # if request.endpoint == "show_login_form" or request.endpoint == "login":
+    #     debug_print(request.endpoint)
+    #     return  # Skip authentication for login page to avoid loop
+
+    # auth_header = request.headers.get("Authorization")
+    # if auth_header:
+    #     # debug_print(auth_header)
+    #     auth_type, token = auth_header.split()
+    #     if auth_type.lower() == "bearer":
+    #         api_key_token = token
+    #         # debug_print(api_key_token)
+    #         # Validate the API key token here
+    #         if validate_api_key_token(api_key_token):
+    #             session["api_key_token"] = api_key_token
+    #         else:
+    #             return "Invalid API key token", 402
+    #     elif auth_type.lower() == "basic":
+    #         # key set by LDAP.  We are just accepting it.  
+    #         return
+    #     else:
+    #         return "Unauthorized", 403
+    # else:
+    #     return 
+    #     # Second, check for cookies for dashboard authentication
+    #     username = request.cookies.get("username")
+    #     password = request.cookies.get("password")
+    #     if username and password and validate_user_credentials(username, password):
+    #         debug_print("Valid")
+    #         session["user"] = (
+    #             username  # You can customize what you store in the session
+    #         )
+    #         return  # continue the request
+
+    #     return redirect(
+    #         url_for("show_login_form")
+    #     )  # Redirect to login if no valid session or cookies
 
 
 def validate_api_key_token(api_key_token):
@@ -788,7 +874,7 @@ def validate_api_key_token(api_key_token):
 def show_login_form():
     return render_template("login.html")
 
-
+# no longer used, using LDAP instead
 @app.route("/login", methods=["POST"])
 def login():
     username = request.form["username"]
@@ -1055,6 +1141,12 @@ def handle_rescan(source: str):
 
 @app.route("/file/<string:source>/<string:upload_id>", methods=["POST"])
 def handle_file(source: str, upload_id: str):
+
+    if source not in g_remote_entries:
+        return f"Invalid Source {source}",  503
+
+    if upload_id not in g_remote_entries[source]:
+        return f"Invalid ID {upload_id} for {source}", 503
 
     g_uploads[upload_id] = {
         "display_filename": g_remote_entries[source][upload_id]["basename"],

@@ -1,14 +1,37 @@
-
 services:
+  nginx:
+    image: weseek/nginx-auth-ldap:1.13.9-1-alpine
+    ports:
+      - "8091:80"  # Map host's port 8091 to Nginx's port 80
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d  # Custom Nginx configuration
+      - ./nginx/logs:/var/logs/nginx
+    depends_on:
+      - storage_tools_server  # Ensure Nginx starts after the Flask app service
+
+    dns:
+      - 128.2.1.10  # Add your internal DNS servers here if needed
+      - 128.2.1.11
+
   storage_tools_server:
     build:
       context: .
-      network: host
     image: storage_tools_server
     container_name: storage_tools_server
-    network_mode: host
+    environment:
+     - HOSTNAME=${HOSTNAME}
+
+    expose:
+     - "8091"  # Expose port 8091 to the internal Docker network
     volumes:
-      - ${UPLOAD_DIR}:/mnt/uploads
+      - ./uploads:/mnt/uploads  # Volume mount for uploads directory
+      - ./uploads/v1:/volume1
+      - ./uploads/v2:/volume2
+      - ./uploads/v3:/volume3
+      - ./uploads/v4:/volume4
+      - ./uploads/v5:/volume5
+      - ./uploads/v6:/volume6
     tty: true
     stdin_open: true
     restart: always
