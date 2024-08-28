@@ -67,23 +67,26 @@ class RemoteConnection:
                 self.m_sio.disconnect()
 
             api_key_token = self.m_config["API_KEY_TOKEN"]
-            headers={'Authorization': f'Bearer {api_key_token}'}
+            # headers={'Authorization': f'Bearer {api_key_token}'}
+            headers = {"X-Api-Key": api_key_token}
 
-            self.m_sio.connect(f"http://{server}:{port}/socket.io", headers=headers)
+            self.m_sio.connect(f"http://{server}:{port}/socket.io", headers=headers, transports=['websocket'])
             self.m_sio.on('control_msg')(self._handle_control_msg)    
             self.m_sio.on("dashboard_file")(self._on_dashboard_file)
             self.m_sio.on("node_data")(self._on_node_data)
-            self.m_sio.on("node_send")(self.send)
+            self.m_sio.on("node_send")(self._on_node_send)
             self.m_sio.on("disconnect")(self._on_disconnect)
             self.m_sio.on("connect")(self._on_connect)
+            self.m_sio.on("node_revise_stats")(self._on_node_revise_stats)
             # self.m_sio.on("device_remove")(self.removeFiles)
 
-            self.m_sio.emit('join', { 'room': self.m_config["source"], "type": "node" })
+            self.m_node_source = self.m_config["source"].replace("SRC","NODE")
+            self.m_sio.emit('join', { 'room': self.m_node_source, "type": "node" })
             self.m_server = server_full
             self.m_upload_id_map = {}
             self.m_rev_upload_id_map = {}
 
-            self._send_node_data()
+            self.send_node_data()
             rtn = True
 
         except Exception as e:
@@ -103,9 +106,11 @@ class RemoteConnection:
         
     def _on_dashboard_file(self, data):
 
+        debug_print(data)
+
         source = data.get("source")
         # we only want to do updates from external sources.  
-        if source == self.m_source:
+        if source == self.m_node_source:
             return 
         debug_print(data)
         upload_id = data["upload_id"]
@@ -119,6 +124,7 @@ class RemoteConnection:
         pass 
 
     def _on_node_data(self, data):
+        debug_print("Got node data")
         for (source_name, sources) in data["entries"].items():
             source_items = sources["entries"]
             for (project, projects) in source_items.items():
@@ -151,26 +157,27 @@ class RemoteConnection:
 
         ids = [ self.m_rev_upload_id_map[uid] for uid in data["upload_ids"] if uid in self.m_rev_upload_id_map ]
         msg = {
-            "source": data["source"],
+            "source": self.m_node_source,
             "upload_ids": ids
         }
         self.m_sio.emit("transfer_node_files", msg)
 
     def _handle_control_msg(self, data):
         source = data.get("source")
-        if source != self.m_config["source"]:
+        # if source != self.m_config["source"] :
+        if source != self.m_node_source:
             return 
         if data.get("action", "") == "cancel":
             self.m_signal = "cancel"
 
 
-    def _send_node_data(self):
+    def send_node_data(self):
         data = self.m_database.get_node_data()
         count = count_elements(data)
         debug_print(f"data has {count}")
 
         stats = self.m_database.get_run_stats()
-        source = self.m_config["source"]
+        source = self.m_node_source
         debug_print(f"Source is [{source}]")
 
         node_data = {"entries": data, 
@@ -180,13 +187,20 @@ class RemoteConnection:
 
         self.m_sio.emit("remote_node_data", node_data)
 
-    def send(self, data):
-        source = data.get("source")
+    def _on_node_send(self, data):
+        source = data.get("source").replace("NODE", "SRC")
         if source != self.m_config["source"]:
             return 
         files = data.get("files")
 
         self._sendFiles(self.m_server, files)
+
+    def _on_node_revise_stats(self, data):
+        debug_print(data)
+
+        # msg = {}
+        if self.m_node_source in data:
+            pass 
 
 
     def _sendFiles(self, server, filelist):
@@ -197,7 +211,9 @@ class RemoteConnection:
         num_threads = min(self.m_config["threads"], len(filelist))
         url = f"http://{server}/file"
 
-        source = self.m_config["source"]
+        #  source = self.m_config["source"]
+        debug_print(f"Source: {self.m_node_source}")
+        source = self.m_node_source
         api_key_token = self.m_config["API_KEY_TOKEN"]
 
 
@@ -216,7 +232,7 @@ class RemoteConnection:
 
     
         with SocketIOTQDM(total=total_size, unit="B", unit_scale=True, desc="File Transfer", position=0, 
-                          leave=False, source=self.m_config["source"], socket=self.m_local_sio, event=local_status_event) as local_main_pbar,  SocketIOTQDM(total=total_size, unit="B", unit_scale=True, desc="File Transfer", position=0, 
+                          leave=False, source=self.m_node_source, socket=self.m_local_sio, event=local_status_event) as local_main_pbar,  SocketIOTQDM(total=total_size, unit="B", unit_scale=True, desc="File Transfer", position=0, 
                           leave=False, source=self.m_config["source"], socket=self.m_sio, event=remote_status_event) as remote_main_pbar:
 
             def worker(index:int):
@@ -234,7 +250,7 @@ class RemoteConnection:
                         if self.m_signal == "cancel":
                             break
 
-                        fullpath = os.path.join(dirroot, file)
+                        fullpath = os.path.join(dirroot, file.strip("/"))
                         if not os.path.exists(fullpath):
                             local_main_pbar.update()
                             remote_main_pbar.update()
@@ -258,7 +274,7 @@ class RemoteConnection:
                             
                             debug_print(headers)
                             # Setup the progress bar
-                            with SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_config["source"], socket=self.m_sio, event=remote_status_event) as remote_pbar, SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_config["source"], socket=self.m_local_sio, event=local_status_event) as local_pbar:
+                            with SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_node_source, socket=self.m_sio, event=remote_status_event) as remote_pbar, SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_config["source"], socket=self.m_local_sio, event=local_status_event) as local_pbar:
                                 def read_and_update():
                                     while True:
                                         # Read the file in chunks of 4096 bytes (or any size you prefer)

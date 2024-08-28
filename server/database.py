@@ -272,7 +272,7 @@ class Database:
                 "topics": entry.get("topics", []),
             }
             node_entry.update(entry)
-            node_entry["dirroot"] = self.root
+            # node_entry["dirroot"] = self.root
 
             rtn[project][ymd][run][relpath] = rtn[project][ymd][run].get(relpath, [])
             rtn[project][ymd][run][relpath].append(node_entry)

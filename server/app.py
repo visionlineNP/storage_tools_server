@@ -303,6 +303,8 @@ def on_disconnect():
             del g_remote_entries[remove]
         if remove in g_remote_sockets:
             del g_remote_sockets[remove]
+        if remove in g_node_entries:
+            del g_node_entries[remove]
         if remove in g_sources["devices"]:
             g_sources["devices"].pop(g_sources["devices"].index(remove))
             # debug_print(g_sources["devices"])
@@ -558,6 +560,12 @@ def on_device_status_tqdm(data):
     socketio.emit("node_status_tqdm", data, to="dashboard")
 
 
+# send the updated data to the server.  
+@socketio.on("server_refresh")
+def on_server_refresh():
+    global g_remote_connection
+    g_remote_connection.send_node_data()
+
 @socketio.on("request_robots")
 def on_request_robots():
     names = [i[1] for i in g_database.get_robots()]
@@ -670,9 +678,13 @@ def on_remote_node_data(data):
     # debug_print(data)
 
     g_node_entries[source] = data
+    if not source in g_sources["nodes"]:
+        g_sources["nodes"].append(source)
+        debug_print(f"added {source} to 'nodes'")
 
     msg = {"entries": g_node_entries}
 
+    socketio.emit("node_data", msg, to=source)
     socketio.emit("node_data", msg, to="dashboard")
 
 
@@ -1283,6 +1295,9 @@ def handle_file(source: str, upload_id: str):
 
             if g_selected_action[source] == "cancel":
                 socketio.emit("dashboard_file", cancel_msg, to="dashboard")
+                if source in g_sources["nodes"]: 
+                    socketio.emit("dashboard_file", cancel_msg, to=source)
+
                 return jsonify({"message": f"File {filename} upload canceled"})
 
             try:
@@ -1290,6 +1305,9 @@ def handle_file(source: str, upload_id: str):
             except OSError:
                 # we lost the connection on the client side.
                 socketio.emit("dashboard_file", cancel_msg, to="dashboard")
+                if source in g_sources["nodes"]: 
+                   socketio.emit("dashboard_file", cancel_msg, to=source)
+
                 return jsonify({"message": f"File {filename} upload canceled"})
 
             if not chunk:
@@ -1308,6 +1326,9 @@ def handle_file(source: str, upload_id: str):
                 "Size mismatch. " + str(current_size) + " != " + str(expected)
             )
             socketio.emit("dashboard_file", cancel_msg, to="dashboard")
+            if source in g_sources["nodes"]: 
+                socketio.emit("dashboard_file", cancel_msg, to=source)
+
             return jsonify({"message": f"File {filename} upload canceled"})
 
         os.rename(tmp_path, filepath)
@@ -1323,6 +1344,8 @@ def handle_file(source: str, upload_id: str):
         }
         # socketio.emit("dashboard_file", data, to="client-" + source)
         socketio.emit("dashboard_file", data, to="dashboard")
+        if source in g_sources["nodes"]: 
+            socketio.emit("dashboard_file", data, to=source)
 
     g_remote_entries[source][upload_id]["localpath"] = filepath
     g_remote_entries[source][upload_id]["on_server"] = True
@@ -1360,6 +1383,8 @@ def device_revise_stats():
                 update_stat(source, uid, stats[source])
 
     socketio.emit( "device_revise_stats", stats, to="dashboard" )
+    for node in g_sources["nodes"]:
+        socketio.emit("node_revise_stats", stats, to=node)
 
 
 def send_device_data():
@@ -1488,7 +1513,7 @@ def send_node_data():
     debug_print("send")
     msg = {"entries": g_node_entries}
 
-    socketio.emit("node_data", msg)
+    socketio.emit("node_data", msg, to="dashboard")
 
 
 def send_server_data():

@@ -71,7 +71,10 @@ function on_remote_connection(msg) {
         // })
 
         refreshTooltips();
-
+    }
+    const refresh_button = document.getElementById("refresh_button");
+    if( refresh_button) {
+        refresh_button.disabled = !msg.connected;
     }
 }
 
@@ -158,6 +161,15 @@ function updateServerData(data) {
             }
         });
 
+        const refreshButton = document.createElement("button")
+        refreshButton.className = "btn btn-secondary";
+        refreshButton.id = "refresh_button";
+        refreshButton.textContent = "Refresh";
+        refreshButton.disabled = !data.remote_connected;
+        refreshButton.addEventListener('click', () => {
+            socket.emit("server_refresh");
+        })
+
         const spanSyncStatus = document.createElement("span");
         const icon = document.createElement("i")
         icon.id = "sync_status";
@@ -177,6 +189,7 @@ function updateServerData(data) {
         containerData.appendChild(spanSyncStatus);
         containerData.appendChild(selectElement);
         containerData.appendChild(linkButton);
+        containerData.appendChild(refreshButton)
 
 
     }
