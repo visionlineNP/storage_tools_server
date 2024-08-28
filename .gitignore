@@ -6,3 +6,4 @@ server/__pycache__
 nginx/conf.d/ldap.conf
 server/scratch.py
 uploads/
+nginx/conf.d/01_ldap_active.conf

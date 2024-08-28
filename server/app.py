@@ -200,12 +200,11 @@ def on_join(data):
     client = data.get("type", None)
     join_room(room)
     socketio.emit("dashboard_info", {"data": f"Joined room: {room}"}, to=room)
-    socketio.emit("echo", data)
     debug_print(f"Joined room {room} from {client}")
     if client is not None:
         g_remote_sockets[room] = request.sid
     else:
-        pass
+        send_all_data()
 
 
 @socketio.on("leave")
@@ -1353,7 +1352,7 @@ def send_device_data():
             for uid in g_remote_entries[source]:
                 entry = {}
                 # entry.update(g_remote_entries[source][uid])
-                for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", ]:
+                for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
                     entry[key] = g_remote_entries[source][uid][key]
 
                 entry["size"] = humanfriendly.format_size(entry["size"])
