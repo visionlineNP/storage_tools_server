@@ -115,17 +115,6 @@ def get_source_by_mac_address():
                     macs.append(addr.address.replace(":",""))
     rtn = "SRC-" + "_".join(macs)
     return rtn 
-    mac_addresses = {}
-    for interface, addrs in psutil.net_if_addrs().items():
-        if interface == "lo":
-            continue 
-
-        for addr in addrs:
-            if addr.family == psutil.AF_LINK:  # Check if it's a MAC address
-                # Check if the interface is "UP"
-                if psutil.net_if_stats()[interface].isup:
-                    mac_addresses[interface] = addr.address
-    return mac_addresses
 
 
 debug_print(f"Using {config_filename}")
