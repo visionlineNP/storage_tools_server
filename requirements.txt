@@ -11,3 +11,4 @@ zeroconf
 gunicorn
 gevent
 websocket-client
+psutil

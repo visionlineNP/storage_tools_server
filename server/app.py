@@ -16,18 +16,19 @@ from flask_socketio import SocketIO, disconnect, join_room, leave_room
 import os
 import yaml
 import json
-from .debug_print import debug_print
-from .speed import FileSpeedEstimate
-from .database import Database, get_upload_id
-import argparse
 import humanfriendly
-from zeroconf import Zeroconf, ServiceInfo
 import socket
 import fcntl
 import struct
-from .remoteConnection import RemoteConnection
+from zeroconf import Zeroconf, ServiceInfo
 import jwt
 from engineio.payload import Payload
+import psutil
+
+from .debug_print import debug_print
+from .speed import FileSpeedEstimate
+from .database import Database, get_upload_id
+from .remoteConnection import RemoteConnection
 
 
 
@@ -102,9 +103,39 @@ g_database = None
 # config_filename = args.config
 config_filename = os.environ.get("CONFIG", "config/config.yaml")
 
+def get_source_by_mac_address():
+    macs = []
+    addresses = psutil.net_if_addrs()
+    for interface in sorted(addresses):
+        if interface == "lo":
+            continue
+        for addr in sorted(addresses[interface]):
+            if addr.family == psutil.AF_LINK:  # Check if it's a MAC address
+                if psutil.net_if_stats()[interface].isup:
+                    macs.append(addr.address.replace(":",""))
+    rtn = "SRC-" + "_".join(macs)
+    return rtn 
+    mac_addresses = {}
+    for interface, addrs in psutil.net_if_addrs().items():
+        if interface == "lo":
+            continue 
+
+        for addr in addrs:
+            if addr.family == psutil.AF_LINK:  # Check if it's a MAC address
+                # Check if the interface is "UP"
+                if psutil.net_if_stats()[interface].isup:
+                    mac_addresses[interface] = addr.address
+    return mac_addresses
+
+
 debug_print(f"Using {config_filename}")
 with open(config_filename, "r") as f:
     g_config = yaml.safe_load(f)
+
+
+    # debug_print(get_source_by_mac_address())
+    g_config["source"] = get_source_by_mac_address()
+    debug_print(f"Setting source name to {g_config['source']}")
 
 #     debug_print(json.dumps(g_config, indent=True))
 
