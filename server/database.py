@@ -8,6 +8,7 @@ import threading
 import humanfriendly
 from datetime import datetime, timedelta
 import hashlib
+from .debug_print import debug_print
 
 
 def get_upload_id(source: str, project: str, file: str):
@@ -31,11 +32,12 @@ def get_upload_id(source: str, project: str, file: str):
 
 
 class Database:
-    def __init__(self, root, source) -> None:
+    def __init__(self, root, source, volume_map) -> None:
         self.source = source
         self.root = root
         self.filename = pathlib.Path(root) / "database.json"
         self.mutex = threading.Lock()
+        self.volume_map = volume_map
         self._init_db(self.filename)
 
     def _init_db(self, filename=None):
@@ -58,18 +60,23 @@ class Database:
         # init db without file to create new db.
         self._init_db()
 
-        for root, _, files in os.walk(self.root):
-            for basename in files:
-                if basename == "database.json":
-                    continue
-                if basename.endswith(".metadata") or basename.endswith(".json"):
-                    base = ".".join(basename.split(".")[:-1])
-                    filename = os.path.join(root, base)
-                    entry = json.load(open(os.path.join(root, basename), "r"))
-                    entry["localpath"] = filename
-                    entry["reldir"] = root.replace(self.root, "").strip()
-                    # entry["upload_id"] = str(hex(abs(hash(filename))))
-                    self.add_data(entry)
+        for project in sorted(self.volume_map):
+            volume_root = self.volume_map[project]
+
+            debug_print((project, volume_root))
+            for root, _, files in os.walk(volume_root):
+                debug_print(root)
+                for basename in files:
+                    if basename == "database.json":
+                        continue
+                    if basename.endswith(".metadata"):
+                        base = ".".join(basename.split(".")[:-1])
+                        filename = os.path.join(root, base)
+                        entry = json.load(open(os.path.join(root, basename), "r"))
+                        entry["localpath"] = filename
+                        entry["reldir"] = root.replace(volume_root, "").strip()
+                        # entry["upload_id"] = str(hex(abs(hash(filename))))
+                        self.add_data(entry)
 
         self.estimate_runs()
         self.commit()
@@ -181,8 +188,8 @@ class Database:
         return rtn
 
     def add_data(self, entry: dict):
-        datatype = entry["datatype"]
-        date = entry["datetime"]
+        # datatype = entry["datatype"]
+        # date = entry["datetime"]
         basename = entry["basename"]
         reldir = entry["reldir"]
         # size = entry["size"]
@@ -190,7 +197,7 @@ class Database:
 
         project = entry["project"]
         robot = entry["robot_name"]
-        run = entry["run_name"]
+        # run = entry["run_name"]
 
         fullpath = f"{reldir}/{basename}"
 

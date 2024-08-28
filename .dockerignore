@@ -2,3 +2,4 @@ venv
 Dockerfile*
 env.sh
 __pycache__/*
+uploads

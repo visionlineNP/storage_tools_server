@@ -94,12 +94,12 @@ class RemoteConnection:
     def _on_connect(self):
         debug_print("node connected")
         source = self.m_config["source"]
-        self.m_local_sio.emit("remote_connection", {"source": source, "address": self.m_server, "connected": True})
+        self.m_local_sio.emit("remote_connection", {"source": source, "address": self.m_server, "connected": True}, to="dashboard")
 
     def _on_disconnect(self):
         debug_print("node disconnected")
         source = self.m_config["source"]
-        self.m_local_sio.emit("remote_connection", {"source": source, "connected": False})
+        self.m_local_sio.emit("remote_connection", {"source": source, "connected": False}, to="dashboard")
         
     def _on_dashboard_file(self, data):
 
@@ -112,7 +112,7 @@ class RemoteConnection:
         local_id = self.m_upload_id_map.get(upload_id, None)
         if( local_id):
             data["upload_id"] = local_id
-            self.m_local_sio.emit("dashboard_update", data)
+            self.m_local_sio.emit("dashboard_update", data, to="dashboard")
         else:
             debug_print(f"Didn't get mapping for {upload_id}")
         # self.m_local_sio.emit("dashboard_file_server", data)
@@ -142,7 +142,7 @@ class RemoteConnection:
                                     "on_remote": on_remote,
                                     "upload_id": upload_id
                                 }
-                                self.m_local_sio.emit("dashboard_file_server", msg)
+                                self.m_local_sio.emit("dashboard_file_server", msg, to="dashboard")
 
                                 # debug_print(("on_local:", entry.get("on_local"), "on_remote", entry.get("on_remote")))
 

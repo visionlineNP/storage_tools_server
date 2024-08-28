@@ -289,23 +289,10 @@
 
     <script type="text/javascript" charset="utf-8">
 
-      var socket = io.connect('http://' + document.domain + ':' + location.port);
+      var socket = io.connect('http://' + document.domain + ':' + location.port, {
+        transports: ['websocket'] 
+      });
 
-    //   let username = getCookie('username')
-    //   let token = getCookie('token')
-     //  let api_key = getCookie('api_key_token');
-     //  console.log("api_key:", api_key, ", Username: ", username);
-
-      
-       // var socket = io.connect('http://' + document.domain + ':' + location.port, {
-       //     transportOptions: {
-       //         polling: {
-       //             extraHeaders: {
-       //                 "Authorization": 'Bearer ' + api_key
-       //             }
-       //         }
-       //     }
-       // });
 
     </script>
 </body>

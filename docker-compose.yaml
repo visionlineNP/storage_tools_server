@@ -26,12 +26,20 @@ services:
      - "8091"  # Expose port 8091 to the internal Docker network
     volumes:
       - ./uploads:/mnt/uploads  # Volume mount for uploads directory
-      - ./uploads/v1:/volume1
-      - ./uploads/v2:/volume2
-      - ./uploads/v3:/volume3
-      - ./uploads/v4:/volume4
-      - ./uploads/v5:/volume5
-      - ./uploads/v6:/volume6
+      - ./uploads/volume1:/volume1
+      - ./uploads/volume2:/volume2
+      - ./uploads/volume3:/volume3
+      - ./uploads/volume4:/volume4
+      - ./uploads/volume5:/volume5
+      - ./uploads/volume6:/volume6
+
+      # - /volume1:/volume1
+      # - /volume2:/volume2
+      # - /volume3:/volume3
+      # - /volume4:/volume4
+      # - /volume5:/volume5
+      # - /volume6:/volume6
+
     tty: true
     stdin_open: true
     restart: always

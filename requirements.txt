@@ -10,3 +10,4 @@ humanfriendly
 zeroconf
 gunicorn
 gevent
+websocket-client

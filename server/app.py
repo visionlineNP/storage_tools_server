@@ -27,6 +27,10 @@ import fcntl
 import struct
 from .remoteConnection import RemoteConnection
 import jwt
+from engineio.payload import Payload
+
+
+
 
 
 # prepare the app
@@ -34,9 +38,14 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = "AirLabKeyKey"
 hostname=os.environ["HOSTNAME"]
 
-origins = [f"http://{hostname}:8091", f"http://{hostname}.andrew.cmu.edu:8091"]
-debug_print(origins)
-socketio = SocketIO(app, cors_allowed_origins=origins)
+#origins = [f"http://{hostname}:8091", f"http://{hostname}.andrew.cmu.edu:8091"]
+origins = "*"
+# debug_print(origins)
+# import logging
+# logging.basicConfig(level=logging.DEBUG)
+
+Payload.max_decode_packets = 100  # Increase the number of packets allowed in a single request
+socketio = SocketIO(app, cors_allowed_origins=origins, ping_interval=25, ping_timeout=60, max_http_buffer_size=200000000, logger=False, engineio_logger=False)
 
 
 # global variables.
@@ -48,6 +57,9 @@ g_sources = {"devices": [], "nodes": [], "report_host": [], "report_node": []}
 
 # maps source to upload_id to file entry for files on device
 g_remote_entries = {}
+
+# buffer of source to entries.  
+g_remote_entries_buffer = {}
 
 # maps source to node data for files on remote nodes (other servers)
 g_node_entries = {}
@@ -99,10 +111,11 @@ with open(config_filename, "r") as f:
     g_upload_dir = g_config["upload_dir"]
     os.makedirs(g_upload_dir, exist_ok=True)
 
-    g_database = Database(g_upload_dir, g_config["source"])
+    g_database = Database(g_upload_dir, g_config["source"], g_config.get("volume_map", {}))
 
-    # this is optional. We can preload projects, sites, and robots
-    # based on the config.
+    g_database.regenerate()
+    # # this is optional. We can preload projects, sites, and robots
+    # # based on the config.
     for project_name in sorted(g_config.get("volume_map", [])):
     # for project_name in g_config.get("projects", []):
         g_database.add_project(project_name, "")
@@ -113,7 +126,7 @@ with open(config_filename, "r") as f:
     for site_name in g_config.get("sites", []):
         g_database.add_site(site_name, "")
 
-    g_database.estimate_runs()
+    # g_database.estimate_runs()
 
 # wrapper for remote connection to another server
 g_remote_connection = RemoteConnection(g_config, socketio, g_database)
@@ -143,9 +156,11 @@ def get_ip_addresses():
 
 
 def setup_zeroconf():
-    ip_addresses = get_ip_addresses()
+    # ip_addresses = get_ip_addresses()
+    ip_addresses = ["127.0.0.1"]
     addresses = [socket.inet_aton(ip) for ip in ip_addresses]
 
+    debug_print(f"using address: {ip_addresses}")
     desc = {}
     info = ServiceInfo(
         "_http._tcp.local.",
@@ -185,6 +200,7 @@ def on_join(data):
     client = data.get("type", None)
     join_room(room)
     socketio.emit("dashboard_info", {"data": f"Joined room: {room}"}, to=room)
+    socketio.emit("echo", data)
     debug_print(f"Joined room {room} from {client}")
     if client is not None:
         g_remote_sockets[room] = request.sid
@@ -284,8 +300,17 @@ def on_disconnect():
 
 @socketio.on("keep_alive")
 def on_keep_alive():
+
+    source = None
+    for _source, sid in g_remote_sockets.items():
+        if sid == request.sid:
+            source = _source
+            break
+
+    # debug_print(source)
     # just keeping aliving.
-    debug_print("alive")
+    socketio.emit("keep_alive_ack")
+    # debug_print("alive")
     pass 
         
 @socketio.on("control_msg")
@@ -316,7 +341,7 @@ def on_device_remove(data):
         filenames.append((dirroot, relpath, upload_id))
 
     msg = {"source": source, "files": filenames}
-    socketio.emit("device_remove", msg)
+    socketio.emit("device_remove", msg, to=source)
 
 
 ui_status = {}
@@ -335,30 +360,48 @@ def on_device_status(data):
     if "msg" in data:
         msg["msg"] = data["msg"]
 
-    socketio.emit("device_status", msg)
+    socketio.emit("device_status", msg, to="dashboard")
 
 
 @socketio.on("device_status_tqdm")
 def on_device_status_tqdm(data):
     # debug_print(data)
-    socketio.emit("device_status_tqdm", data)
+    socketio.emit("device_status_tqdm", data, to="dashboard")
 
 
 @socketio.on("device_scan")
 def on_device_scan(data):
     socketio.emit("device_scan", data)
 
+@socketio.on("device_files_items")
+def on_device_files_items(data):    
+    global g_remote_entries_buffer
+
+    source = data.get("source")
+    files = data.get("files")
+
+    g_remote_entries_buffer[source] = g_remote_entries_buffer.get(source, [])
+    g_remote_entries_buffer[source].extend(files)
+
 
 @socketio.on("device_files")
 def on_device_files(data):
     global g_remote_entries
+    global g_remote_entries_buffer
     global g_fs_info
     global g_projects
     global g_sources
 
-    project = data.get("project", "")
-    files = data.get("files")
     source = data.get("source")
+    project = data.get("project", None)
+    if project is None:
+        g_remote_entries[source] = {}
+        send_device_data()
+
+    # files = data.get("files")
+    files = g_remote_entries_buffer.get( source, data.get("files", []))
+    if source in g_remote_entries_buffer: del g_remote_entries_buffer[source]
+
     g_selected_files_ready[source] = False
     g_selected_action[source] = None
     g_projects[source] = project
@@ -449,8 +492,9 @@ def on_add_project(data):
 
 @socketio.on("set_project")
 def on_set_project(data):
-
-    socketio.emit("set_project", data)
+    source = data["source"]
+    debug_print(data)
+    socketio.emit("set_project", data, to=source)
 
 
 @socketio.on("server_connect")
@@ -485,8 +529,8 @@ def on_server_disconnect():
 # file upload, so both will be updated.
 @socketio.on("server_status_tqdm")
 def on_device_status_tqdm(data):
-    socketio.emit("server_status_tqdm", data)
-    socketio.emit("node_status_tqdm", data)
+    socketio.emit("server_status_tqdm", data, to="dashboard")
+    socketio.emit("node_status_tqdm", data, to="dashboard")
 
 
 @socketio.on("request_robots")
@@ -604,7 +648,7 @@ def on_remote_node_data(data):
 
     msg = {"entries": g_node_entries}
 
-    socketio.emit("node_data", msg)
+    socketio.emit("node_data", msg, to="dashboard")
 
 
 # comes from local gui
@@ -747,6 +791,9 @@ def on_debug_count_to_next_task(data):
 ###########################################
 @socketio.on("scan_server")
 def on_debug_scan_server():
+
+    debug_print("Scan Server")
+
     g_database.regenerate()
 
     for project_name in g_config.get("projects", []):
@@ -772,6 +819,12 @@ def authenticate():
         debug_print(request.endpoint)
         return  # Skip authentication for login page to avoid loop
 
+    api_key = request.headers.get('X-Api-Key')
+    if api_key:
+        if validate_api_key_token(api_key):
+            return
+        else:
+            return "Invalid API Key", 402
 
     auth_header = request.headers.get("Authorization")
     if auth_header:
@@ -789,7 +842,7 @@ def authenticate():
 
             user = request.headers.get('X-Authenticated-User')  # Header set by Nginx after LDAP auth
             if not user:
-                return jsonify({'error': 'Unauthorized'}), 401
+                return jsonify({'error': 'Unauthorized-v1'}), 401
 
             # Generate a token for the authenticated user
             token = generate_token(user)
@@ -804,11 +857,11 @@ def authenticate():
             )  
 
         else:
-            return jsonify({'error': 'Unauthorized'}), 401
+            return jsonify({'error': 'Unauthorized-v2'}), 401
 
     else:
         if g_config.get("use_ldap", True):
-            return jsonify({'error': 'Unauthorized'}), 401
+            return jsonify({'error': 'Unauthorized-v3'}), 401
 
         username = request.cookies.get("username")
         password = request.cookies.get("password")
@@ -1085,7 +1138,7 @@ def get_file_path(source: str, upload_id: str) -> str:
     """
     project = g_remote_entries[source][upload_id].get("project")
     root = g_config.get("volume_root", "/")
-    volume = g_config["volume_map"].get(project).strip("/")
+    volume = g_config["volume_map"].get(project, "").strip("/")
 
     relpath = g_remote_entries[source][upload_id]["relpath"]
     filename = g_remote_entries[source][upload_id]["basename"]
@@ -1167,6 +1220,10 @@ def handle_file(source: str, upload_id: str):
     else:
         open_mode = "ab"
 
+    cid = request.args.get("cid")
+    splits = request.args.get("splits")
+    is_last = cid == splits
+
     filep = request.stream
     filename = g_remote_entries[source][upload_id]["basename"]
 
@@ -1200,14 +1257,14 @@ def handle_file(source: str, upload_id: str):
         while True:
 
             if g_selected_action[source] == "cancel":
-                socketio.emit("dashboard_file", cancel_msg)
+                socketio.emit("dashboard_file", cancel_msg, to="dashboard")
                 return jsonify({"message": f"File {filename} upload canceled"})
 
             try:
                 chunk = filep.read(chunk_size)
             except OSError:
                 # we lost the connection on the client side.
-                socketio.emit("dashboard_file", cancel_msg)
+                socketio.emit("dashboard_file", cancel_msg, to="dashboard")
                 return jsonify({"message": f"File {filename} upload canceled"})
 
             if not chunk:
@@ -1215,7 +1272,9 @@ def handle_file(source: str, upload_id: str):
             fid.write(chunk)
             g_uploads[upload_id]["progress"].update(len(chunk))
 
-    if os.path.exists(tmp_path):
+    os.chmod(tmp_path, 0o777 )
+
+    if os.path.exists(tmp_path) and is_last:
         current_size = os.path.getsize(tmp_path)
         if current_size != expected:
             # transfer canceled politely on the client side, or
@@ -1223,7 +1282,7 @@ def handle_file(source: str, upload_id: str):
             cancel_msg["status"] = (
                 "Size mismatch. " + str(current_size) + " != " + str(expected)
             )
-            socketio.emit("dashboard_file", cancel_msg)
+            socketio.emit("dashboard_file", cancel_msg, to="dashboard")
             return jsonify({"message": f"File {filename} upload canceled"})
 
         os.rename(tmp_path, filepath)
@@ -1238,7 +1297,7 @@ def handle_file(source: str, upload_id: str):
             "upload_id": upload_id,
         }
         # socketio.emit("dashboard_file", data, to="client-" + source)
-        socketio.emit("dashboard_file", data)
+        socketio.emit("dashboard_file", data, to="dashboard")
 
     g_remote_entries[source][upload_id]["localpath"] = filepath
     g_remote_entries[source][upload_id]["on_server"] = True
@@ -1246,6 +1305,8 @@ def handle_file(source: str, upload_id: str):
     metadata_filename = filepath + ".metadata"
     with open(metadata_filename, "w") as fid:
         json.dump(g_remote_entries[source][upload_id], fid, indent=True)
+
+    os.chmod(metadata_filename, 0o777)
 
     g_database.add_data(g_remote_entries[source][upload_id])
     g_database.estimate_runs()
@@ -1273,7 +1334,7 @@ def device_revise_stats():
             for uid in g_remote_entries[source]:
                 update_stat(source, uid, stats[source])
 
-    socketio.emit( "device_revise_stats", stats )
+    socketio.emit( "device_revise_stats", stats, to="dashboard" )
 
 
 def send_device_data():
@@ -1291,7 +1352,10 @@ def send_device_data():
                 device_data[source]["fs_info"] = g_fs_info[source]
             for uid in g_remote_entries[source]:
                 entry = {}
-                entry.update(g_remote_entries[source][uid])
+                # entry.update(g_remote_entries[source][uid])
+                for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", ]:
+                    entry[key] = g_remote_entries[source][uid][key]
+
                 entry["size"] = humanfriendly.format_size(entry["size"])
                 date = g_remote_entries[source][uid]["datetime"].split(" ")[0]
                 relpath = g_remote_entries[source][uid]["relpath"]
@@ -1335,7 +1399,7 @@ def send_device_data():
 
     debug_print("send_device_data")
     # debug_print(json.dumps(device_data, indent=True))
-    socketio.emit("device_data", device_data)
+    socketio.emit("device_data", device_data, to="dashboard")
 
 
 def update_stat(source, uid, stat):
@@ -1417,7 +1481,7 @@ def send_server_data():
         "remote_connected": g_remote_connection.connected(),
     }
 
-    socketio.emit("server_data", server_data)
+    socketio.emit("server_data", server_data, to="dashboard")
 
 
 def send_report_host_data():
@@ -1426,7 +1490,7 @@ def send_report_host_data():
     for report_host in g_sources["report_host"]:
         msg["hosts"].append(report_host)
 
-    socketio.emit("report_host_data", msg)
+    socketio.emit("report_host_data", msg, to="dashboard")
     send_report_node_data()
 
 
@@ -1437,7 +1501,7 @@ def send_report_node_data():
         if report_node in g_sources["report_node"]:
             msg["nodes"][report_node] = g_report_node_info[report_node]
 
-    socketio.emit("report_node_data", msg)
+    socketio.emit("report_node_data", msg, to="dashboard")
 
 
 setup_zeroconf()
@@ -1445,6 +1509,10 @@ setup_zeroconf()
 
 # run with CONFIG=$PWD/config/config.ssd.yaml gunicorn -k gevent -w 1 -b "0.0.0.0:8091" "server.app:app"
 
-if __name__ == "__main__":
+def main():
     debug_print("enter")
     socketio.run(debug=False, host="0.0.0.0", port=g_config["port"])
+
+
+if __name__ == "__main__":
+    main()

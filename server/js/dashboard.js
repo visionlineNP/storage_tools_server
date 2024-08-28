@@ -17,6 +17,8 @@ $(document).ready(function () {
     }
     statusDiv.textContent = 'Online';
 
+    socket.emit('join', {'room': 'dashboard'})
+
   });
 
   socket.on("disconnect", function () {
