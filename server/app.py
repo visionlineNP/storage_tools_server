@@ -131,7 +131,13 @@ with open(config_filename, "r") as f:
     g_upload_dir = g_config["upload_dir"]
     os.makedirs(g_upload_dir, exist_ok=True)
 
-    g_database = Database(g_upload_dir, g_config["source"], g_config.get("volume_map", {}))
+    v_root = g_config.get("volume_root", "/")
+    v_map = g_config.get("volume_map", {}).copy()
+    for name in v_map:
+        v_map[ name ] = os.path.join(v_root,  v_map.get(name, "").strip("/"))
+         
+
+    g_database = Database(g_upload_dir, g_config["source"], v_map)
 
     g_database.regenerate()
     # # this is optional. We can preload projects, sites, and robots
