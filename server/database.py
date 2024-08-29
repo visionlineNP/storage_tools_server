@@ -32,12 +32,14 @@ def get_upload_id(source: str, project: str, file: str):
 
 
 class Database:
-    def __init__(self, root, source, volume_map) -> None:
+    def __init__(self, root, source, volume_map, blackout) -> None:
         self.source = source
         self.root = root
         self.filename = pathlib.Path(root) / "database.json"
+        debug_print(f"-- Loading {self.filename.as_posix()}")
         self.mutex = threading.Lock()
         self.volume_map = volume_map
+        self.blackout = blackout
         self._init_db(self.filename)
 
     def _init_db(self, filename=None):
@@ -65,6 +67,13 @@ class Database:
 
             debug_print((project, volume_root))
             for root, _, files in os.walk(volume_root):
+                skip = False
+                for b in self.blackout:
+                    if b in root:
+                        skip = True 
+                if skip:
+                    continue
+
                 debug_print(root)
                 for basename in files:
                     if basename == "database.json":
@@ -74,7 +83,8 @@ class Database:
                         filename = os.path.join(root, base)
                         entry = json.load(open(os.path.join(root, basename), "r"))
                         entry["localpath"] = filename
-                        entry["reldir"] = root.replace(volume_root, "").strip()
+                        entry["dirroot"] = volume_root
+                        # entry["reldir"] = root.replace(volume_root, "").strip()
                         # entry["upload_id"] = str(hex(abs(hash(filename))))
                         self.add_data(entry)
 
@@ -191,7 +201,7 @@ class Database:
         # datatype = entry["datatype"]
         # date = entry["datetime"]
         basename = entry["basename"]
-        reldir = entry["reldir"]
+        reldir = entry["relpath"]
         # size = entry["size"]
         site = entry["site"]
 
@@ -203,7 +213,7 @@ class Database:
 
         with self.mutex:
             name_to_index = {
-                f"{item['reldir']}/{item['basename']}": i
+                f"{item['relpath']}/{item['basename']}": i
                 for i, item in enumerate(self.database["data"])
             }
         if fullpath in name_to_index:
@@ -265,7 +275,7 @@ class Database:
             rtn[project][ymd][run] = rtn[project][ymd].get(run, {})
             rtn[project][ymd][run][relpath] = rtn[project][ymd][run].get(relpath, [])
             node_entry = {
-                "reldir": os.path.join(project, ymd, relpath),
+                "reldir": relpath,
                 "on_local": False,
                 "on_remote": True,
                 "hsize": humanfriendly.format_size(entry["size"]),
@@ -278,6 +288,67 @@ class Database:
             rtn[project][ymd][run][relpath].append(node_entry)
 
         return rtn
+
+    def get_send_data_ymd_stub(self):
+
+        rtn = {}
+        for entry in self.database["data"]:
+            project = entry["project"]
+            date = entry["datetime"]
+            ymd = date.split(" ")[0]
+
+            rtn[project] = rtn.get(project, {})
+            rtn[project][ymd] = rtn[project].get(ymd, {})
+        return rtn
+
+    def get_send_data_ymd(self, send_project, send_ymd):
+        pass 
+        rtn = {}
+        for entry in self.database["data"]:
+            project = entry["project"]
+            if project != send_project:
+                continue 
+
+            datatype = entry["datatype"]
+            date = entry["datetime"]
+            ymd = date.split(" ")[0]
+
+            if ymd != send_ymd:
+                continue
+
+            robot = entry["robot_name"]
+            run = entry["run_name"]
+
+            dirroot = self.root
+            
+            basename = entry["basename"]
+            relpath = entry["relpath"]
+            size = entry["size"]
+            site = entry["site"]
+            topics = entry.get("topics", [])
+            upload_id = entry["upload_id"]
+
+            rtn[run] = rtn.get(run, {})
+            rtn[run][relpath] = rtn[run].get(relpath, [])
+            rtn[run][relpath].append(
+                {
+                    "datetime": date,
+                    "relpath": relpath,
+                    "basename": basename,
+                    "size": size,
+                    "site": site,
+                    "run_name": run,
+                    "datatype": datatype,
+                    "on_local": True,
+                    "on_remote": False,
+                    "hsize": humanfriendly.format_size(size),
+                    "topics": topics,
+                    "upload_id": upload_id,
+                }
+            )
+
+        return rtn
+
 
     """
     returns project -> ymd -> run## -> relpath -> list of entries
@@ -324,17 +395,24 @@ class Database:
 
         return rtn
 
-    def get_run_stats(self):
+    def get_run_stats(self, send_project=None, send_ymd=None):
         stats = {}
 
         for entry in self.database["data"]:
             project = entry["project"]
+            if send_project and project != send_project:
+                continue
+
             robot = entry["robot_name"]
             run = entry["run_name"]
 
             datatype = entry["datatype"]
             date = entry["datetime"]
             ymd = date.split(" ")[0]
+
+            if send_ymd and ymd != send_ymd:
+                continue
+
             start_time = entry["start_datetime"]
             end_time = entry["end_datetime"]
             basename = entry["basename"]

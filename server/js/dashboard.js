@@ -61,17 +61,23 @@ $(document).ready(function () {
     updateProgress(msg, "server-status-tqdm");
   })
 
-
-  socket.on('node_data', function (data) {
-    console.log('Received node_data:', data);
-    updateNodeData(data);
-  });
+  socket.on("server_ymd_data", function(msg) {
+    processServerYMD(msg);
+  })
 
   socket.on('server_data', function (data) {
     //console.log('Received server_data:', data);
     updateServerData(data);
   });
 
+  socket.on('node_data', function (data) {
+    console.log('Received node_data:', data);
+    updateNodeData(data);
+  });
+
+  socket.on('node_ymd_data', function(msg) {
+    processNodeYMD(msg);
+  })
 
   socket.on('report_host_data', function (data) {
     console.log("Received report_host_data:", data);
@@ -272,68 +278,6 @@ function updateAllRobotSelects() {
 }
 
 
-
-// function updateNodeData(data) {
-//   let container = $('#node-data-container');
-//   container.empty(); // Clear previous data
-
-//   $.each(data, function (source, source_item) {
-
-//     let sourceHtml = '<h2>' + source + '</h2><ul>';
-
-//     $.each(source_item.fs_info, function (_, info) {
-//       sourceHtml += '<li>' + info[0] + ' : <b>' + info[1] + '%</b> free</li>';
-//     });
-
-//     sourceHtml += '</ul><div class="btn-group">' +
-//       '<button type="button" class="btn btn-primary" id="select-new-' + source + '">Select All New</button>' +
-//       '<button type="button" class="btn btn-secondary" id="clear-all-' + source + '">Clear Selections</button>' +
-//       '<button type="button" class="btn btn-success" id="transfer-selected-' + source + '">Transfer Selected</button>' +
-//       '<button type="button" class="btn btn-danger" id="cancel-' + source + '">Stop Transfer</button>' +
-//       '<button type="button" class="btn btn-danger" id="remove-selected-' + source + '">Removed Completed</button>' +
-//       '</div><div class="btn-group">' +
-//       '<button type="button" class="btn btn-primary" id="rescan-' + source + '">Scan</button>' +
-//       '</div>';
-
-//     sourceHtml += '<table class="table table-striped">' +
-//       '<thead><tr>' +
-//       '<th></th>' +
-//       '<th>Project</th>' +
-//       '<th>Name</th>' +
-//       '<th>Rel Path</th>' +
-//       '<th>Basename</th>' +
-//       '<th>DateTime</th>' +
-//       '<th>File size</th>' +
-//       '<th>State</th>' +
-//       '</tr></thead><tbody>';
-
-//     $.each(source_item.entries, function (_, entry) {
-//       sourceHtml += '<tr>' +
-//         '<td><input type="checkbox" id="' + entry.upload_id + '" data-source="' + source + '" data-on-device="' + entry.on_device + '" data-on-server="' + entry.on_server + '"></td>' +
-//         '<td>' + entry.project + '</td>' +
-//         '<td>' + entry.robot_name + '</td>' +
-//         '<td style="overflow-x:scroll;">' + entry.relpath + '</td>' +
-//         '<td>' + entry.basename + '</td>' +
-//         '<td>' + entry.datetime + '</td>' +
-//         '<td>' + entry.size + '</td>' +
-//         '<td><div id="status_' + entry.upload_id + '" class="status-div">' + entry.status + '</div></td>' +
-//         '</tr>';
-//     });
-
-//     sourceHtml += '</tbody></table>';
-//     container.append(sourceHtml);
-
-//     // attachEventHandlers();
-//   });
-
-//   // subscribe to each room.  
-//   $.each(data, function (source, source_item) {
-//     socket.emit('join', { 'room': source });
-//   });
-
-//   // Re-attach event handlers after dynamic content insertion
-//   //attachEventHandlers();
-// };
 
 
 function updateServerDataOld(data) {

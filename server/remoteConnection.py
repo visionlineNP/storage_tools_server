@@ -106,7 +106,7 @@ class RemoteConnection:
         
     def _on_dashboard_file(self, data):
 
-        debug_print(data)
+        # debug_print(data)
 
         source = data.get("source")
         # we only want to do updates from external sources.  
@@ -143,6 +143,8 @@ class RemoteConnection:
                                 self.m_upload_id_map[remote_id] = upload_id
                                 self.m_rev_upload_id_map[upload_id] = remote_id
 
+                                # debug_print((remote_id, upload_id))
+
                                 msg = {
                                     "on_local": on_local,
                                     "on_remote": on_remote,
@@ -154,6 +156,9 @@ class RemoteConnection:
 
     def server_transfer_files(self, data):
         debug_print(data)
+
+        # for uid in data["upload_ids"]:
+        #     debug_print((uid, self.m_rev_upload_id_map.get(uid, "Not found")))
 
         ids = [ self.m_rev_upload_id_map[uid] for uid in data["upload_ids"] if uid in self.m_rev_upload_id_map ]
         msg = {
@@ -174,11 +179,11 @@ class RemoteConnection:
     def send_node_data(self):
         data = self.m_database.get_node_data()
         count = count_elements(data)
-        debug_print(f"data has {count}")
+        # debug_print(f"data has {count}")
 
         stats = self.m_database.get_run_stats()
         source = self.m_node_source
-        debug_print(f"Source is [{source}]")
+        # debug_print(f"Source is [{source}]")
 
         node_data = {"entries": data, 
                      "stats": stats,
@@ -212,7 +217,7 @@ class RemoteConnection:
         url = f"http://{server}/file"
 
         #  source = self.m_config["source"]
-        debug_print(f"Source: {self.m_node_source}")
+        # debug_print(f"Source: {self.m_node_source}")
         source = self.m_node_source
         api_key_token = self.m_config["API_KEY_TOKEN"]
 
@@ -272,7 +277,7 @@ class RemoteConnection:
 
                                 }
                             
-                            debug_print(headers)
+                            # debug_print(headers)
                             # Setup the progress bar
                             with SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_node_source, socket=self.m_sio, event=remote_status_event) as remote_pbar, SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_config["source"], socket=self.m_local_sio, event=local_status_event) as local_pbar:
                                 def read_and_update():

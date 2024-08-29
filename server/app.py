@@ -123,7 +123,7 @@ with open(config_filename, "r") as f:
 
 
     # debug_print(get_source_by_mac_address())
-    g_config["source"] = get_source_by_mac_address()
+    g_config["source"] = get_source_by_mac_address() + "_" + str(g_config["port"])
     debug_print(f"Setting source name to {g_config['source']}")
 
 #     debug_print(json.dumps(g_config, indent=True))
@@ -136,10 +136,11 @@ with open(config_filename, "r") as f:
     for name in v_map:
         v_map[ name ] = os.path.join(v_root,  v_map.get(name, "").strip("/"))
          
+    blackout = g_config.get("blackout", [])
 
-    g_database = Database(g_upload_dir, g_config["source"], v_map)
+    g_database = Database(g_upload_dir, g_config["source"], v_map, blackout)
 
-    g_database.regenerate()
+    # g_database.regenerate()
     # # this is optional. We can preload projects, sites, and robots
     # # based on the config.
     for project_name in sorted(g_config.get("volume_map", [])):
@@ -152,7 +153,7 @@ with open(config_filename, "r") as f:
     for site_name in g_config.get("sites", []):
         g_database.add_site(site_name, "")
 
-    # g_database.estimate_runs()
+    g_database.estimate_runs()
 
 # wrapper for remote connection to another server
 g_remote_connection = RemoteConnection(g_config, socketio, g_database)
@@ -468,7 +469,7 @@ def on_device_files(data):
             "run_name": None,
             "datatype": get_datatype(file),
             "relpath": os.path.dirname(file),
-            "reldir": reldir,
+            # "reldir": reldir,
             "basename": os.path.basename(file),
             "fullpath": file,
             "size": size,
@@ -501,6 +502,55 @@ def on_device_files(data):
         g_remote_entries[source][upload_id]["status"] = status
 
     send_device_data()
+
+
+@socketio.on("request_server_ymd_data")
+def on_request_server_ymd_data(data):
+    global g_database
+    tab = data.get("tab")
+    names = tab.split(":")
+
+    _, project, ymd = names
+    data = g_database.get_send_data_ymd(project, ymd)
+
+    stats = g_database.get_run_stats(project, ymd)
+    
+    server_data = {
+        "runs": data,
+        "stats": stats,
+        "source": g_config["source"],
+        "project": project,
+        "ymd": ymd,
+        "tab": tab
+    }
+
+    socketio.emit("server_ymd_data", server_data, to="dashboard")
+
+
+@socketio.on("request_node_ymd_data")
+def on_request_node_ymd_data(data):
+    global g_node_entries
+
+    tab = data.get("tab")
+    names = tab.split(":")
+    _, source, project, ymd = names
+
+    source_data = g_node_entries.get(source, {})
+    # project_data = source_data.get("entries", {}).get(project)
+    # ymd_data = project_data.get(ymd, {})
+    runs= source_data.get("entries", {}).get(project, {}).get(ymd, [])
+
+    stats_data = source_data.get("stats", {}).get(project).get(ymd, {})
+
+    msg = {
+        "tab": tab,
+        "runs": runs,
+        "stats": stats_data,
+        "source": source,  
+        "project": project,
+        "ymd": ymd
+    }
+    socketio.emit("node_ymd_data", msg, to="dashboard")
 
 
 @socketio.on("request_projects")
@@ -714,7 +764,7 @@ def on_transfer_node_files(data):
             continue
 
         dirroot = g_remote_entries[source][upload_id]["dirroot"]
-        reldir = g_remote_entries[source][upload_id]["reldir"]
+        reldir = g_remote_entries[source][upload_id]["relpath"]
         basename = g_remote_entries[source][upload_id]["basename"]
         file = os.path.join(reldir, basename)
         offset = g_remote_entries[source][upload_id]["temp_size"]
@@ -1161,6 +1211,12 @@ def handle_report_node():
 
     return jsonify({"message": "Connection accepted"}), 200
 
+def get_dirroot(project:str) -> str:
+    root = g_config.get("volume_root", "/")
+    volume = g_config["volume_map"].get(project, "").strip("/")
+    # debug_print((root, project, volume))
+    return os.path.join(root, volume)
+
 
 def get_file_path(source: str, upload_id: str) -> str:
     """
@@ -1349,6 +1405,7 @@ def handle_file(source: str, upload_id: str):
 
     g_remote_entries[source][upload_id]["localpath"] = filepath
     g_remote_entries[source][upload_id]["on_server"] = True
+    g_remote_entries[source][upload_id]["dirroot"] = get_dirroot(g_remote_entries[source][upload_id]["project"])
 
     metadata_filename = filepath + ".metadata"
     with open(metadata_filename, "w") as fid:
@@ -1517,7 +1574,8 @@ def send_node_data():
 
 
 def send_server_data():
-    data = g_database.get_send_data()
+    # data = g_database.get_send_data()
+    data = g_database.get_send_data_ymd_stub()
 
     stats = g_database.get_run_stats()
     update_fs_info()
@@ -1553,8 +1611,11 @@ def send_report_node_data():
 
     socketio.emit("report_node_data", msg, to="dashboard")
 
-
-setup_zeroconf()
+try:
+    setup_zeroconf()
+except Exception as e:
+    debug_print("Error setting up zero conf. Maybe duplicate process?")
+    pass 
 
 
 # run with CONFIG=$PWD/config/config.ssd.yaml gunicorn -k gevent -w 1 -b "0.0.0.0:8091" "server.app:app"
