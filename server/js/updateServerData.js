@@ -84,6 +84,20 @@ function processServerSelectAllNew() {
 
 }
 
+function processServerStatus(data)
+{
+    const msg = data.msg;
+    const div = document.getElementById("server-status");
+    if( !div) {
+        console.log("Did not find 'server-status'");
+        return
+    }
+    div.innerHTML = "";
+    if( msg.size() > 1) {
+        div.innerHTML = "<span>" + msg + "</span>"
+    }
+
+}
 
 function processServerTransferSelections() {
     const source = $(this)[0].dataset.source;
@@ -107,6 +121,8 @@ function processServerCancelTransfer() {
     socket.emit("control_msg", { "source": source, "action": "cancel" });
 
 }
+
+
 
 /*
  data = {"stats" -> "project" -> "ymd_name" -> "runs" -> []

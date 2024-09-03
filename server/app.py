@@ -688,6 +688,52 @@ def on_update_entry_robot(data):
     socketio.emit("update_entry", update)
 
 
+@socketio.on("remote_node_data_ymd")
+def on_remote_node_data_ymd(data):
+    global g_node_entries
+    global g_remote_entries
+    global g_selected_action
+
+    source = data.get("source")
+
+    if source not in g_sources["node"]:
+        g_sources["node"].append(source)
+
+    g_selected_action[source] = None
+
+    node_entries = {}
+
+    for project, ymds in data["entries"].items():
+        for ymd, runs in ymds.items():
+            for run_name, relpaths in runs.items():
+                for relpath, entries in relpaths.items():
+                    for entry in entries:
+                        file = os.path.join(relpath, entry["basename"])
+                        upload_id = get_upload_id(source, project, file)
+                        entry["upload_id"] = upload_id
+                        entry["project"] = project
+                        g_remote_entries[source][upload_id] = entry
+
+                        filepath = get_file_path(source, upload_id)
+
+                        if os.path.exists(filepath):
+                            g_remote_entries[source][upload_id]["on_server"] = True
+                            entry["on_local"] = True
+
+                        if os.path.exists(filepath + ".tmp"):
+                            g_remote_entries[source][upload_id]["temp_size"] = (
+                                os.path.getsize(filepath + ".tmp")
+                            )
+                        else:
+                            g_remote_entries[source][upload_id]["temp_size"] = 0
+
+
+    msg = {"entries": {source: data}}
+
+    socketio.emit("node_data_ymd", msg, to=source)
+
+    pass
+
 @socketio.on("remote_node_data")
 def on_remote_node_data(data):
     global g_node_entries
@@ -696,8 +742,8 @@ def on_remote_node_data(data):
 
     source = data.get("source")
 
-    if source not in g_sources["devices"]:
-        g_sources["devices"].append(source)
+    if source not in g_sources["node"]:
+        g_sources["node"].append(source)
 
     g_selected_action[source] = None
 
@@ -727,15 +773,15 @@ def on_remote_node_data(data):
                             g_remote_entries[source][upload_id]["temp_size"] = 0
     # debug_print(data)
 
-    g_node_entries[source] = data
-    if not source in g_sources["nodes"]:
-        g_sources["nodes"].append(source)
-        debug_print(f"added {source} to 'nodes'")
+    # g_node_entries[source] = data
+    # if not source in g_sources["nodes"]:
+    #     g_sources["nodes"].append(source)
+    #     debug_print(f"added {source} to 'nodes'")
 
-    msg = {"entries": g_node_entries}
+    # msg = {"entries": g_node_entries}
 
-    socketio.emit("node_data", msg, to=source)
-    socketio.emit("node_data", msg, to="dashboard")
+    # socketio.emit("node_data", msg, to=source)
+    # socketio.emit("node_data", msg, to="dashboard")
 
 
 # comes from local gui
@@ -1566,11 +1612,12 @@ def update_stat(source, uid, stat):
 
 
 def send_node_data():
+    pass 
 
-    debug_print("send")
-    msg = {"entries": g_node_entries}
+    # debug_print("send")
+    # msg = {"entries": g_node_entries}
 
-    socketio.emit("node_data", msg, to="dashboard")
+    # socketio.emit("node_data", msg, to="dashboard")
 
 
 def send_server_data():

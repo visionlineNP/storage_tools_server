@@ -40,7 +40,7 @@ python ./server/app.py -c config/config.yaml
 
 Step 3. Stopping the server
 
-Control-c in the window, or `kill -hup PID` where PID is the Process ID, found via `ps`. 
+Control-c in the window, or `kill -hup PID` where PID is the Process ID, found via `ps`.
 
 ### Run as Docker Compose
 
@@ -67,3 +67,13 @@ docker compose up
 Step 5. Stop the server
 
 Control-c in the running console, or `docker compose stop`
+
+## Runnning on server
+
+``` bash
+ssh airlab-storage.andrew.cmu.edu
+cd {dir for server}
+sudo -s
+HOSTNAME=airlab-storage docker-compose down
+HOSTNAME=airlab-storage docker-compose up --build
+```

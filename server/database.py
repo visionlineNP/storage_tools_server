@@ -5,9 +5,12 @@ import json
 import os
 import pathlib
 import threading
+from flask_socketio import SocketIO
 import humanfriendly
 from datetime import datetime, timedelta
 import hashlib
+from tqdm import tqdm 
+
 from .debug_print import debug_print
 
 
@@ -75,7 +78,7 @@ class Database:
                     continue
 
                 debug_print(root)
-                for basename in files:
+                for basename in tqdm(files, desc=f"Processing {root}", leave=False):
                     if basename == "database.json":
                         continue
                     if basename.endswith(".metadata"):

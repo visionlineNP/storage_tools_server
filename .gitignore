@@ -9,3 +9,5 @@ uploads/
 nginx/conf.d/01_ldap_active.conf
 nginx/logs/error.log
 nginx/logs/access.log
+nginx/conf.d/ldap (1).conf
+nginx/conf.d/ldap_ssl.conf

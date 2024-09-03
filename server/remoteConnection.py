@@ -74,6 +74,7 @@ class RemoteConnection:
             self.m_sio.on('control_msg')(self._handle_control_msg)    
             self.m_sio.on("dashboard_file")(self._on_dashboard_file)
             self.m_sio.on("node_data")(self._on_node_data)
+            self.m_sio.on("node_data_ymd")(self._on_node_data)
             self.m_sio.on("node_send")(self._on_node_send)
             self.m_sio.on("disconnect")(self._on_disconnect)
             self.m_sio.on("connect")(self._on_connect)
@@ -177,6 +178,44 @@ class RemoteConnection:
 
 
     def send_node_data(self):
+
+        data = self.m_database.get_send_data_ymd_stub()
+
+        stats = self.m_database.get_run_stats()
+        source = self.m_node_source
+        # debug_print(f"Source is [{source}]")
+
+        node_data = {"entries": data, 
+                     "stats": stats,
+                       "source": source
+                        }
+
+        self.m_sio.emit("remote_node_data", node_data)
+
+        stub = self.m_database.get_send_data_ymd_stub()
+        for project in stub:
+            for ymd in stub[project]:
+
+                data = self.m_database.get_send_data_ymd(project, ymd)
+
+                stats = self.m_database.get_run_stats(project, ymd)
+                
+                node_data = {
+                    "runs": data,
+                    "stats": stats,
+                    "source": self.m_node_source,
+                    "project": project,
+                    "ymd": ymd,
+                }
+                self.m_sio.emit("remote_node_data_ymd", node_data)
+
+
+        # for each project / ymd
+        #   send data
+        # send complete 
+        pass 
+
+    def send_node_data_old(self):
         data = self.m_database.get_node_data()
         count = count_elements(data)
         # debug_print(f"data has {count}")
@@ -190,6 +229,7 @@ class RemoteConnection:
                        "source": source
                         }
 
+        debug_print("Send node data")
         self.m_sio.emit("remote_node_data", node_data)
 
     def _on_node_send(self, data):

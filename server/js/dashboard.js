@@ -29,7 +29,7 @@ $(document).ready(function () {
       statusDiv.textContent = 'Offline';
       //statusDiv.style.backgroundColor = 'red';
     }
-
+    
   });
 
   // process data device 

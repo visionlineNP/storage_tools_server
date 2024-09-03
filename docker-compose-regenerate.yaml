@@ -1,0 +1,27 @@
+services:
+  storage_tools_regenerate:
+    build:
+      context: .
+      dockerfile: Dockerfile.regenerate
+    image: storage_tools_regenerate
+    container_name: storage_tools_regenerate
+
+    volumes:
+      - ./uploads:/mnt/uploads  # Volume mount for uploads directory
+      # - ./uploads/volume1:/volume1
+      # - ./uploads/volume2:/volume2
+      # - ./uploads/volume3:/volume3
+      # - ./uploads/volume4:/volume4
+      # - ./uploads/volume5:/volume5
+      # - ./uploads/volume6:/volume6
+
+      - /volume1:/volume1
+      - /volume2:/volume2
+      - /volume3:/volume3
+      - /volume4:/volume4
+      - /volume5:/volume5
+      - /volume6:/volume6
+
+    tty: true
+    stdin_open: true
+
