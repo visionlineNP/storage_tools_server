@@ -742,8 +742,8 @@ def on_remote_node_data(data):
 
     source = data.get("source")
 
-    if source not in g_sources["node"]:
-        g_sources["node"].append(source)
+    if source not in g_sources["nodes"]:
+        g_sources["nodes"].append(source)
 
     g_selected_action[source] = None
 
