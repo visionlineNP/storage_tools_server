@@ -164,3 +164,8 @@ dd {
 .bs-tooltip-auto[data-popper-placement^="left"] {
     width: fit-content;
 }
+
+.table_relpath {
+    font-style: italic;
+    text-align: center;
+}

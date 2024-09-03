@@ -701,11 +701,12 @@ def on_remote_node_data_ymd(data):
 
     g_selected_action[source] = None
 
-    node_entries = {}
+    rtn = {}
 
     project = data["project"]
     ymd = data["ymd"]
     runs = data["runs"]    
+
 
     for run_name, relpaths in runs.items():
         for relpath, entries in relpaths.items():
@@ -729,10 +730,12 @@ def on_remote_node_data_ymd(data):
                 else:
                     g_remote_entries[source][upload_id]["temp_size"] = 0
 
+                rtn[upload_id] = entry
 
-    msg = {"entries": {source: data}}
+    msg = {"entries": rtn,
+           "project": project}
 
-    socketio.emit("node_data_ymd", msg, to=source)
+    socketio.emit("node_data_ymd_rtn", msg, to=source)
 
     pass
 
@@ -748,6 +751,7 @@ def on_remote_node_data(data):
         g_sources["nodes"].append(source)
 
     g_selected_action[source] = None
+
 
     g_remote_entries[source] = {}
     for project, ymds in data["entries"].items():

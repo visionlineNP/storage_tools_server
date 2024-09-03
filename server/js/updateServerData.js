@@ -248,38 +248,46 @@ function processServerYMD(data)
         const run_dd = document.createElement("dd");
         run_dl.appendChild(run_dd);
 
+
+        const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "Status"]
+        const item_names = ["site", "datetime", "run_name", "basename", "hsize"]
+
+        const table = document.createElement("table");
+        table.className = "table table-striped";
+        run_dd.appendChild(table);
+
+        const thead = document.createElement("thead");
+        table.appendChild(thead);
+        const tr = document.createElement("tr");
+        thead.appendChild(tr);
+
+        header_names.forEach((header) => {
+            const th = document.createElement("th");
+            th.textContent = header;
+            tr.appendChild(th);
+        });
+
+        const tbody = document.createElement("tbody");
+        table.appendChild(tbody);
+
         run_entry = Object.entries(run_entry);
         run_entry.sort((a, b) => a[0].localeCompare(b[0]));
 
         for ([relpath, items] of run_entry) {
+            const run_header_tr = document.createElement("tr");
+            run_header_tr.className = "table-active";
+            tbody.appendChild(run_header_tr);
+
+            const run_header_td = document.createElement("td");
+            run_header_td.className = "table_relpath"
+            run_header_td.setAttribute("colspan", header_names.length);
+            run_header_tr.appendChild(run_header_td);
+
             const relpath_tag = document.createElement("span");
+            relpath_tag.className = "table_relpath";
             relpath_tag.innerHTML = relpath;
-            run_dd.appendChild(relpath_tag);
-
-            const table = document.createElement("table");
-            table.className = "table table-striped";
-            run_dd.appendChild(table);
-
-            const thead = document.createElement("thead");
-            table.appendChild(thead);
-            const tr = document.createElement("tr");
-            thead.appendChild(tr);
-
-            //const header = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
-            // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]
-            const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "Status"]
-
-            const item_names = ["site", "datetime", "run_name", "basename", "hsize"]
-
-            header_names.forEach((header) => {
-                const th = document.createElement("th");
-                th.textContent = header;
-                tr.appendChild(th);
-            });
-
-            const tbody = document.createElement("tbody");
-            table.appendChild(tbody);
-
+            run_header_td.appendChild(relpath_tag);
+        
             items.sort((a, b) => a["datetime"].localeCompare(b["datetime"]))
 
             $.each(items, function (_, detail) {
@@ -374,7 +382,8 @@ function processServerYMD(data)
                 tdStatus.appendChild(statusDiv);
                 tr.appendChild(tdStatus);
             });
-        };
+
+        }
     };
 
 }

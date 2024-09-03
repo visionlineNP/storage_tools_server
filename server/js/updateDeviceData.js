@@ -446,45 +446,50 @@ function updateDeviceData(data) {
 
       }
 
+      const thHeaders = [
+        '', 'Robot', 'Site', 'Basename',  'DateTime', 'File size', 'State'
+      ];
+
+
+      const table = document.createElement('table');
+      table.className = 'table table-striped';
+      ymd_tab.append(table)
+
+      const thead = document.createElement('thead');
+      const tr = document.createElement('tr');
+
+      thHeaders.forEach(header => {
+        const th = document.createElement('th');
+        th.textContent = header;
+        tr.appendChild(th);
+      });
+
+      thead.appendChild(tr);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      table.appendChild(tbody);
+
       date_entries = Object.entries(date_items);
       date_entries.sort((a, b) => a[0].localeCompare(b[0]));
 
+      date_entries.forEach((data_entry) => {
+        relpath = data_entry[0]
+        relpath_entries = data_entry[1]
 
-      for (const [relpath, relpath_entries] of date_entries) {
-        let relpath_div = document.createElement("div");
-        relpath_div.innerHTML = relpath;
-        ymd_tab.append(relpath_div);
+        const run_header_tr = document.createElement("tr");
+        run_header_tr.className = "table-active";
+        tbody.appendChild(run_header_tr);
 
-        const tableDiv = document.createElement('div');
-        ymd_tab.append(tableDiv);
+        const run_header_td = document.createElement("td");
+        run_header_td.className = "table_relpath"
+        run_header_td.setAttribute("colspan", thHeaders.length);
+        run_header_tr.appendChild(run_header_td);
 
-        const table = document.createElement('table');
-        table.className = 'table table-striped';
-
-        const thead = document.createElement('thead');
-        const tr = document.createElement('tr');
-
-        const thHeaders = [
-          '',
-          'Robot',
-          'Site',
-          'Basename',
-          'DateTime',
-          'File size',
-          'State'
-        ];
-
-        thHeaders.forEach(header => {
-          const th = document.createElement('th');
-          th.textContent = header;
-          tr.appendChild(th);
-        });
-
-        thead.appendChild(tr);
-        table.appendChild(thead);
-
-        const tbody = document.createElement('tbody');
-
+        const relpath_tag = document.createElement("span");
+        relpath_tag.className = "table_relpath";
+        relpath_tag.innerHTML = relpath;
+        run_header_td.appendChild(relpath_tag);
 
         for (const entry of relpath_entries) {
 
@@ -623,11 +628,7 @@ function updateDeviceData(data) {
           tbody.appendChild(tr);
         };
 
-        table.appendChild(tbody);
-        tableDiv.appendChild(table);
-
-      };
-
+      });
 
     });
 

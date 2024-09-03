@@ -74,7 +74,7 @@ class RemoteConnection:
             self.m_sio.on('control_msg')(self._handle_control_msg)    
             self.m_sio.on("dashboard_file")(self._on_dashboard_file)
             self.m_sio.on("node_data")(self._on_node_data)
-            self.m_sio.on("node_data_ymd")(self._on_node_data)
+            self.m_sio.on("node_data_ymd_rtn")(self._on_node_data_ymd_rtn)
             self.m_sio.on("node_send")(self._on_node_send)
             self.m_sio.on("disconnect")(self._on_disconnect)
             self.m_sio.on("connect")(self._on_connect)
@@ -124,9 +124,68 @@ class RemoteConnection:
         # self.m_local_sio.emit("dashboard_file_server", data)
         pass 
 
+
+    def _on_node_data_ymd_rtn(self, data):
+        entries = data["entries"]
+        project = data["project"]
+
+        for remote_id in entries:
+            entry = entries[remote_id]
+
+            on_remote = entry.get("on_local")
+            on_local = entry.get("on_remote")
+            remote_id = entry.get("upload_id")
+
+            file = os.path.join(entry["relpath"], entry["basename"]) 
+
+            upload_id = get_upload_id(self.m_config["source"], project, file)
+            self.m_upload_id_map[remote_id] = upload_id
+            self.m_rev_upload_id_map[upload_id] = remote_id
+
+            msg = {
+                "on_local": on_local,
+                "on_remote": on_remote,
+                "upload_id": upload_id
+            }
+            self.m_local_sio.emit("dashboard_file_server", msg, to="dashboard")
+
+
+            pass 
+
     def _on_node_data(self, data):
         debug_print("Got node data")
         for (source_name, sources) in data["entries"].items():
+            project = sources["project"]
+            runs = sources["runs"]
+            ymd = sources["ymd"]
+
+            for( reldir, items) in runs.items():
+                print(reldir, sorted(items))
+                # print(items)
+                continue
+                for entry in items:
+
+                    on_remote = entry.get("on_local")
+                    on_local = entry.get("on_remote")
+                    remote_id = entry.get("upload_id")
+
+                    file = os.path.join(entry["relpath"], entry["basename"]) 
+
+                    upload_id = get_upload_id(self.m_config["source"], project, file)
+                    self.m_upload_id_map[remote_id] = upload_id
+                    self.m_rev_upload_id_map[upload_id] = remote_id
+
+                    # debug_print((remote_id, upload_id))
+
+                    msg = {
+                        "on_local": on_local,
+                        "on_remote": on_remote,
+                        "upload_id": upload_id
+                    }
+                    self.m_local_sio.emit("dashboard_file_server", msg, to="dashboard")
+
+        
+            continue
             source_items = sources["entries"]
             for (project, projects) in source_items.items():
                 for (ymd, ymds) in projects.items():
