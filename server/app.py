@@ -703,29 +703,31 @@ def on_remote_node_data_ymd(data):
 
     node_entries = {}
 
-    for project, ymds in data["entries"].items():
-        for ymd, runs in ymds.items():
-            for run_name, relpaths in runs.items():
-                for relpath, entries in relpaths.items():
-                    for entry in entries:
-                        file = os.path.join(relpath, entry["basename"])
-                        upload_id = get_upload_id(source, project, file)
-                        entry["upload_id"] = upload_id
-                        entry["project"] = project
-                        g_remote_entries[source][upload_id] = entry
+    project = data["project"]
+    ymd = data["ymd"]
+    runs = data["runs"]    
 
-                        filepath = get_file_path(source, upload_id)
+    for run_name, relpaths in runs.items():
+        for relpath, entries in relpaths.items():
+            for entry in entries:
+                file = os.path.join(relpath, entry["basename"])
+                upload_id = get_upload_id(source, project, file)
+                entry["upload_id"] = upload_id
+                entry["project"] = project
+                g_remote_entries[source][upload_id] = entry
 
-                        if os.path.exists(filepath):
-                            g_remote_entries[source][upload_id]["on_server"] = True
-                            entry["on_local"] = True
+                filepath = get_file_path(source, upload_id)
 
-                        if os.path.exists(filepath + ".tmp"):
-                            g_remote_entries[source][upload_id]["temp_size"] = (
-                                os.path.getsize(filepath + ".tmp")
-                            )
-                        else:
-                            g_remote_entries[source][upload_id]["temp_size"] = 0
+                if os.path.exists(filepath):
+                    g_remote_entries[source][upload_id]["on_server"] = True
+                    entry["on_local"] = True
+
+                if os.path.exists(filepath + ".tmp"):
+                    g_remote_entries[source][upload_id]["temp_size"] = (
+                        os.path.getsize(filepath + ".tmp")
+                    )
+                else:
+                    g_remote_entries[source][upload_id]["temp_size"] = 0
 
 
     msg = {"entries": {source: data}}
