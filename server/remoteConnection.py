@@ -42,6 +42,7 @@ class RemoteConnection:
         self.m_verbose = config.get("verbose", True)
         self.m_database = database
         self.m_source = config.get("source")
+        self.m_username = ""
 
         # maps remote to local id
         self.m_upload_id_map = {}
@@ -53,7 +54,7 @@ class RemoteConnection:
     def connected(self):
         return self.m_sio.connected
 
-    def connect(self, server_full):
+    def connect(self, server_full, username):
         rtn = False
 
         try:
@@ -79,15 +80,19 @@ class RemoteConnection:
             self.m_sio.on("disconnect")(self._on_disconnect)
             self.m_sio.on("connect")(self._on_connect)
             self.m_sio.on("node_revise_stats")(self._on_node_revise_stats)
+            self.m_sio.on("dashboard_info")(self._on_dashboard_info)
             # self.m_sio.on("device_remove")(self.removeFiles)
 
-            self.m_node_source = self.m_config["source"].replace("SRC","NODE")
+            # self.m_node_source = self.m_config["source"].replace("SRC","NODE")
+            self.m_node_source = self.m_config["source"]
             self.m_sio.emit('join', { 'room': self.m_node_source, "type": "node" })
             self.m_server = server_full
             self.m_upload_id_map = {}
             self.m_rev_upload_id_map = {}
 
             self.send_node_data()
+
+            self.m_username = username
             rtn = True
 
         except Exception as e:
@@ -95,16 +100,25 @@ class RemoteConnection:
                 debug_print(e)
         return rtn
 
+    def dashboard_room(self):
+        return "dashboard-" + self.m_username
+
     def _on_connect(self):
         debug_print("node connected")
         source = self.m_config["source"]
-        self.m_local_sio.emit("remote_connection", {"source": source, "address": self.m_server, "connected": True}, to="dashboard")
+        self.m_local_sio.emit("remote_connection", {"source": source, "address": self.m_server, "connected": True}, to=self.dashboard_room())
+        self.m_sio.emit("server_refresh")
 
     def _on_disconnect(self):
         debug_print("node disconnected")
         source = self.m_config["source"]
-        self.m_local_sio.emit("remote_connection", {"source": source, "connected": False}, to="dashboard")
+        self.m_local_sio.emit("remote_connection", {"source": source, "connected": False}, to=self.dashboard_room())
         
+
+    def _on_dashboard_info(self, data):
+        host = data.get("source")
+        debug_print(f"connected to [{host}]")
+
     def _on_dashboard_file(self, data):
 
         # debug_print(data)
@@ -113,12 +127,12 @@ class RemoteConnection:
         # we only want to do updates from external sources.  
         if source == self.m_node_source:
             return 
-        debug_print(data)
+        # debug_print(data)
         upload_id = data["upload_id"]
         local_id = self.m_upload_id_map.get(upload_id, None)
         if( local_id):
             data["upload_id"] = local_id
-            self.m_local_sio.emit("dashboard_update", data, to="dashboard")
+            self.m_local_sio.emit("dashboard_update", data, to=self.dashboard_room())
         else:
             debug_print(f"Didn't get mapping for {upload_id}")
         # self.m_local_sio.emit("dashboard_file_server", data)
@@ -129,25 +143,28 @@ class RemoteConnection:
         entries = data["entries"]
         project = data["project"]
 
-        for remote_id in entries:
-            entry = entries[remote_id]
+        for upload_id in entries:
+            entry = entries[upload_id]
 
             on_remote = entry.get("on_local")
             on_local = entry.get("on_remote")
             remote_id = entry.get("upload_id")
 
-            file = os.path.join(entry["relpath"], entry["basename"]) 
 
-            upload_id = get_upload_id(self.m_config["source"], project, file)
+            # file = os.path.join(entry["relpath"], entry["basename"]) 
+
+            # upload_id = get_upload_id(self.m_config["source"], project, file)
             self.m_upload_id_map[remote_id] = upload_id
             self.m_rev_upload_id_map[upload_id] = remote_id
 
+            # debug_print(f"Remote: {remote_id} -> {upload_id}")            
+
             msg = {
-                "on_local": on_local,
-                "on_remote": on_remote,
+                "on_remote": on_local,
+                "on_local": on_remote,
                 "upload_id": upload_id
             }
-            self.m_local_sio.emit("dashboard_file_server", msg, to="dashboard")
+            self.m_local_sio.emit("dashboard_file_server", msg, to=self.dashboard_room())
 
 
             pass 
@@ -182,7 +199,7 @@ class RemoteConnection:
                         "on_remote": on_remote,
                         "upload_id": upload_id
                     }
-                    self.m_local_sio.emit("dashboard_file_server", msg, to="dashboard")
+                    self.m_local_sio.emit("dashboard_file_server", msg, to=self.dashboard_room())
 
         
             continue
@@ -210,15 +227,15 @@ class RemoteConnection:
                                     "on_remote": on_remote,
                                     "upload_id": upload_id
                                 }
-                                self.m_local_sio.emit("dashboard_file_server", msg, to="dashboard")
+                                self.m_local_sio.emit("dashboard_file_server", msg, to=self.dashboard_room())
 
                                 # debug_print(("on_local:", entry.get("on_local"), "on_remote", entry.get("on_remote")))
 
     def server_transfer_files(self, data):
         debug_print(data)
 
-        # for uid in data["upload_ids"]:
-        #     debug_print((uid, self.m_rev_upload_id_map.get(uid, "Not found")))
+        for uid in data["upload_ids"]:
+            debug_print((uid, self.m_rev_upload_id_map.get(uid, "Not found")))
 
         ids = [ self.m_rev_upload_id_map[uid] for uid in data["upload_ids"] if uid in self.m_rev_upload_id_map ]
         msg = {
@@ -237,7 +254,30 @@ class RemoteConnection:
 
 
     def send_node_data(self):
+        debug_print("Sending node data")
+        data = self.m_database.get_send_data()
+            
+        source = self.m_node_source
+        stats = self.m_database.get_run_stats()
 
+        node_data = {"entries": data, 
+                     "stats": stats,
+                       "source": source
+                        }
+
+        url = f"http://{self.m_server}/node-data"
+
+        api_key_token = self.m_config["API_KEY_TOKEN"]
+        headers = {
+            "Authorization": f"Bearer {api_key_token}"
+            }
+
+        response = requests.post(url, json=node_data, headers=headers)
+        debug_print(response.status_code)
+
+    def send_node_data_old(self):
+
+        debug_print("Sending node data")
         data = self.m_database.get_send_data_ymd_stub()
 
         stats = self.m_database.get_run_stats()
@@ -255,18 +295,23 @@ class RemoteConnection:
         for project in stub:
             for ymd in stub[project]:
 
-                data = self.m_database.get_send_data_ymd(project, ymd)
+                datasets = self.m_database.get_send_data_ymd(project, ymd)
 
                 stats = self.m_database.get_run_stats(project, ymd)
                 
-                node_data = {
-                    "runs": data,
-                    "stats": stats,
-                    "source": self.m_node_source,
-                    "project": project,
-                    "ymd": ymd,
-                }
-                self.m_sio.emit("remote_node_data_ymd", node_data)
+                for i, data in enumerate(datasets):
+
+                    node_data = {
+                        "total": len(datasets),
+                        "index": i,
+                        "runs": data,
+                        "stats": stats,
+                        "source": self.m_node_source,
+                        "project": project,
+                        "ymd": ymd,
+                    }
+                    debug_print(f"sending {project} {ymd} {i}/{len(datasets)}")
+                    self.m_sio.emit("remote_node_data_ymd", node_data)
 
 
         # for each project / ymd
@@ -292,7 +337,8 @@ class RemoteConnection:
         self.m_sio.emit("remote_node_data", node_data)
 
     def _on_node_send(self, data):
-        source = data.get("source").replace("NODE", "SRC")
+        # source = data.get("source").replace("NODE", "SRC")
+        source = data.get("source")
         if source != self.m_config["source"]:
             return 
         files = data.get("files")

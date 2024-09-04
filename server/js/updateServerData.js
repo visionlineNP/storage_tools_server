@@ -38,9 +38,13 @@ function on_dashboard_file_server(data) {
     } else { console.log("didnt find ", "on_local_" + upload_id) }
 
     let checkbox = document.getElementById("server_select_" + upload_id)
-    checkbox.dataset.on_local = data.on_local;
-    checkbox.dataset.on_remote = data.on_remote;
-    refreshTooltips();
+    if(checkbox) {
+        checkbox.dataset.on_local = data.on_local;
+        checkbox.dataset.on_remote = data.on_remote;
+        refreshTooltips();
+    } else {
+        console.log("Did not find ", "server_select_" + upload_id)
+    }
 }
 
 function on_remote_connection(msg) {
@@ -51,7 +55,7 @@ function on_remote_connection(msg) {
             sync_status.className = "bi bi-cloud-fill";
             sync_status.title = "Connected";
             link_button.dataset.connected = true;
-            link_button.textContent = "Disconnect"
+            link_button.textContent = "Disconnect";
 
         } else {
             sync_status.className = "bi bi-cloud grayed-out";
@@ -123,6 +127,39 @@ function processServerCancelTransfer() {
 }
 
 
+window.server_accumulate = {};
+
+function accumulateServerYMD(data)
+{
+    const ymd_name = data.ymd; 
+    const runs = Object.entries(data.runs);
+    const project_name = data.project;
+    const source = data.source;
+    const total = data.total;
+
+    const key = source + "." + project_name + "." + ymd_name
+
+
+    acc_data =  window.server_accumulate[key]
+    if( acc_data == null) {
+        acc_data = data;
+        acc_data.found = 1;
+    } else {
+        acc_data.found += 1;
+
+        for ([run_name, run_entry] of runs) {
+            acc_data.runs[run_name] = run_entry;
+        };        
+    }
+    window.server_accumulate[key] = acc_data;
+
+    console.log(acc_data.found)
+    if(total == acc_data.found) {
+        processServerYMD(acc_data);
+        window.server_accumulate[key] = null;
+    }
+
+}
 
 /*
  data = {"stats" -> "project" -> "ymd_name" -> "runs" -> []
@@ -133,6 +170,7 @@ function processServerCancelTransfer() {
 */
 function processServerYMD(data)
 {
+    console.log(data);
     const ymd_name = data.ymd; 
     const runs = Object.entries(data.runs);
     const project_name = data.project;
@@ -251,6 +289,10 @@ function processServerYMD(data)
 
         const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "Status"]
         const item_names = ["site", "datetime", "run_name", "basename", "hsize"]
+
+        // const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
+        // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]
+
 
         const table = document.createElement("table");
         table.className = "table table-striped";
@@ -426,6 +468,8 @@ function updateServerData(data) {
         linkButton.dataset.connected = data.remote_connected
         if (data.remote_connected) {
             linkButton.textContent = "Disconnect";
+            socket.emit("server_refresh");
+
         } else {
             linkButton.textContent = "Connect";
         }

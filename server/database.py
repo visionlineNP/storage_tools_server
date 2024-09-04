@@ -30,6 +30,8 @@ def get_upload_id(source: str, project: str, file: str):
     val = f"{source}_{project}_{file.strip('/')}"
     val = val.replace("/", "_")
     val = val.replace(".", "_")
+    # Use 'return val' when debugging issues with id missmatch
+    # return val
     hash_object = hashlib.md5(val.encode())
     return hash_object.hexdigest()
 
@@ -306,7 +308,9 @@ class Database:
 
     def get_send_data_ymd(self, send_project, send_ymd):
         pass 
+        rtnarr = []
         rtn = {}
+        max_count = 500
         for entry in self.database["data"]:
             project = entry["project"]
             if project != send_project:
@@ -349,8 +353,12 @@ class Database:
                     "upload_id": upload_id,
                 }
             )
+            if len(rtn[run][relpath]) >= max_count:
+                rtnarr.append(rtn)
+                run = {}
 
-        return rtn
+        rtnarr.append(rtn)
+        return rtnarr
 
 
     """
@@ -374,6 +382,7 @@ class Database:
             site = entry["site"]
             topics = entry.get("topics", [])
             upload_id = entry["upload_id"]
+            robot_name = entry["robot_name"]
 
             rtn[project] = rtn.get(project, {})
             rtn[project][ymd] = rtn[project].get(ymd, {})
@@ -393,6 +402,11 @@ class Database:
                     "hsize": humanfriendly.format_size(size),
                     "topics": topics,
                     "upload_id": upload_id,
+                    "dirroot": self.volume_map[project],
+                    "robot_name": robot_name,
+                    "start_datetime" :entry["start_datetime"],
+                    "end_datetime" : entry["end_datetime"]
+
                 }
             )
 
@@ -416,12 +430,15 @@ class Database:
             if send_ymd and ymd != send_ymd:
                 continue
 
-            start_time = entry["start_datetime"]
-            end_time = entry["end_datetime"]
-            basename = entry["basename"]
-            relpath = entry["relpath"]
+            if not "start_datetime" in entry:
+                debug_print(json.dumps(entry, indent=True))
+
+            start_time = entry.get("start_datetime", entry.get("start_time"))
+            end_time = entry.get("end_datetime", entry.get("end_time"))
+            # basename = entry["basename"]
+            # relpath = entry["relpath"]
             size = entry["size"]
-            site = entry["site"]
+            # site = entry["site"]
 
             stats[project] = stats.get(project, {})
             stats[project][ymd] = stats[project].get(ymd, {})

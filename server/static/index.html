@@ -45,12 +45,12 @@
                     <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#nodes-tab"><i class="bi bi-cloud" ></i> &nbsp;  Nodes</a>
                     </li>
-                    <li class="nav-item">
+                    <!-- <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#report-host-tab">Report Host</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#report-node-tab">Report Node</a>
-                    </li>
+                    </li> -->
                     <hr>
                     <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#config-tab"><i class="bi bi-gear"></i> Configure</a>
@@ -308,9 +308,13 @@
     <script type="text/javascript" charset="utf-8">
 
       
-      var protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+      let protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
       let url = protocol + "//" + document.domain + ':' + location.port;
-      var socket = io.connect(url, {transports: ['websocket']});
+      let username = getCookie("username");
+
+
+
+      var socket = io.connect(url, {transports: ['websocket'], query: `username=${username}`});
       
     //   var socket = io.connect('https://' + document.domain + ':' + location.port, {
     //     transports: ['websocket'] 

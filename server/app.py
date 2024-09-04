@@ -100,6 +100,10 @@ g_upload_dir = None
 g_database = None
 
 
+# dashboard clients
+# when we need to send something to every dashboard.  
+g_dashboard_rooms = []
+
 # config_filename = args.config
 config_filename = os.environ.get("CONFIG", "config/config.yaml")
 
@@ -210,6 +214,19 @@ def generate_token(user):
     return jwt.encode(payload, app.config["SECRET_KEY"], algorithm='HS256')
 
 
+def dashboard_room():
+
+    username = request.headers.get('X-Authenticated-User')
+    if not username:
+        username = request.cookies.get("username")
+    if not username:
+        username = request.args.get("username")
+
+    if not username:
+        username = "DEVICE"
+
+    return "dashboard-" + username
+
 
 ###############################################################################
 # socket io connectons
@@ -226,13 +243,17 @@ def on_join(data):
     room = data["room"]
     client = data.get("type", None)
     join_room(room)
-    socketio.emit("dashboard_info", {"data": f"Joined room: {room}"}, to=room)
+    socketio.emit("dashboard_info", {"data": f"Joined room: {room}", "source": g_config["source"]}, to=room)
     debug_print(f"Joined room {room} from {client}")
-    if client is not None:
+    if client != "dashboard":
         g_remote_sockets[room] = request.sid
     else:
+        if room not in g_dashboard_rooms:
+            g_dashboard_rooms.append(room)
+
         send_all_data()
 
+    
 
 @socketio.on("leave")
 def on_leave(data):
@@ -241,12 +262,33 @@ def on_leave(data):
     debug_print(f"left room {source}")
 
 
+@socketio.on("ping")
+def on_ping(data):
+    debug_print(f"Got ping {data}")
+
+
 @socketio.on("connect")
 def on_connect():
     # debug_print(session.get('api_key_token'))
 
     debug_print("Connection")
+
+
+    # debug_print(("request.headers.get('X-Authenticated-User') is ", request.headers.get('X-Authenticated-User') ))
+
+    username = request.args.get("username")
+    if username is None:
+        username = request.headers.get('X-Authenticated-User') 
+    debug_print(f"username is {username}")
+
+    api_key_token = request.headers.get("X-Api-Key")
+    if api_key_token:
+        debug_print(f"Api key: {api_key_token}")
+        return 
+
     auth_header = request.headers.get("Authorization")
+
+
     if auth_header:
         debug_print(auth_header)
         auth_type, token = auth_header.split()
@@ -257,17 +299,20 @@ def on_connect():
             if validate_api_key_token(api_key_token):
                 debug_print("Valid token")
                 session["api_key_token"] = api_key_token
+                return "Valid Connection", 200
             else:
                 debug_print("Invalid token")
                 return "Invalid API key token", 401
         elif auth_type.lower() == "basic":
-            pass
+            user = request.headers.get('X-Authenticated-User')  # Header set by Nginx after LDAP auth
+            ## need to pass this to send_all_data.
         else:
             disconnect()
 
-    debug_print("Client connected")
-    send_all_data()
-
+    # debug_print("Client connected")
+    # if username:
+    #     send_all_data()
+    # return "Good", 200
     
 def send_all_data():
     send_device_data()
@@ -278,6 +323,7 @@ def send_all_data():
     on_request_projects()
     on_request_robots()
     on_request_sites()
+    debug_print("Sent all data")
 
 
 @socketio.on("disconnect")
@@ -308,7 +354,7 @@ def on_disconnect():
             del g_node_entries[remove]
         if remove in g_sources["devices"]:
             g_sources["devices"].pop(g_sources["devices"].index(remove))
-            # debug_print(g_sources["devices"])
+            debug_print(g_sources["devices"])            
             send_device_data()
         if remove in g_sources["nodes"]:
             g_sources["nodes"].pop(g_sources["nodes"].index(remove))
@@ -324,7 +370,11 @@ def on_disconnect():
             send_report_node_data()
 
         debug_print(f"Got disconnect: {remove}")
-
+    else:
+        room = dashboard_room()
+        if room in g_dashboard_rooms:
+            g_dashboard_rooms.pop(g_dashboard_rooms.index(room))
+        debug_print("client disconnect: " + room )
 
 @socketio.on("keep_alive")
 def on_keep_alive():
@@ -388,13 +438,14 @@ def on_device_status(data):
     if "msg" in data:
         msg["msg"] = data["msg"]
 
-    socketio.emit("device_status", msg, to="dashboard")
+    # socketio.emit("device_status", msg, to=dashboard_room())
+    socketio.emit("device_status", msg, to=dashboard_room())
 
 
 @socketio.on("device_status_tqdm")
 def on_device_status_tqdm(data):
     # debug_print(data)
-    socketio.emit("device_status_tqdm", data, to="dashboard")
+    socketio.emit("device_status_tqdm", data, to=dashboard_room())
 
 
 @socketio.on("device_scan")
@@ -511,20 +562,23 @@ def on_request_server_ymd_data(data):
     names = tab.split(":")
 
     _, project, ymd = names
-    data = g_database.get_send_data_ymd(project, ymd)
+    datasets = g_database.get_send_data_ymd(project, ymd)
 
     stats = g_database.get_run_stats(project, ymd)
     
-    server_data = {
-        "runs": data,
-        "stats": stats,
-        "source": g_config["source"],
-        "project": project,
-        "ymd": ymd,
-        "tab": tab
-    }
+    for i, data in enumerate(datasets):
+        server_data = {
+            "total": len(datasets),
+            "index": i,
+            "runs": data,
+            "stats": stats,
+            "source": g_config["source"],
+            "project": project,
+            "ymd": ymd,
+            "tab": tab
+        }
 
-    socketio.emit("server_ymd_data", server_data, to="dashboard")
+        socketio.emit("server_ymd_data", server_data, to=dashboard_room())
 
 
 @socketio.on("request_node_ymd_data")
@@ -550,7 +604,7 @@ def on_request_node_ymd_data(data):
         "project": project,
         "ymd": ymd
     }
-    socketio.emit("node_ymd_data", msg, to="dashboard")
+    socketio.emit("node_ymd_data", msg, to=dashboard_room())
 
 
 @socketio.on("request_projects")
@@ -578,8 +632,9 @@ def on_set_project(data):
 def on_server_connect(data):
     global g_remote_connection
     address = data.get("address", None)
+    username = request.cookies.get("username")
     if address:
-        g_remote_connection.connect(address)
+        g_remote_connection.connect(address, username)
 
     # debug_print(("Connection", g_remote_connection.connected()))
     source = g_config["source"]
@@ -606,8 +661,8 @@ def on_server_disconnect():
 # file upload, so both will be updated.
 @socketio.on("server_status_tqdm")
 def on_device_status_tqdm(data):
-    socketio.emit("server_status_tqdm", data, to="dashboard")
-    socketio.emit("node_status_tqdm", data, to="dashboard")
+    socketio.emit("server_status_tqdm", data, to=dashboard_room())
+    socketio.emit("node_status_tqdm", data, to=dashboard_room())
 
 
 # send the updated data to the server.  
@@ -711,8 +766,10 @@ def on_remote_node_data_ymd(data):
     for run_name, relpaths in runs.items():
         for relpath, entries in relpaths.items():
             for entry in entries:
+                orig_id = entry["upload_id"]
                 file = os.path.join(relpath, entry["basename"])
-                upload_id = get_upload_id(source, project, file)
+                upload_id = get_upload_id(g_config["source"], project, file)
+                debug_print((orig_id, upload_id))
                 entry["upload_id"] = upload_id
                 entry["project"] = project
                 g_remote_entries[source][upload_id] = entry
@@ -735,6 +792,7 @@ def on_remote_node_data_ymd(data):
     msg = {"entries": rtn,
            "project": project}
 
+    debug_print(f"emit rtn to {source}")
     socketio.emit("node_data_ymd_rtn", msg, to=source)
 
     pass
@@ -752,31 +810,54 @@ def on_remote_node_data(data):
 
     g_selected_action[source] = None
 
-
     g_remote_entries[source] = {}
+
     for project, ymds in data["entries"].items():
+        rtn = {}
         for ymd, runs in ymds.items():
             for run_name, relpaths in runs.items():
                 for relpath, entries in relpaths.items():
                     for entry in entries:
+
+                        node_upload_id = entry["upload_id"]
+                    
                         file = os.path.join(relpath, entry["basename"])
-                        upload_id = get_upload_id(source, project, file)
+                        upload_id = get_upload_id(g_config["source"], project, file)
+
                         entry["upload_id"] = upload_id
+                        entry["local_id"] = node_upload_id
                         entry["project"] = project
+                        entry["on_local"] = True
+
                         g_remote_entries[source][upload_id] = entry
 
-                        filepath = get_file_path(source, upload_id)
+                        filepath = get_file_path_from_entry(entry)
 
                         if os.path.exists(filepath):
-                            g_remote_entries[source][upload_id]["on_server"] = True
-                            entry["on_local"] = True
-
+                            entry["on_remote"] = True
+                                            
                         if os.path.exists(filepath + ".tmp"):
                             g_remote_entries[source][upload_id]["temp_size"] = (
                                 os.path.getsize(filepath + ".tmp")
                             )
                         else:
                             g_remote_entries[source][upload_id]["temp_size"] = 0
+
+                        # rtn_entries_items = ["on_local","on_remote","upload_id","relpath","basename" ]
+                        rtn_entries_items = ["on_local","on_remote","upload_id" ]
+                        rtn_entry = {
+                            name: entry[name] for name in rtn_entries_items
+                        }
+                        rtn[node_upload_id] = rtn_entry
+
+
+        msg = {"entries": rtn,
+               "project": project}
+
+        debug_print(f"emit rtn to {source}")
+        socketio.emit("node_data_ymd_rtn", msg, to=source)
+
+
     # debug_print(data)
 
     # g_node_entries[source] = data
@@ -787,7 +868,7 @@ def on_remote_node_data(data):
     # msg = {"entries": g_node_entries}
 
     # socketio.emit("node_data", msg, to=source)
-    # socketio.emit("node_data", msg, to="dashboard")
+    # socketio.emit("node_data", msg, to=dashboard_room())
 
 
 # comes from local gui
@@ -800,6 +881,7 @@ def on_server_transer_files(data):
 # comes from remote gui
 @socketio.on("transfer_node_files")
 def on_transfer_node_files(data):
+    debug_print(data)
     source = data.get("source")
     selected_files = data.get("upload_ids")
 
@@ -815,12 +897,16 @@ def on_transfer_node_files(data):
         if os.path.exists(filepath):
             continue
 
-        dirroot = g_remote_entries[source][upload_id]["dirroot"]
-        reldir = g_remote_entries[source][upload_id]["relpath"]
-        basename = g_remote_entries[source][upload_id]["basename"]
+        entry = g_remote_entries[source][upload_id]
+
+        # debug_print(entry)
+
+        dirroot = entry["dirroot"]
+        reldir = entry["relpath"]
+        basename = entry["basename"]
+        offset = entry["temp_size"]
+        size = entry["size"]
         file = os.path.join(reldir, basename)
-        offset = g_remote_entries[source][upload_id]["temp_size"]
-        size = g_remote_entries[source][upload_id]["size"]
 
         filenames.append((dirroot, file, upload_id, offset, size))
 
@@ -980,6 +1066,7 @@ def authenticate():
         elif auth_type.lower() == "basic":
 
             user = request.headers.get('X-Authenticated-User')  # Header set by Nginx after LDAP auth
+            debug_print(user)
             if not user:
                 return jsonify({'error': 'Unauthorized-v1'}), 401
 
@@ -1126,6 +1213,17 @@ def serve_scratch():
     debug_print("Yo")
     return send_from_directory("static", "stratch.html")
 
+@app.route("/node-data", methods=["POST"])
+def handle_node_data():
+    data = request.get_json()
+    source = data.get("source")
+
+    debug_print(f"Got data from node {source}")
+
+    on_remote_node_data(data)
+
+    return jsonify("Received")
+
 
 @app.route("/transfer-selected", methods=["POST"])
 def transfer_selected():
@@ -1269,6 +1367,24 @@ def get_dirroot(project:str) -> str:
     # debug_print((root, project, volume))
     return os.path.join(root, volume)
 
+def get_file_path_from_entry(entry:dict) -> str:
+    project = entry.get("project")
+
+    root = g_config.get("volume_root", "/")
+    volume = g_config["volume_map"].get(project, "").strip("/")
+
+    relpath = entry["relpath"]
+    filename = entry["basename"]
+    try:
+        filedir = os.path.join(root, volume, relpath)
+    except TypeError as e:
+        debug_print((root, volume, relpath))
+        raise e
+
+    filepath = os.path.join(filedir, filename)
+
+    return filepath
+
 
 def get_file_path(source: str, upload_id: str) -> str:
     """
@@ -1281,21 +1397,24 @@ def get_file_path(source: str, upload_id: str) -> str:
     Returns:
     str: The full path of the file.
     """
-    project = g_remote_entries[source][upload_id].get("project")
-    root = g_config.get("volume_root", "/")
-    volume = g_config["volume_map"].get(project, "").strip("/")
+    entry = g_remote_entries[source][upload_id]
+    return get_file_path_from_entry(entry)
+    
+    # project = g_remote_entries[source][upload_id].get("project")
+    # root = g_config.get("volume_root", "/")
+    # volume = g_config["volume_map"].get(project, "").strip("/")
 
-    relpath = g_remote_entries[source][upload_id]["relpath"]
-    filename = g_remote_entries[source][upload_id]["basename"]
-    try:
-        filedir = os.path.join(root, volume, relpath)
-    except TypeError as e:
-        debug_print((root, volume, relpath))
-        raise e
+    # relpath = g_remote_entries[source][upload_id]["relpath"]
+    # filename = g_remote_entries[source][upload_id]["basename"]
+    # try:
+    #     filedir = os.path.join(root, volume, relpath)
+    # except TypeError as e:
+    #     debug_print((root, volume, relpath))
+    #     raise e
 
-    filepath = os.path.join(filedir, filename)
+    # filepath = os.path.join(filedir, filename)
 
-    return filepath
+    # return filepath
 
 
 def get_rel_dir(source: str, upload_id: str) -> str:
@@ -1335,6 +1454,20 @@ def handle_rescan(source: str):
         return jsonify({"message": f"Rescanning {source}"})
     else:
         return jsonify({"message": f"{source} not found on this server."}), 404
+
+
+def send_dashboard_file(msg):
+    send_to_all_dashboards("dashboard_file", msg, with_nodes=True)
+
+
+def send_to_all_dashboards(event, msg, with_nodes:bool=False):
+    rooms = []
+    rooms.extend(g_dashboard_rooms)
+    if with_nodes:
+        rooms.extend(g_sources["nodes"])
+
+    for room in rooms:
+        socketio.emit(event, msg, to=room)
 
 
 @app.route("/file/<string:source>/<string:upload_id>", methods=["POST"])
@@ -1402,9 +1535,10 @@ def handle_file(source: str, upload_id: str):
         while True:
 
             if g_selected_action[source] == "cancel":
-                socketio.emit("dashboard_file", cancel_msg, to="dashboard")
-                if source in g_sources["nodes"]: 
-                    socketio.emit("dashboard_file", cancel_msg, to=source)
+                send_dashboard_file(cancel_msg)
+                # socketio.emit("dashboard_file", cancel_msg, to=dashboard_room())
+                # if source in g_sources["nodes"]: 
+                #     socketio.emit("dashboard_file", cancel_msg, to=source)
 
                 return jsonify({"message": f"File {filename} upload canceled"})
 
@@ -1412,9 +1546,10 @@ def handle_file(source: str, upload_id: str):
                 chunk = filep.read(chunk_size)
             except OSError:
                 # we lost the connection on the client side.
-                socketio.emit("dashboard_file", cancel_msg, to="dashboard")
-                if source in g_sources["nodes"]: 
-                   socketio.emit("dashboard_file", cancel_msg, to=source)
+                send_dashboard_file(cancel_msg)
+                # socketio.emit("dashboard_file", cancel_msg, to=dashboard_room())
+                # if source in g_sources["nodes"]: 
+                #    socketio.emit("dashboard_file", cancel_msg, to=source)
 
                 return jsonify({"message": f"File {filename} upload canceled"})
 
@@ -1433,9 +1568,10 @@ def handle_file(source: str, upload_id: str):
             cancel_msg["status"] = (
                 "Size mismatch. " + str(current_size) + " != " + str(expected)
             )
-            socketio.emit("dashboard_file", cancel_msg, to="dashboard")
-            if source in g_sources["nodes"]: 
-                socketio.emit("dashboard_file", cancel_msg, to=source)
+            send_dashboard_file(cancel_msg)
+            # socketio.emit("dashboard_file", cancel_msg, to=dashboard_room())
+            # if source in g_sources["nodes"]: 
+            #     socketio.emit("dashboard_file", cancel_msg, to=source)
 
             return jsonify({"message": f"File {filename} upload canceled"})
 
@@ -1451,9 +1587,10 @@ def handle_file(source: str, upload_id: str):
             "upload_id": upload_id,
         }
         # socketio.emit("dashboard_file", data, to="client-" + source)
-        socketio.emit("dashboard_file", data, to="dashboard")
-        if source in g_sources["nodes"]: 
-            socketio.emit("dashboard_file", data, to=source)
+        send_dashboard_file(data)
+        # socketio.emit("dashboard_file", data, to=dashboard_room())
+        # if source in g_sources["nodes"]: 
+        #     socketio.emit("dashboard_file", data, to=source)
 
     g_remote_entries[source][upload_id]["localpath"] = filepath
     g_remote_entries[source][upload_id]["on_server"] = True
@@ -1491,9 +1628,10 @@ def device_revise_stats():
             for uid in g_remote_entries[source]:
                 update_stat(source, uid, stats[source])
 
-    socketio.emit( "device_revise_stats", stats, to="dashboard" )
-    for node in g_sources["nodes"]:
-        socketio.emit("node_revise_stats", stats, to=node)
+    send_to_all_dashboards("device_revise_stats", stats)
+    # socketio.emit( "device_revise_stats", stats, to=dashboard_room() )
+    # for node in g_sources["nodes"]:
+    #     socketio.emit("node_revise_stats", stats, to=node)
 
 
 def send_device_data():
@@ -1556,9 +1694,10 @@ def send_device_data():
                 update_stat(source, uid, device_data[source]["stats"][date])
                 update_stat(source, uid, device_data[source]["stats"]["total"])
 
-    debug_print("send_device_data")
-    # debug_print(json.dumps(device_data, indent=True))
-    socketio.emit("device_data", device_data, to="dashboard")
+    for room in g_dashboard_rooms:
+        debug_print(f"send_device_data to [{room}]")
+        # debug_print(json.dumps(device_data, indent=True))
+        socketio.emit("device_data", device_data, to=room)
 
 
 def update_stat(source, uid, stat):
@@ -1623,7 +1762,7 @@ def send_node_data():
     # debug_print("send")
     # msg = {"entries": g_node_entries}
 
-    # socketio.emit("node_data", msg, to="dashboard")
+    # socketio.emit("node_data", msg, to=dashboard_room())
 
 
 def send_server_data():
@@ -1642,7 +1781,8 @@ def send_server_data():
         "remote_connected": g_remote_connection.connected(),
     }
 
-    socketio.emit("server_data", server_data, to="dashboard")
+    send_to_all_dashboards("server_data", server_data, with_nodes=False)
+    # socketio.emit("server_data", server_data, to=dashboard_room())
 
 
 def send_report_host_data():
@@ -1651,7 +1791,7 @@ def send_report_host_data():
     for report_host in g_sources["report_host"]:
         msg["hosts"].append(report_host)
 
-    socketio.emit("report_host_data", msg, to="dashboard")
+    socketio.emit("report_host_data", msg, to=dashboard_room())
     send_report_node_data()
 
 
@@ -1662,7 +1802,7 @@ def send_report_node_data():
         if report_node in g_sources["report_node"]:
             msg["nodes"][report_node] = g_report_node_info[report_node]
 
-    socketio.emit("report_node_data", msg, to="dashboard")
+    socketio.emit("report_node_data", msg, to=dashboard_room())
 
 try:
     setup_zeroconf()

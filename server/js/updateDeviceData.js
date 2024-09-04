@@ -92,6 +92,8 @@ function processTransferSelections() {
 
 function updateDeviceData(data) {
   // save device data for later.  
+  console.log(data);
+  
   window.device_data = {};
 
   const container = document.getElementById("device-data-container");
@@ -491,142 +493,7 @@ function updateDeviceData(data) {
         relpath_tag.innerHTML = relpath;
         run_header_td.appendChild(relpath_tag);
 
-        for (const entry of relpath_entries) {
-
-          window.device_data[source_name][entry.upload_id] = entry;
-
-          let siteOptionsHtml = '';
-          $.each(window.sites, (_, site) => {
-            const selected = site === entry.site ? ' selected' : '';
-            siteOptionsHtml += `<option onchange= value="${site}"${selected}>${site}</option>`;
-          });
-          siteOptionsHtml += '<option value="add-new-site">Add New Site</option>';
-
-          let robotOptionsHtml = '';
-          $.each(window.robots, (_, robot) => {
-            const selected = robot === entry.robot_name ? ' selected' : '';
-            robotOptionsHtml += `<option value="${robot}"${selected}>${robot}</option>`;
-          });
-          robotOptionsHtml += '<option value="add-new-robot">Add New Robot</option>';
-
-          const tr = document.createElement('tr');
-
-          const tdCheckbox = document.createElement('td');
-          const checkbox = document.createElement('input');
-          checkbox.type = 'checkbox';
-          checkbox.id = entry.upload_id;
-          checkbox.dataset.source = source_name;
-          checkbox.dataset.date = date;
-          checkbox.dataset.group = "table";
-          checkbox.dataset.onDevice = entry.on_device;
-          checkbox.dataset.onServer = entry.on_server;
-          tdCheckbox.appendChild(checkbox);
-          tr.appendChild(tdCheckbox);
-
-          // const tdProject = document.createElement('td');
-          // tdProject.textContent = entry.project;
-          // tr.appendChild(tdProject);
-
-          const tdRobotSelect = document.createElement('td');
-          const robotSelect = document.createElement('select');
-          robotSelect.id = `robot_${entry.upload_id}`;
-          robotSelect.className = 'robot-select';
-          robotSelect.dataset.source = source_name;
-          robotSelect.dataset.uploadId = entry.upload_id;
-          robotSelect.innerHTML = robotOptionsHtml;
-          tdRobotSelect.appendChild(robotSelect);
-          tr.appendChild(tdRobotSelect);
-
-          const tdSiteSelect = document.createElement('td');
-          const siteSelect = document.createElement('select');
-          siteSelect.id = `site_${entry.upload_id}`;
-          siteSelect.className = 'site-select';
-          siteSelect.dataset.source = source_name;
-          siteSelect.dataset.uploadId = entry.upload_id;
-          siteSelect.innerHTML = siteOptionsHtml;
-          tdSiteSelect.appendChild(siteSelect);
-          tr.appendChild(tdSiteSelect);
-
-          const tdBasename = document.createElement('td');
-          tdBasename.innerHTML = entry.basename;
-          if (entry.topics != null && entry.topics.length > 0) {
-
-            tdBasename.innerHTML += "&nbsp;";
-
-            let dropdown = document.createElement("div");
-            tdBasename.appendChild(dropdown);
-            dropdown.className = "dropdown";
-
-
-            let caret = document.createElement("i");
-            caret.className = "fas fa-caret-down dropdown-toggle";
-            caret.setAttribute("data-bs-toggle", "dropdown");
-            caret.id = "topics-" + entry.upload_id;
-            caret.setAttribute("aria-expanded", "false");
-            dropdown.appendChild(caret);
-
-            let dul = document.createElement("ul")
-            dul.className = "dropdown-menu";
-            dul.setAttribute("aria-labelledby", "topics-" + entry.upload_id);
-            dropdown.appendChild(dul);
-            let topics = entry.topics;
-            topics.sort((a, b) => a.localeCompare(b));
-            for (const topic of topics) {
-              let dil = document.createElement("li")
-              dul.appendChild(dil);
-              dil.innerHTML = topic;
-              dil.className = "dropdown-item";
-            }
-          }
-          tr.appendChild(tdBasename);
-
-          const tdDateTimeInput = document.createElement('td');
-          tdDateTimeInput.innerHTML = entry.datetime;
-          // const dateTimeInput = document.createElement('input');
-          // dateTimeInput.type = 'datetime-local';
-          // dateTimeInput.id = `date_${entry.upload_id}`;
-          // dateTimeInput.name = `date_${entry.upload_id}`;
-          // dateTimeInput.value = entry.datetime;
-          // dateTimeInput.onchange = () => postDateTimeChange(source, entry.upload_id);
-          // tdDateTimeInput.appendChild(dateTimeInput);
-          tr.appendChild(tdDateTimeInput);
-
-          const tdFileSize = document.createElement('td');
-          tdFileSize.textContent = entry.size;
-          tr.appendChild(tdFileSize);
-
-          const tdStatusDiv = document.createElement('td');
-          const statusDiv = document.createElement('div');
-          statusDiv.id = `status_${entry.upload_id}`;
-          statusDiv.className = 'status-div';
-          //statusDiv.textContent = entry.status;
-          const onDevice = document.createElement("i")
-          onDevice.className = "bi bi-robot";
-          onDevice.title = "On Device";
-          onDevice.id = `on_device_${entry.upload_id}`;
-          onDevice.setAttribute("data-bs-toggle", "tooltip");
-          if (!entry.on_device) {
-            onDevice.title = "Not On Device";
-            onDevice.classList.add("grayed-out");
-          }
-          statusDiv.appendChild(onDevice);
-
-          const onServer = document.createElement("i");
-          onServer.className = "bi bi-server";
-          onServer.title = "On Server";
-          onServer.id = `on_server_${entry.upload_id}`;
-          onServer.setAttribute("data-bs-toggle", "tooltip");
-          if (!entry.on_server) {
-            onServer.title = "Not On Server";
-            onServer.classList.add("grayed-out");
-          }
-          statusDiv.appendChild(onServer);
-
-          tdStatusDiv.appendChild(statusDiv);
-          tr.appendChild(tdStatusDiv);
-
-          tbody.appendChild(tr);
-        };
+        updateDeviceDataEntry(source_name, date, tbody);
 
       });
 
@@ -692,6 +559,144 @@ function updateDeviceData(data) {
   $('[data-bs-toggle="tooltip"]').tooltip();
 
 
+}
+
+function updateDeviceDataEntry(source_name, date, tbody) {
+  for (const entry of relpath_entries) {
+
+    window.device_data[source_name][entry.upload_id] = entry;
+
+    let siteOptionsHtml = '';
+    $.each(window.sites, (_, site) => {
+      const selected = site === entry.site ? ' selected' : '';
+      siteOptionsHtml += `<option onchange= value="${site}"${selected}>${site}</option>`;
+    });
+    siteOptionsHtml += '<option value="add-new-site">Add New Site</option>';
+
+    let robotOptionsHtml = '';
+    $.each(window.robots, (_, robot) => {
+      const selected = robot === entry.robot_name ? ' selected' : '';
+      robotOptionsHtml += `<option value="${robot}"${selected}>${robot}</option>`;
+    });
+    robotOptionsHtml += '<option value="add-new-robot">Add New Robot</option>';
+
+    const tr = document.createElement('tr');
+
+    const tdCheckbox = document.createElement('td');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.id = entry.upload_id;
+    checkbox.dataset.source = source_name;
+    checkbox.dataset.date = date;
+    checkbox.dataset.group = "table";
+    checkbox.dataset.onDevice = entry.on_device;
+    checkbox.dataset.onServer = entry.on_server;
+    tdCheckbox.appendChild(checkbox);
+    tr.appendChild(tdCheckbox);
+
+    // const tdProject = document.createElement('td');
+    // tdProject.textContent = entry.project;
+    // tr.appendChild(tdProject);
+    const tdRobotSelect = document.createElement('td');
+    const robotSelect = document.createElement('select');
+    robotSelect.id = `robot_${entry.upload_id}`;
+    robotSelect.className = 'robot-select';
+    robotSelect.dataset.source = source_name;
+    robotSelect.dataset.uploadId = entry.upload_id;
+    robotSelect.innerHTML = robotOptionsHtml;
+    tdRobotSelect.appendChild(robotSelect);
+    tr.appendChild(tdRobotSelect);
+
+    const tdSiteSelect = document.createElement('td');
+    const siteSelect = document.createElement('select');
+    siteSelect.id = `site_${entry.upload_id}`;
+    siteSelect.className = 'site-select';
+    siteSelect.dataset.source = source_name;
+    siteSelect.dataset.uploadId = entry.upload_id;
+    siteSelect.innerHTML = siteOptionsHtml;
+    tdSiteSelect.appendChild(siteSelect);
+    tr.appendChild(tdSiteSelect);
+
+    const tdBasename = document.createElement('td');
+    tdBasename.innerHTML = entry.basename;
+    if (entry.topics != null && entry.topics.length > 0) {
+
+      tdBasename.innerHTML += "&nbsp;";
+
+      let dropdown = document.createElement("div");
+      tdBasename.appendChild(dropdown);
+      dropdown.className = "dropdown";
+
+
+      let caret = document.createElement("i");
+      caret.className = "fas fa-caret-down dropdown-toggle";
+      caret.setAttribute("data-bs-toggle", "dropdown");
+      caret.id = "topics-" + entry.upload_id;
+      caret.setAttribute("aria-expanded", "false");
+      dropdown.appendChild(caret);
+
+      let dul = document.createElement("ul");
+      dul.className = "dropdown-menu";
+      dul.setAttribute("aria-labelledby", "topics-" + entry.upload_id);
+      dropdown.appendChild(dul);
+      let topics = entry.topics;
+      topics.sort((a, b) => a.localeCompare(b));
+      for (const topic of topics) {
+        let dil = document.createElement("li");
+        dul.appendChild(dil);
+        dil.innerHTML = topic;
+        dil.className = "dropdown-item";
+      }
+    }
+    tr.appendChild(tdBasename);
+
+    const tdDateTimeInput = document.createElement('td');
+    tdDateTimeInput.innerHTML = entry.datetime;
+    // const dateTimeInput = document.createElement('input');
+    // dateTimeInput.type = 'datetime-local';
+    // dateTimeInput.id = `date_${entry.upload_id}`;
+    // dateTimeInput.name = `date_${entry.upload_id}`;
+    // dateTimeInput.value = entry.datetime;
+    // dateTimeInput.onchange = () => postDateTimeChange(source, entry.upload_id);
+    // tdDateTimeInput.appendChild(dateTimeInput);
+    tr.appendChild(tdDateTimeInput);
+
+    const tdFileSize = document.createElement('td');
+    tdFileSize.textContent = entry.size;
+    tr.appendChild(tdFileSize);
+
+    const tdStatusDiv = document.createElement('td');
+    const statusDiv = document.createElement('div');
+    statusDiv.id = `status_${entry.upload_id}`;
+    statusDiv.className = 'status-div';
+    //statusDiv.textContent = entry.status;
+    const onDevice = document.createElement("i");
+    onDevice.className = "bi bi-robot";
+    onDevice.title = "On Device";
+    onDevice.id = `on_device_${entry.upload_id}`;
+    onDevice.setAttribute("data-bs-toggle", "tooltip");
+    if (!entry.on_device) {
+      onDevice.title = "Not On Device";
+      onDevice.classList.add("grayed-out");
+    }
+    statusDiv.appendChild(onDevice);
+
+    const onServer = document.createElement("i");
+    onServer.className = "bi bi-server";
+    onServer.title = "On Server";
+    onServer.id = `on_server_${entry.upload_id}`;
+    onServer.setAttribute("data-bs-toggle", "tooltip");
+    if (!entry.on_server) {
+      onServer.title = "Not On Server";
+      onServer.classList.add("grayed-out");
+    }
+    statusDiv.appendChild(onServer);
+
+    tdStatusDiv.appendChild(statusDiv);
+    tr.appendChild(tdStatusDiv);
+
+    tbody.appendChild(tr);
+  };
 }
 
 function updateDeviceStats(source_name, stats) {

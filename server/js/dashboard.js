@@ -17,7 +17,9 @@ $(document).ready(function () {
     }
     statusDiv.textContent = 'Online';
 
-    socket.emit('join', {'room': 'dashboard'})
+    username = getCookie("username")
+
+    socket.emit('join', {'room': 'dashboard-' + username, "type": "dashboard"})
 
   });
 
@@ -29,7 +31,7 @@ $(document).ready(function () {
       statusDiv.textContent = 'Offline';
       //statusDiv.style.backgroundColor = 'red';
     }
-    
+
   });
 
   // process data device 
@@ -62,7 +64,7 @@ $(document).ready(function () {
   })
 
   socket.on("server_ymd_data", function(msg) {
-    processServerYMD(msg);
+    accumulateServerYMD(msg);
   })
 
   socket.on('server_data', function (data) {
