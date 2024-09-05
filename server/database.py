@@ -47,6 +47,17 @@ class Database:
         self.blackout = blackout
         self._init_db(self.filename)
 
+    # def filter_db(self):
+    #     data = []
+    #     debug_print(f"starting with {len(self.database['data'])}")
+    #     for entry in self.database["data"]:
+    #         basename = entry.get("basename")
+    #         if basename.startswith("frame_") and basename.endswith("png"):
+    #             continue
+    #         data.append(entry)
+    #     debug_print(f"end with {len(data)}")
+    #     self.database["data"] = data
+
     def _init_db(self, filename=None):
         if filename and filename.exists():
             self.database = json.load(filename.open("r"))
@@ -311,6 +322,7 @@ class Database:
         rtnarr = []
         rtn = {}
         max_count = 500
+        count = 0
         for entry in self.database["data"]:
             project = entry["project"]
             if project != send_project:
@@ -353,9 +365,11 @@ class Database:
                     "upload_id": upload_id,
                 }
             )
-            if len(rtn[run][relpath]) >= max_count:
+            count += 1
+            if count >= max_count:
                 rtnarr.append(rtn)
                 run = {}
+                count = 0
 
         rtnarr.append(rtn)
         return rtnarr

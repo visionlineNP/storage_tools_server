@@ -619,7 +619,14 @@ function updateDeviceDataEntry(source_name, date, tbody) {
 
     const tdBasename = document.createElement('td');
     tdBasename.innerHTML = entry.basename;
-    if (entry.topics != null && entry.topics.length > 0) {
+
+    console.log(entry.topics)
+    let topics = null;
+    if( entry.topics) {      
+      topics = Object.entries(entry.topics)
+    }
+
+    if (topics && topics.length > 0) {
 
       tdBasename.innerHTML += "&nbsp;";
 
@@ -639,12 +646,12 @@ function updateDeviceDataEntry(source_name, date, tbody) {
       dul.className = "dropdown-menu";
       dul.setAttribute("aria-labelledby", "topics-" + entry.upload_id);
       dropdown.appendChild(dul);
-      let topics = entry.topics;
-      topics.sort((a, b) => a.localeCompare(b));
-      for (const topic of topics) {
+
+      topics.sort((a, b) => a[0].localeCompare(b[0]));
+      for (const [topic, topic_count ] of topics) {
         let dil = document.createElement("li");
         dul.appendChild(dil);
-        dil.innerHTML = topic;
+        dil.innerHTML = topic + " : (" + topic_count + ")";
         dil.className = "dropdown-item";
       }
     }

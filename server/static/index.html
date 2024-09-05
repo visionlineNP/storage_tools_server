@@ -312,7 +312,7 @@
       let url = protocol + "//" + document.domain + ':' + location.port;
       let username = getCookie("username");
 
-
+      console.log(document.referrer);
 
       var socket = io.connect(url, {transports: ['websocket'], query: `username=${username}`});
       

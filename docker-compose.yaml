@@ -1,12 +1,15 @@
 services:
-  nginx:
+  nginx-sts:
     image: weseek/nginx-auth-ldap:1.13.9-1-alpine
     ports:
       - "8091:80"  # Map host's port 8091 to Nginx's port 80
+      - "8092:443" # map ssl port 
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d  # Custom Nginx configuration
+      - ./nginx/ldap_ssl_conf.d:/etc/nginx/conf.d  # Custom Nginx configuration
       - ./nginx/logs:/var/logs/nginx
+      - ./nginx/certs:/etc/nginx/certs:ro  # Mount the SSL certificates
+
     depends_on:
       - storage_tools_server  # Ensure Nginx starts after the Flask app service
 
@@ -25,20 +28,21 @@ services:
     expose:
      - "8091"  # Expose port 8091 to the internal Docker network
     volumes:
-      - ./uploads:/mnt/uploads  # Volume mount for uploads directory
-      - ./uploads/volume1:/volume1
-      - ./uploads/volume2:/volume2
-      - ./uploads/volume3:/volume3
-      - ./uploads/volume4:/volume4
-      - ./uploads/volume5:/volume5
-      - ./uploads/volume6:/volume6
+      # - ./local:/mnt/uploads  # Volume mount for uploads directory
+      # - ./uploads/volume1:/volume1
+      # - ./uploads/volume2:/volume2
+      # - ./uploads/volume3:/volume3
+      # - ./uploads/volume4:/volume4
+      # - ./uploads/volume5:/volume5
+      # - ./uploads/volume6:/volume6
 
-      # - /volume1:/volume1
-      # - /volume2:/volume2
-      # - /volume3:/volume3
-      # - /volume4:/volume4
-      # - /volume5:/volume5
-      # - /volume6:/volume6
+      - ./uploads:/mnt/uploads  # Volume mount for uploads directory
+      - /volume1:/volume1
+      - /volume2:/volume2
+      - /volume3:/volume3
+      - /volume4:/volume4
+      - /volume5:/volume5
+      - /volume6:/volume6
 
     tty: true
     stdin_open: true

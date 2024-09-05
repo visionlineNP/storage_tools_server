@@ -439,13 +439,13 @@ def on_device_status(data):
         msg["msg"] = data["msg"]
 
     # socketio.emit("device_status", msg, to=dashboard_room())
-    socketio.emit("device_status", msg, to=dashboard_room())
+    socketio.emit("device_status", msg)
 
 
 @socketio.on("device_status_tqdm")
 def on_device_status_tqdm(data):
     # debug_print(data)
-    socketio.emit("device_status_tqdm", data, to=dashboard_room())
+    socketio.emit("device_status_tqdm", data)
 
 
 @socketio.on("device_scan")
@@ -502,7 +502,7 @@ def on_device_files(data):
         md5 = entry.get("md5")
         robot_name = entry.get("robot_name")
         site = entry.get("site")
-        topics = entry.get("topics", [])
+        topics = entry.get("topics", {})
         # for dirroot, file, size, start_datetime, end_datetime, md5 in files:
         ymd = start_datetime.split(" ")[0]
         upload_id = get_upload_id(source, project, file)
@@ -555,6 +555,32 @@ def on_device_files(data):
     send_device_data()
 
 
+# @socketio.on("request_server_ymd_data")
+# def on_request_server_ymd_data(data):
+#     global g_database
+#     tab = data.get("tab")
+#     names = tab.split(":")
+
+#     _, project, ymd = names
+#     datasets = g_database.get_send_data_ymd(project, ymd)
+
+#     stats = g_database.get_run_stats(project, ymd)
+    
+#     for i, data in enumerate(datasets):
+#         server_data = {
+#             "total": len(datasets),
+#             "index": i,
+#             "runs": data,
+#             "stats": stats,
+#             "source": g_config["source"],
+#             "project": project,
+#             "ymd": ymd,
+#             "tab": tab
+#         }
+
+#         socketio.emit("server_ymd_data", server_data, to=dashboard_room())
+
+
 @socketio.on("request_server_ymd_data")
 def on_request_server_ymd_data(data):
     global g_database
@@ -563,12 +589,24 @@ def on_request_server_ymd_data(data):
 
     _, project, ymd = names
     datasets = g_database.get_send_data_ymd(project, ymd)
-
     stats = g_database.get_run_stats(project, ymd)
     
-    for i, data in enumerate(datasets):
+    room = dashboard_room()
+
+    # Start the long-running task in the background
+    socketio.start_background_task(target=emit_server_ymd_data, datasets=datasets, stats=stats, project=project, ymd=ymd, tab=tab, room=room)
+    debug_print(f"sending data! {project} {ymd} {len(datasets)}")
+
+
+def emit_server_ymd_data(datasets, stats, project, ymd, tab, room):
+    """Background task to emit data incrementally."""
+    max_rows = 2
+
+    total = min(max_rows, len(datasets))
+
+    for i, data in enumerate(datasets[:max_rows]):
         server_data = {
-            "total": len(datasets),
+            "total": total,
             "index": i,
             "runs": data,
             "stats": stats,
@@ -578,8 +616,10 @@ def on_request_server_ymd_data(data):
             "tab": tab
         }
 
-        socketio.emit("server_ymd_data", server_data, to=dashboard_room())
+        # Emit the data to the client
+        socketio.emit("server_ymd_data", server_data, to=room)
 
+    debug_print(f"-- complete {project} {ymd} {len(datasets)}")
 
 @socketio.on("request_node_ymd_data")
 def on_request_node_ymd_data(data):
@@ -1205,7 +1245,13 @@ def serve_css(path):
 
 @app.route("/")
 def serve_index():
-    return send_from_directory("static", "index.html")
+
+    response = make_response(send_from_directory("static", "index.html"))
+    user = request.headers.get('X-Authenticated-User')  
+    if user:
+        response.set_cookie("username", user)  
+
+    return response
 
 
 @app.route("/debug")
@@ -1656,12 +1702,8 @@ def send_device_data():
                 entry["size"] = humanfriendly.format_size(entry["size"])
                 date = g_remote_entries[source][uid]["datetime"].split(" ")[0]
                 relpath = g_remote_entries[source][uid]["relpath"]
-                device_data[source]["entries"][date] = device_data[source][
-                    "entries"
-                ].get(date, {})
-                device_data[source]["entries"][date][relpath] = device_data[source][
-                    "entries"
-                ][date].get(relpath, [])
+                device_data[source]["entries"][date] = device_data[source]["entries"].get(date, {})
+                device_data[source]["entries"][date][relpath] = device_data[source]["entries"][date].get(relpath, [])
                 device_data[source]["entries"][date][relpath].append(entry)
 
                 device_data[source]["stats"] = device_data[source].get(
