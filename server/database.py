@@ -115,7 +115,7 @@ class Database:
     def _add_name(self, table: str, name: str, description: str):
         with self.mutex:
             name_to_index = {
-                name: i for i, (name, _) in enumerate(self.database[table])
+                name_: i for i, (name_, _) in enumerate(self.database[table])
             }
             if name in name_to_index:
                 return name_to_index[name]
@@ -126,7 +126,8 @@ class Database:
         self._add_name("projects", name, description)
 
     def add_robot_name(self, name: str, description: str):
-        self._add_name("robots", name, description)
+        if not self._has_name("robots", name):
+            self._add_name("robots", name, description)
 
     def add_site(self, name: str, description: str):
         self._add_name("sites", name, description)
@@ -137,6 +138,16 @@ class Database:
             for i, (name, desc) in enumerate(self.database[table]):
                 rtn.append((i, name, desc))
         return rtn
+
+    def _has_name(self, table:str, name:str):
+        with self.mutex:
+            for name_, _ in self.database[table]:
+                if name_ == name:
+                    return True 
+        return False 
+
+    def has_robot_name(self, name:str)-> bool:
+        return self._has_name("robots", name)
 
     def get_projects(self):
         return self._get_names("projects")
@@ -512,8 +523,8 @@ class Database:
         entry_set = [
             i
             for i, entry in enumerate(self.database["data"])
-            if entry["datatype"].lower() == ".mcap"
-            or entry["datatype"].lower() == ".bag"
+            if (entry["datatype"].lower() == "mcap")
+            or (entry["datatype"].lower() == "bag")
         ]
 
         # debug_print(sorted(self.database["data"][0]))
@@ -557,6 +568,10 @@ class Database:
             if relpath in runs_by_relpath and len(runs_by_relpath[relpath]) == 1:
                 entry["run_name"] = runs_by_relpath[relpath][0]
 
+        # update all other runs to be default run name
+        for entry in self.database["data"]:
+            if not entry["run_name"]:
+                entry["run_name"] = "run__no_name"
 
 def group_overlapping_intervals(intervals):
     if not intervals:

@@ -57,6 +57,19 @@ sites:
  - shelter
 
 
+# what kinds of files to search for
+# when importing directly.   
+include_suffix:
+  - mcap
+  - mp4 
+  - txt
+  - bag 
+  - ass
+  - yaml
+#  - png # not using PNG because there are just too many, and this
+         # isn't the right way to browse images right now.  
+
+
 # ----------------------------------------------
 # Server Optional updates
 # ----------------------------------------------
@@ -76,7 +89,7 @@ keys:
 
 # set to true for production server
 # set to false for local or field server. 
-use_ldap: true
+use_ldap: false
 
 # ----------------------------------------------
 # Remote mode configuration
@@ -87,15 +100,15 @@ use_ldap: true
 # Uncomment when running this server in the field
 # or when syncing with main server
 
-# remote:
-#   - "airlab-share-01.andrew.cmu.edu:8091"
+remote:
+  - "airlab-storage.andrew.cmu.edu:8091"
 #   - "localhost:8092"
 
 # The server key to use when acting as remote
 # uncomment the next line and set it to the 
 # correct API key.  
 
-# API_KEY_TOKEN: "server_1_key_asfaa9"
+API_KEY_TOKEN: "server_1_key_asfaa9"
 
 
 

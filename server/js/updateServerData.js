@@ -357,7 +357,12 @@ function processServerYMD(data)
                     td.innerHTML = detail[key];
 
                     if (key == "basename") {
-                        if (detail.topics != null && detail.topics.length > 0) {
+                        let topics = null;
+                        if( detail.topics) {      
+                          topics = Object.entries(detail.topics)
+                        }
+                    
+                        if (topics && topics.length > 0)  {
 
                             td.innerHTML += "&nbsp;";
 
@@ -377,14 +382,14 @@ function processServerYMD(data)
                             dul.className = "dropdown-menu";
                             dul.setAttribute("aria-labelledby", "topics-" + detail.upload_id);
                             dropdown.appendChild(dul);
-                            let topics = detail.topics;
-                            topics.sort((a, b) => a.localeCompare(b));
-                            for (const topic of topics) {
-                                let dil = document.createElement("li")
-                                dul.appendChild(dil);
-                                dil.innerHTML = topic;
-                                dil.className = "dropdown-item";
+                            topics.sort((a, b) => a[0].localeCompare(b[0]));
+                            for (const [topic, topic_count ] of topics) {
+                              let dil = document.createElement("li");
+                              dul.appendChild(dil);
+                              dil.innerHTML = topic + " : (" + topic_count + ")";
+                              dil.className = "dropdown-item";
                             }
+
                         }
 
                     }

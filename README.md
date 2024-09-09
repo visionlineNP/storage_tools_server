@@ -19,7 +19,7 @@ Edit the `config/config.yaml` file to match your configuration.
 
 ### Run as Console App
 
-Step 1. Create a python virtual env
+#### Step 1. Create a python virtual env
 
 ``` bash
 cd storage_tools_server
@@ -28,45 +28,35 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-Step 2. Run
+#### Step 2. Run
 
-``` bash
-cd storage_tools_server
+1. Activate the virtual environment.
 
-# Activate if not already active
-. venv/bin/activate
-python ./server/app.py -c config/config.yaml
-```
+    ``` bash
+    cd storage_tools_server
 
-Step 3. Stopping the server
+    # Activate if not already active
+    . venv/bin/activate
+    ```
+
+2. Set the environment variables.
+    * `HOSTNAME` should be the name or IP address of the server on the same network as the upload devices.  It is ok to set this to `localhost` or `127.0.0.1` when uploading to another server.  
+    * `CONFIG` is the full path to the `config.yaml` in use.  By default, the app will use `$PWD/config/config.yaml`
+
+    ``` bash
+    export HOSTNAME=127.0.0.1 
+    export CONFIG=$PWD/config/config.ssd2.yaml
+    ```
+
+3. Run the app
+
+    ``` bash
+    gunicorn -k gevent -w 1 -b "0.0.0.0:8092" --timeout 120 "server.app:app"
+    ```
+
+#### Step 3. Stopping the server
 
 Control-c in the window, or `kill -hup PID` where PID is the Process ID, found via `ps`.
-
-### Run as Docker Compose
-
-Step 1. Install Docker Compose
-
-Step 2. Clone this repo
-
-Step 3.  Build the Docker Compose image
-
-``` bash
-cd storage_tools_server
-. env.sh 
-docker compose build
-```
-
-Step 4. Run the Docker Compose Image
-
-``` bash
-cd storage_tools_server
-. env.sh
-docker compose up
-```
-
-Step 5. Stop the server
-
-Control-c in the running console, or `docker compose stop`
 
 ## Runnning on server
 

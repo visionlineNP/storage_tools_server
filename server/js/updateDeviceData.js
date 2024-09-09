@@ -620,7 +620,6 @@ function updateDeviceDataEntry(source_name, date, tbody) {
     const tdBasename = document.createElement('td');
     tdBasename.innerHTML = entry.basename;
 
-    console.log(entry.topics)
     let topics = null;
     if( entry.topics) {      
       topics = Object.entries(entry.topics)

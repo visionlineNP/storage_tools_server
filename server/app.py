@@ -143,6 +143,7 @@ with open(config_filename, "r") as f:
     blackout = g_config.get("blackout", [])
 
     g_database = Database(g_upload_dir, g_config["source"], v_map, blackout)
+    g_database.estimate_runs()
 
     # g_database.regenerate()
     # # this is optional. We can preload projects, sites, and robots
@@ -157,7 +158,6 @@ with open(config_filename, "r") as f:
     for site_name in g_config.get("sites", []):
         g_database.add_site(site_name, "")
 
-    g_database.estimate_runs()
 
 # wrapper for remote connection to another server
 g_remote_connection = RemoteConnection(g_config, socketio, g_database)
@@ -501,26 +501,28 @@ def on_device_files(data):
         end_datetime = entry.get("end_time")
         md5 = entry.get("md5")
         robot_name = entry.get("robot_name")
+        if robot_name and len(robot_name) > 0:
+            has_robot = g_database.has_robot_name(robot_name)
+            if not has_robot:
+                g_database.add_robot_name(robot_name, "")
+                g_database.commit()
+
+                # send users new robot names
+                on_request_robots()
+                
         site = entry.get("site")
         topics = entry.get("topics", {})
         # for dirroot, file, size, start_datetime, end_datetime, md5 in files:
-        ymd = start_datetime.split(" ")[0]
         upload_id = get_upload_id(source, project, file)
 
-        try:
-            _project = project if project else "None"
-            reldir = os.path.join(_project, ymd, os.path.dirname(file))
-        except TypeError as e:
-            debug_print((project, ymd, file))
-            raise e
-
+        project = project if project else "None"
+ 
         entry = {
             "project": project,
             "robot_name": robot_name,
             "run_name": None,
             "datatype": get_datatype(file),
             "relpath": os.path.dirname(file),
-            # "reldir": reldir,
             "basename": os.path.basename(file),
             "fullpath": file,
             "size": size,
@@ -595,7 +597,7 @@ def on_request_server_ymd_data(data):
 
     # Start the long-running task in the background
     socketio.start_background_task(target=emit_server_ymd_data, datasets=datasets, stats=stats, project=project, ymd=ymd, tab=tab, room=room)
-    debug_print(f"sending data! {project} {ymd} {len(datasets)}")
+    # debug_print(f"sending data! {project} {ymd} {len(datasets)}")
 
 
 def emit_server_ymd_data(datasets, stats, project, ymd, tab, room):
@@ -619,7 +621,7 @@ def emit_server_ymd_data(datasets, stats, project, ymd, tab, room):
         # Emit the data to the client
         socketio.emit("server_ymd_data", server_data, to=room)
 
-    debug_print(f"-- complete {project} {ymd} {len(datasets)}")
+    # debug_print(f"-- complete {project} {ymd} {len(datasets)}")
 
 @socketio.on("request_node_ymd_data")
 def on_request_node_ymd_data(data):
@@ -1132,7 +1134,7 @@ def authenticate():
         username = request.cookies.get("username")
         password = request.cookies.get("password")
         if username and password and validate_user_credentials(username, password):
-            debug_print("Valid")
+            # debug_print("Valid")
             session["user"] = (
                 username  # You can customize what you store in the session
             )
@@ -1696,6 +1698,7 @@ def send_device_data():
             for uid in g_remote_entries[source]:
                 entry = {}
                 # entry.update(g_remote_entries[source][uid])
+                # debug_print(g_remote_entries[source][uid]["robot_name"])
                 for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
                     entry[key] = g_remote_entries[source][uid][key]
 
