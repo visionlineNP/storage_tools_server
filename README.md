@@ -77,3 +77,8 @@ sudo -s
 docker-compose down
 docker-compose up --build
 ```
+
+## Guides
+
+* [Troubleshooting](docs/Troubleshooting.md)
+* [Adding a new device](docs/AddNewDevice.md)
