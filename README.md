@@ -14,14 +14,22 @@ Edit the `config/config.yaml` file to match your configuration.
 
 ### REQUIRED UPDATES
 
-* `server name` must be unique.  
 * `upload_dir` is the location for uploads.  This must be readable and writeable by the user running the Server.
+* `volume_root` sets the prefix for all entries in the `volume_map`.  This must be readable and writeable by the user running the Server.
+* `volume_map` is a mapping from project name to `volume_root/{path}`.  All projects must have a mapping.
+
+### Optional updates
+
+* `port`.  The TCP port that the server runs on.  Defaults to 8091.  If you change this, make sure to change this in the run step.  
+* `remote`. List of remote servers for pushing data.  
 
 ### Run as Console App
 
 #### Step 1. Create a python virtual env
 
 ``` bash
+cd ~/src
+git clone https://github.com/castacks/storage_tools_server
 cd storage_tools_server
 python -m venv venv
 . venv/bin/activate
@@ -33,26 +41,28 @@ pip install -r requirements.txt
 1. Activate the virtual environment.
 
     ``` bash
-    cd storage_tools_server
+    cd ~/src/storage_tools_server
 
     # Activate if not already active
     . venv/bin/activate
     ```
 
 2. Set the environment variables.
-    * `HOSTNAME` should be the name or IP address of the server on the same network as the upload devices.  It is ok to set this to `localhost` or `127.0.0.1` when uploading to another server.  
     * `CONFIG` is the full path to the `config.yaml` in use.  By default, the app will use `$PWD/config/config.yaml`
+    * `PORT` is the same port as define in the optional setup. The default is 8091.
 
     ``` bash
-    export HOSTNAME=127.0.0.1 
     export CONFIG=$PWD/config/config.ssd2.yaml
+    export PORT=8091
     ```
 
 3. Run the app
 
     ``` bash
-    gunicorn -k gevent -w 1 -b "0.0.0.0:8092" --timeout 120 "server.app:app"
+    gunicorn -k gevent -w 1 -b "0.0.0.0:${PORT}" --timeout 120 "server.app:app"
     ```
+
+    Point your favorite web browser at `http://localhost:${PORT}`. The default user is `admin` and the default password is `NodeNodeDevices`.
 
 #### Step 3. Stopping the server
 
@@ -64,6 +74,6 @@ Control-c in the window, or `kill -hup PID` where PID is the Process ID, found v
 ssh airlab-storage.andrew.cmu.edu
 cd {dir for server}
 sudo -s
-HOSTNAME=airlab-storage docker-compose down
-HOSTNAME=airlab-storage docker-compose up --build
+docker-compose down
+docker-compose up --build
 ```

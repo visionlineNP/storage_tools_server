@@ -169,3 +169,13 @@ dd {
     font-style: italic;
     text-align: center;
 }
+
+
+.table-fit {
+    width: auto;  /* Set the table width to auto */
+    margin: 0;    /* Remove any margin */
+}
+
+.table-fit th, .table-fit td {
+    white-space: nowrap; /* Prevent text from wrapping */
+}

@@ -68,7 +68,6 @@ class RemoteConnection:
                 self.m_sio.disconnect()
 
             api_key_token = self.m_config["API_KEY_TOKEN"]
-            # headers={'Authorization': f'Bearer {api_key_token}'}
             headers = {"X-Api-Key": api_key_token}
 
             self.m_sio.connect(f"http://{server}:{port}/socket.io", headers=headers, transports=['websocket'])

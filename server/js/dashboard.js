@@ -195,6 +195,11 @@ $(document).ready(function () {
     updateSiteList(msg.data);
   });
 
+  socket.on('key_values', function (msg) {
+    updateKeyValues(msg);
+  })
+
+
   document.getElementById('add-project-btn').addEventListener('click', function () {
     const projectName = document.getElementById('project-name-input').value;
     if (projectName) {
@@ -221,6 +226,28 @@ $(document).ready(function () {
     }
   });
 
+  document.getElementById('make-key-btn').addEventListener('click', function() {
+    const input = document.getElementById('keys-name-input') 
+    const name = input.value;
+    const source = input.dataset.source;
+
+    if(name) {
+      socket.emit('generate_key', {"name": name, "source": source})
+      input.value = "";
+    }
+  })
+
+  document.getElementById("insert-key-btn").addEventListener('click', function() {
+    const name = document.getElementById('insert-keys-name-input').value;
+    const key = document.getElementById('insert-keys-value-input').value;
+
+    if( name && key) {
+      socket.emit("insert_key", {"name": name, "key": key})
+
+      document.getElementById('insert-keys-name-input').value = "";
+      document.getElementById('insert-keys-value-input').value = "";
+    }
+  });
 
 });
 
@@ -579,6 +606,100 @@ function updateSiteList(siteData) {
 
   updateAllSiteSelects();
   populateEditMenus();
+}
+
+
+function updateKeyValues(keyValues) {
+  const source = keyValues.source;
+
+  // attach the souce to the button so we can fetch it again. 
+  const input = document.getElementById('keys-name-input') 
+  input.dataset.source = source;
+
+  
+  let keyList = document.getElementById('keys-list');
+  keyList.innerHTML = '';
+
+
+  const table = document.createElement("table");
+  table.classList.add("table-fit")
+  keyList.appendChild(table)
+
+  const tbody = document.createElement("tbody")
+  table.appendChild(tbody);
+
+
+  // const ul = document.createElement('ul');
+  // ul.className = 'list-group';
+  // keyList.appendChild(ul);
+
+  let entries =  Object.entries(keyValues.data);
+  entries = entries.sort((a, b) => a[1].localeCompare(b[1]));
+
+  for( const [key, name] of entries) {
+    const tr = document.createElement("tr")
+    tbody.appendChild(tr);
+
+    let td = document.createElement("td")
+    td.textContent = name
+    tr.appendChild(td);
+
+    td = document.createElement("td")
+    tr.appendChild(td)
+
+    const key_span = document.createElement("input");
+    key_span.type = "text"
+    key_span.value = key
+    key_span.readOnly = true;
+    td.appendChild(key_span)
+
+
+    td = document.createElement("td")
+    tr.appendChild(td)
+    const trash = document.createElement("i");
+    trash.className = "bi bi-trash3";
+    trash.title = "Delete Key";
+    trash.dataset.key = key;
+    trash.dataset.source = source;
+    trash.dataset.name = name;
+    trash.onclick = deleteKey;
+    td.appendChild(trash);
+
+
+    td = document.createElement("td")
+    tr.appendChild(td)
+    const copy = document.createElement("i");
+    copy.className = "bi bi-copy";
+    copy.title = "Copy to clipboard";
+    copy.dataset.key = key;
+
+    copy.addEventListener('click', function()
+    {
+      const key = $(this)[0].dataset.key;    
+      navigator.clipboard.writeText(key);
+    })
+
+    td.appendChild(copy)
+  }
+
+
+}
+
+
+function deleteKey() 
+{
+  const key = $(this)[0].dataset.key;
+  const source = $(this)[0].dataset.source;
+  const name = $(this)[0].dataset.name;
+
+  const msg = "Do you want to delete key for : " + name;
+  console.log("Want to delete key " + key + " from "  + source );
+
+  const do_it = confirm(msg);
+  if(do_it) {
+    // console.log("I'm doing it");
+    socket.emit("delete_key", {"key": key, "source": source, "name": name})
+  }
 }
 
 

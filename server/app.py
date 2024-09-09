@@ -24,6 +24,8 @@ from zeroconf import Zeroconf, ServiceInfo
 import jwt
 from engineio.payload import Payload
 import psutil
+import hashlib
+import secrets
 
 from .debug_print import debug_print
 from .speed import FileSpeedEstimate
@@ -37,13 +39,12 @@ from .remoteConnection import RemoteConnection
 # prepare the app
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "AirLabKeyKey"
-hostname=os.environ["HOSTNAME"]
 
+# optional for extra security, set the Cross site origins (cors_allowed_origins)
+#hostname=os.environ["HOSTNAME"]
 #origins = [f"http://{hostname}:8091", f"http://{hostname}.andrew.cmu.edu:8091"]
+
 origins = "*"
-# debug_print(origins)
-# import logging
-# logging.basicConfig(level=logging.DEBUG)
 
 Payload.max_decode_packets = 100  # Increase the number of packets allowed in a single request
 socketio = SocketIO(app, cors_allowed_origins=origins, ping_interval=25, ping_timeout=60, max_http_buffer_size=200000000, logger=False, engineio_logger=False)
@@ -104,9 +105,6 @@ g_database = None
 # when we need to send something to every dashboard.  
 g_dashboard_rooms = []
 
-# config_filename = args.config
-config_filename = os.environ.get("CONFIG", "config/config.yaml")
-
 def get_source_by_mac_address():
     macs = []
     addresses = psutil.net_if_addrs()
@@ -115,49 +113,64 @@ def get_source_by_mac_address():
             continue
         for addr in sorted(addresses[interface]):
             if addr.family == psutil.AF_LINK:  # Check if it's a MAC address
-                if psutil.net_if_stats()[interface].isup:
-                    macs.append(addr.address.replace(":",""))
-    rtn = "SRC-" + "_".join(macs)
+                # if psutil.net_if_stats()[interface].isup:
+                macs.append(addr.address.replace(":",""))
+
+    name = hashlib.sha256("_".join(macs).encode()).hexdigest()[:16]
+    rtn = f"SRC-{name}"
     return rtn 
 
+# config_filename = args.config
+config_filename = os.environ.get("CONFIG", "config/config.yaml")
 
-debug_print(f"Using {config_filename}")
-with open(config_filename, "r") as f:
-    g_config = yaml.safe_load(f)
+def load_config(config_filename):
+    debug_print(f"Using {config_filename}")
+    with open(config_filename, "r") as f:
+        g_config = yaml.safe_load(f)
+ 
+        g_config["source"] = get_source_by_mac_address() + "_" + str(g_config["port"])
+        debug_print(f"Setting source name to {g_config['source']}")
 
+        g_upload_dir = g_config["upload_dir"]
+        os.makedirs(g_upload_dir, exist_ok=True)
 
-    # debug_print(get_source_by_mac_address())
-    g_config["source"] = get_source_by_mac_address() + "_" + str(g_config["port"])
-    debug_print(f"Setting source name to {g_config['source']}")
-
-#     debug_print(json.dumps(g_config, indent=True))
-
-    g_upload_dir = g_config["upload_dir"]
-    os.makedirs(g_upload_dir, exist_ok=True)
-
-    v_root = g_config.get("volume_root", "/")
-    v_map = g_config.get("volume_map", {}).copy()
-    for name in v_map:
-        v_map[ name ] = os.path.join(v_root,  v_map.get(name, "").strip("/"))
+        v_root = g_config.get("volume_root", "/")
+        v_map = g_config.get("volume_map", {}).copy()
+        for name in v_map:
+            v_map[ name ] = os.path.join(v_root,  v_map.get(name, "").strip("/"))
          
-    blackout = g_config.get("blackout", [])
+        blackout = g_config.get("blackout", [])
 
-    g_database = Database(g_upload_dir, g_config["source"], v_map, blackout)
-    g_database.estimate_runs()
+        g_database = Database(g_upload_dir, g_config["source"], v_map, blackout)
+        g_database.estimate_runs()
 
     # g_database.regenerate()
     # # this is optional. We can preload projects, sites, and robots
     # # based on the config.
-    for project_name in sorted(g_config.get("volume_map", [])):
+        for project_name in sorted(g_config.get("volume_map", [])):
     # for project_name in g_config.get("projects", []):
-        g_database.add_project(project_name, "")
+            g_database.add_project(project_name, "")
 
-    for robot_name in g_config.get("robots", []):
-        g_database.add_robot_name(robot_name, "")
+        for robot_name in g_config.get("robots", []):
+            g_database.add_robot_name(robot_name, "")
 
-    for site_name in g_config.get("sites", []):
-        g_database.add_site(site_name, "")
+        for site_name in g_config.get("sites", []):
+            g_database.add_site(site_name, "")
+    return g_upload_dir,g_database,g_config
 
+g_upload_dir, g_database, g_config = load_config(config_filename)
+
+g_keys_filename = os.environ.get("KEYSFILE", "config/keys.yaml")
+
+def load_keys(g_keys_filename):
+    global g_config 
+    if os.path.exists(g_keys_filename):
+        with open(g_keys_filename, "r") as f:
+            keys = yaml.safe_load(f)
+            g_config["keys"] = keys["keys"]
+            g_config["API_KEY_TOKEN"] = keys.get("API_KEY_TOKEN", None)
+
+load_keys(g_keys_filename)
 
 # wrapper for remote connection to another server
 g_remote_connection = RemoteConnection(g_config, socketio, g_database)
@@ -187,8 +200,8 @@ def get_ip_addresses():
 
 
 def setup_zeroconf():
-    # ip_addresses = get_ip_addresses()
-    ip_addresses = ["127.0.0.1"]
+    ip_addresses = get_ip_addresses()
+    # ip_addresses = ["127.0.0.1"]
     addresses = [socket.inet_aton(ip) for ip in ip_addresses]
 
     debug_print(f"using address: {ip_addresses}")
@@ -269,12 +282,7 @@ def on_ping(data):
 
 @socketio.on("connect")
 def on_connect():
-    # debug_print(session.get('api_key_token'))
-
-    debug_print("Connection")
-
-
-    # debug_print(("request.headers.get('X-Authenticated-User') is ", request.headers.get('X-Authenticated-User') ))
+    # debug_print("Connection")
 
     username = request.args.get("username")
     if username is None:
@@ -287,7 +295,6 @@ def on_connect():
         return 
 
     auth_header = request.headers.get("Authorization")
-
 
     if auth_header:
         debug_print(auth_header)
@@ -323,6 +330,7 @@ def send_all_data():
     on_request_projects()
     on_request_robots()
     on_request_sites()
+    on_request_keys()
     debug_print("Sent all data")
 
 
@@ -731,6 +739,85 @@ def on_add_robot(data):
 def on_request_sites():
     names = [i[1] for i in g_database.get_sites()]
     socketio.emit("site_names", {"data": names})
+
+@socketio.on("request_keys")
+def on_request_keys():
+    keys = g_config["keys"]
+    api_token = g_config["API_KEY_TOKEN"]
+    socketio.emit("key_values", {"data": keys, "source": g_config["source"], "token": api_token}, to=dashboard_room())
+
+def save_keys():
+    global g_keys_filename 
+    global g_config 
+
+    write_data = {
+        "keys": g_config["keys"],
+        "API_KEY_TOKEN": g_config["API_KEY_TOKEN"]
+        }
+    yaml.dump(write_data, open(g_keys_filename, "w"))
+
+
+@socketio.on("generate_key")
+def on_generate_key(data):
+    source = data.get("source")
+    name = data.get("name")
+
+    # add some spice to the key
+    salt = secrets.token_bytes(16)
+
+    values = [source, name, f"{salt}"]
+
+    key = hashlib.sha256("_".join(values).encode()).hexdigest()[:16]
+    if key in g_config["keys"]:
+        socketio.emit("server_status", {"msg": "failed to create key", "rtn": False})
+        return 
+    g_config["keys"][key] = name
+
+    save_keys()
+    socketio.emit("server_status", {"msg": "Created key", "rtn": True})
+    on_request_keys()
+
+@socketio.on("insert_key")
+def on_insert_key(data):
+    name = data.get("name")
+    key = data.get("key")
+
+    if key in g_config["keys"]: 
+        return 
+    
+    if name in g_config["keys"].values():
+        return 
+    g_config["keys"][key] = name 
+
+    save_keys()
+    socketio.emit("server_status", {"msg": "Inserted key", "rtn": True})
+
+    on_request_keys()
+
+@socketio.on("delete_key")
+def on_delete_key(data):
+    source = data.get("source")
+    key = data.get("key")
+    name = data.get("name")
+
+    debug_print(f"deleting {key} for {name} via {source}")
+
+    if key in g_config["keys"]:
+        del g_config["keys"][key]
+    else:
+        debug_print(f"Did not find {key}")
+
+    save_keys()
+
+    on_request_keys()
+
+@socketio.on("set_api_key_token")
+def on_set_api_key_token(data):
+    source = data.get("source")
+    key = data.get("key")
+
+    g_config["API_KEY_TOKEN"] = key 
+    save_keys()
 
 
 @socketio.on("add_site")
@@ -1144,44 +1231,6 @@ def authenticate():
             url_for("show_login_form")
         )  # Redirect to login if no valid session or cookies
 
-    # # Check if the current request is for the login page
-    # if request.endpoint == "show_login_form" or request.endpoint == "login":
-    #     debug_print(request.endpoint)
-    #     return  # Skip authentication for login page to avoid loop
-
-    # auth_header = request.headers.get("Authorization")
-    # if auth_header:
-    #     # debug_print(auth_header)
-    #     auth_type, token = auth_header.split()
-    #     if auth_type.lower() == "bearer":
-    #         api_key_token = token
-    #         # debug_print(api_key_token)
-    #         # Validate the API key token here
-    #         if validate_api_key_token(api_key_token):
-    #             session["api_key_token"] = api_key_token
-    #         else:
-    #             return "Invalid API key token", 402
-    #     elif auth_type.lower() == "basic":
-    #         # key set by LDAP.  We are just accepting it.  
-    #         return
-    #     else:
-    #         return "Unauthorized", 403
-    # else:
-    #     return 
-    #     # Second, check for cookies for dashboard authentication
-    #     username = request.cookies.get("username")
-    #     password = request.cookies.get("password")
-    #     if username and password and validate_user_credentials(username, password):
-    #         debug_print("Valid")
-    #         session["user"] = (
-    #             username  # You can customize what you store in the session
-    #         )
-    #         return  # continue the request
-
-    #     return redirect(
-    #         url_for("show_login_form")
-    #     )  # Redirect to login if no valid session or cookies
-
 
 def validate_api_key_token(api_key_token):
     # this should be more secure
@@ -1195,7 +1244,7 @@ def validate_api_key_token(api_key_token):
 def show_login_form():
     return render_template("login.html")
 
-# no longer used, using LDAP instead
+# Only used for local server. Not used when running LDAP
 @app.route("/login", methods=["POST"])
 def login():
     username = request.form["username"]
