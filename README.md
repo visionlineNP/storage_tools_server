@@ -52,7 +52,7 @@ pip install -r requirements.txt
     * `PORT` is the same port as define in the optional setup. The default is 8091.
 
     ``` bash
-    export CONFIG=$PWD/config/config.ssd2.yaml
+    export CONFIG=$PWD/config/config.yaml
     export PORT=8091
     ```
 
@@ -81,4 +81,4 @@ docker-compose up --build
 ## Guides
 
 * [Troubleshooting](docs/Troubleshooting.md)
-* [Adding a new device](docs/AddNewDevice.md)
+* [API Keys, Adding New Device](docs/KeyManagement.md)
