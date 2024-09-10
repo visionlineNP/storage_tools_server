@@ -249,6 +249,15 @@ $(document).ready(function () {
     }
   });
 
+  document.getElementById("set-key-btn").addEventListener("click", function() {
+    const key = document.getElementById("keys-set-api-key-input").value;
+
+    if( key ) {
+      socket.emit("set_api_key_token", {"key": key});
+      document.getElementById("keys-set-api-key-input").value = "";
+    }
+  })
+
 });
 
 
@@ -625,13 +634,22 @@ function updateKeyValues(keyValues) {
   table.classList.add("table-fit")
   keyList.appendChild(table)
 
+  const thead = document.createElement("thead");
+  table.appendChild(thead);
+
+  const hr = document.createElement("tr");
+  thead.appendChild(hr);
+
+  const header = ["Name", "API Key", ""];
+  header.forEach(name => {
+    const td = document.createElement("td");
+    hr.appendChild(td);
+    td.textContent = name;
+    td.className = "key-table-header";
+  });
+
   const tbody = document.createElement("tbody")
   table.appendChild(tbody);
-
-
-  // const ul = document.createElement('ul');
-  // ul.className = 'list-group';
-  // keyList.appendChild(ul);
 
   let entries =  Object.entries(keyValues.data);
   entries = entries.sort((a, b) => a[1].localeCompare(b[1]));

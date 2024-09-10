@@ -173,9 +173,19 @@ dd {
 
 .table-fit {
     width: auto;  /* Set the table width to auto */
-    margin: 0;    /* Remove any margin */
+    /* margin: 0; */   /* Remove any margin */
 }
 
 .table-fit th, .table-fit td {
     white-space: nowrap; /* Prevent text from wrapping */
+}
+
+.card-fit {
+    display: inline-block; /* Make the card fit its content */
+    width: auto;           /* Set width to auto to fit the content */
+    margin: 0;             /* Remove any extra margin */
+}
+
+.key-table-header {
+    font-weight: bold;
 }

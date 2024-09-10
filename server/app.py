@@ -813,7 +813,7 @@ def on_delete_key(data):
 
 @socketio.on("set_api_key_token")
 def on_set_api_key_token(data):
-    source = data.get("source")
+    # source = data.get("source")
     key = data.get("key")
 
     g_config["API_KEY_TOKEN"] = key 
