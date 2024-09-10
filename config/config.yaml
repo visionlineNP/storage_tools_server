@@ -71,26 +71,10 @@ include_suffix:
          # isn't the right way to browse images right now.  
 
 
-# ----------------------------------------------
-# Server Optional updates
-# ----------------------------------------------
-
-# # The access keys for each device and server
-# # This will be replaced with some other mechanism
-# # in the future.  
-# keys:
-#   "device_1_key_101201" : "Device 1"
-#   "device_2_key_Af1180" : "Device 2"
-#   "server_1_key_asfaa9" : "Server 1"
-#   "server_2_key_@#$%as" : "Server 2"
-#   "reporter_1_key_&%$#" : "Report 1"
-#   "node_1_key_&%$#" : "Node 1"
-#   "user_key_1234" : "admin"
-#   "airlib_share_01_key_*a$1@f": "Airlab Share 01"
 
 # set to true for production server
 # set to false for local or field server. 
-use_ldap: false
+use_ldap: true
 
 # ----------------------------------------------
 # Remote mode configuration
@@ -101,8 +85,8 @@ use_ldap: false
 # Uncomment when running this server in the field
 # or when syncing with main server
 
-remote:
-  - "airlab-storage.andrew.cmu.edu:8091"
+#remote:
+#  - "airlab-storage.andrew.cmu.edu:8091"
 #   - "localhost:8092"
 
 # The server key to use when acting as remote
