@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 import shutil
+import uuid
 from flask import (
     Flask,
     render_template,
@@ -11,6 +12,7 @@ from flask import (
     url_for,
     flash,
     make_response,
+    g
 )
 from flask_socketio import SocketIO, disconnect, join_room, leave_room
 import os
@@ -222,23 +224,30 @@ def setup_zeroconf():
 def generate_token(user):
     payload = {
         'user': user,
-        'iss': 'storage_tool_server',
+        'iss': 'sts',
+        'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }
     return jwt.encode(payload, app.config["SECRET_KEY"], algorithm='HS256')
 
 
-def dashboard_room():
+def dashboard_room(data=None):
+    room = None 
+    if data:
+        room = data.get("session_token", None)
+    # room = request.cookies.get("session_token")
+    if not room:
+        room = "DEVICE"
 
-    username = request.headers.get('X-Authenticated-User')
-    if not username:
-        username = request.cookies.get("username")
-    if not username:
-        username = request.args.get("username")
+    # username = request.headers.get('X-Authenticated-User')
+    # if not username:
+    #     username = request.cookies.get("username")
+    # if not username:
+    #     username = request.args.get("username")
 
-    if not username:
-        username = "DEVICE"
+    # if not username:
+        # username = "DEVICE"
 
-    return "dashboard-" + username
+    return "dashboard-" + room
 
 
 ###############################################################################
@@ -253,18 +262,19 @@ def dashboard_room():
 @socketio.on("join")
 def on_join(data):
     global g_remote_sockets
-    room = data["room"]
+    room = data["room"]    
     client = data.get("type", None)
     join_room(room)
     socketio.emit("dashboard_info", {"data": f"Joined room: {room}", "source": g_config["source"]}, to=room)
     debug_print(f"Joined room {room} from {client}")
-    if client != "dashboard":
-        g_remote_sockets[room] = request.sid
-    else:
+    g_remote_sockets[room] = request.sid
+
+    if client == "dashboard":
         if room not in g_dashboard_rooms:
             g_dashboard_rooms.append(room)
 
-        send_all_data()
+        session_token = data.get("session_token")
+        send_all_data({"session_token": session_token})
 
     
 
@@ -284,6 +294,8 @@ def on_ping(data):
 def on_connect():
     # debug_print("Connection")
 
+    g.session_token = request.args.get("session_token")
+
     username = request.args.get("username")
     if username is None:
         username = request.headers.get('X-Authenticated-User') 
@@ -292,7 +304,12 @@ def on_connect():
     api_key_token = request.headers.get("X-Api-Key")
     if api_key_token:
         debug_print(f"Api key: {api_key_token}")
-        return 
+        if validate_api_key_token(api_key_token):
+            debug_print("Valid key")
+            return 
+        
+        # disconnect()
+        raise ConnectionRefusedError(f"Invalid API key token {api_key_token}")
 
     auth_header = request.headers.get("Authorization")
 
@@ -309,7 +326,9 @@ def on_connect():
                 return "Valid Connection", 200
             else:
                 debug_print("Invalid token")
-                return "Invalid API key token", 401
+                raise ConnectionRefusedError(f"Invalid API key token {api_key_token}")
+                disconnect()
+            
         elif auth_type.lower() == "basic":
             user = request.headers.get('X-Authenticated-User')  # Header set by Nginx after LDAP auth
             ## need to pass this to send_all_data.
@@ -321,16 +340,16 @@ def on_connect():
     #     send_all_data()
     # return "Good", 200
     
-def send_all_data():
-    send_device_data()
-    send_node_data()
-    send_server_data()
+def send_all_data(data):
+    send_device_data(data)
+    send_node_data(data)
+    send_server_data(data)
     send_report_host_data()
     send_report_node_data()
-    on_request_projects()
-    on_request_robots()
-    on_request_sites()
-    on_request_keys()
+    on_request_projects(data)
+    on_request_robots(data)
+    on_request_sites(data)
+    on_request_keys(data)
     debug_print("Sent all data")
 
 
@@ -341,6 +360,8 @@ def on_disconnect():
     global g_remote_sockets
     global g_sources
     global g_report_node_info
+
+    debug_print(f"session id: {request.sid}")
 
     remove = None
     for source, sid in g_remote_sockets.items():
@@ -362,7 +383,6 @@ def on_disconnect():
             del g_node_entries[remove]
         if remove in g_sources["devices"]:
             g_sources["devices"].pop(g_sources["devices"].index(remove))
-            debug_print(g_sources["devices"])            
             send_device_data()
         if remove in g_sources["nodes"]:
             g_sources["nodes"].pop(g_sources["nodes"].index(remove))
@@ -377,12 +397,15 @@ def on_disconnect():
 
             send_report_node_data()
 
+        if remove in g_dashboard_rooms:
+            g_dashboard_rooms.pop(g_dashboard_rooms.index(remove))
+
         debug_print(f"Got disconnect: {remove}")
-    else:
-        room = dashboard_room()
-        if room in g_dashboard_rooms:
-            g_dashboard_rooms.pop(g_dashboard_rooms.index(room))
-        debug_print("client disconnect: " + room )
+    # else:
+    #     room = dashboard_room()
+    #     if room in g_dashboard_rooms:
+    #         g_dashboard_rooms.pop(g_dashboard_rooms.index(room))
+    #     debug_print("client disconnect: " + room )
 
 @socketio.on("keep_alive")
 def on_keep_alive():
@@ -411,6 +434,8 @@ def on_control_msg(data):
 @socketio.on("device_remove")
 def on_device_remove(data):
 
+    debug_print(data)
+
     source = data.get("source")
     ids = data.get("files")
 
@@ -422,11 +447,12 @@ def on_device_remove(data):
             )
             continue
 
-        dirroot = g_remote_entries[source][upload_id]["dirroot"]
+        dirroot = g_remote_entries[source][upload_id]["remote_dirroot"]
         relpath = g_remote_entries[source][upload_id]["fullpath"].strip("/")
         filenames.append((dirroot, relpath, upload_id))
 
     msg = {"source": source, "files": filenames}
+    debug_print(msg)
     socketio.emit("device_remove", msg, to=source)
 
 
@@ -540,6 +566,7 @@ def on_device_files(data):
             "end_datetime": end_datetime,
             "upload_id": upload_id,
             "dirroot": dirroot,
+            "remote_dirroot": dirroot,
             "status": None,
             "temp_size": 0,
             "on_device": True,
@@ -601,7 +628,7 @@ def on_request_server_ymd_data(data):
     datasets = g_database.get_send_data_ymd(project, ymd)
     stats = g_database.get_run_stats(project, ymd)
     
-    room = dashboard_room()
+    room = dashboard_room(data)
 
     # Start the long-running task in the background
     socketio.start_background_task(target=emit_server_ymd_data, datasets=datasets, stats=stats, project=project, ymd=ymd, tab=tab, room=room)
@@ -654,13 +681,14 @@ def on_request_node_ymd_data(data):
         "project": project,
         "ymd": ymd
     }
-    socketio.emit("node_ymd_data", msg, to=dashboard_room())
+    socketio.emit("node_ymd_data", msg, to=dashboard_room(data))
 
 
 @socketio.on("request_projects")
-def on_request_projects():
+def on_request_projects(data):
+    room = dashboard_room(data)
     names = [i[1] for i in g_database.get_projects()]
-    socketio.emit("project_names", {"data": names})
+    socketio.emit("project_names", {"data": names}, to=room)
 
 
 @socketio.on("add_project")
@@ -668,7 +696,7 @@ def on_add_project(data):
     global g_database
     g_database.add_project(data.get("project"), data.get("desc", ""))
     g_database.commit()
-    on_request_projects()
+    on_request_projects(data)
 
 
 @socketio.on("set_project")
@@ -682,9 +710,9 @@ def on_set_project(data):
 def on_server_connect(data):
     global g_remote_connection
     address = data.get("address", None)
-    username = request.cookies.get("username")
+    # username = request.cookies.get("username")
     if address:
-        g_remote_connection.connect(address, username)
+        g_remote_connection.connect(address, send_to_all_dashboards)
 
     # debug_print(("Connection", g_remote_connection.connected()))
     source = g_config["source"]
@@ -699,7 +727,7 @@ def on_server_connect(data):
 
 
 @socketio.on("server_disconnect")
-def on_server_disconnect():
+def on_server_disconnect(data):
     global g_remote_connection
     g_remote_connection.disconnect()
     # debug_print(("Connection", g_remote_connection.connected()))
@@ -711,18 +739,20 @@ def on_server_disconnect():
 # file upload, so both will be updated.
 @socketio.on("server_status_tqdm")
 def on_device_status_tqdm(data):
-    socketio.emit("server_status_tqdm", data, to=dashboard_room())
-    socketio.emit("node_status_tqdm", data, to=dashboard_room())
+    send_to_all_dashboards("server_status_tqdm", data, with_nodes=True)
+    send_to_all_dashboards("node_status_tqdm", data, with_nodes=True)
+    # socketio.emit("server_status_tqdm", data, to=dashboard_room())
+    # socketio.emit("node_status_tqdm", data, to=dashboard_room())
 
 
 # send the updated data to the server.  
 @socketio.on("server_refresh")
-def on_server_refresh():
+def on_server_refresh(msg=None):
     global g_remote_connection
     g_remote_connection.send_node_data()
 
 @socketio.on("request_robots")
-def on_request_robots():
+def on_request_robots(data=None):
     names = [i[1] for i in g_database.get_robots()]
     socketio.emit("robot_names", {"data": names})
 
@@ -736,15 +766,16 @@ def on_add_robot(data):
 
 
 @socketio.on("request_sites")
-def on_request_sites():
+def on_request_sites(data=None):
     names = [i[1] for i in g_database.get_sites()]
     socketio.emit("site_names", {"data": names})
 
 @socketio.on("request_keys")
-def on_request_keys():
+def on_request_keys(data=None):
     keys = g_config["keys"]
-    api_token = g_config["API_KEY_TOKEN"]
-    socketio.emit("key_values", {"data": keys, "source": g_config["source"], "token": api_token}, to=dashboard_room())
+    api_token = g_config.get("API_KEY_TOKEN", "")
+    # socketio.emit("key_values", {"data": keys, "source": g_config["source"], "token": api_token}, to=dashboard_room(data))
+    socketio.emit("key_values", {"data": keys, "source": g_config["source"], "token": api_token})
 
 def save_keys():
     global g_keys_filename 
@@ -761,7 +792,7 @@ def save_keys():
 def on_generate_key(data):
     source = data.get("source")
     name = data.get("name")
-
+    
     # add some spice to the key
     salt = secrets.token_bytes(16)
 
@@ -775,7 +806,7 @@ def on_generate_key(data):
 
     save_keys()
     socketio.emit("server_status", {"msg": "Created key", "rtn": True})
-    on_request_keys()
+    on_request_keys(data)
 
 @socketio.on("insert_key")
 def on_insert_key(data):
@@ -792,7 +823,7 @@ def on_insert_key(data):
     save_keys()
     socketio.emit("server_status", {"msg": "Inserted key", "rtn": True})
 
-    on_request_keys()
+    on_request_keys(data)
 
 @socketio.on("delete_key")
 def on_delete_key(data):
@@ -1110,10 +1141,10 @@ def on_task_reindex_all(data):
 # debug code. Disable for production
 ###########################################
 @socketio.on("debug_clear_data")
-def on_debug_clear_data():
+def on_debug_clear_data(data=None):
     global g_database
     g_database.debug_clear_data()
-    send_server_data()
+    send_server_data(data)
 
 
 @socketio.on("debug_count_to")
@@ -1144,7 +1175,7 @@ def on_debug_count_to_next_task(data):
 # debug code. Disable for production
 ###########################################
 @socketio.on("scan_server")
-def on_debug_scan_server():
+def on_debug_scan_server(data=None):
 
     debug_print("Scan Server")
 
@@ -1159,7 +1190,7 @@ def on_debug_scan_server():
     for site_name in g_config.get("sites", []):
         g_database.add_site(site_name, "")
 
-    send_server_data()
+    send_server_data(data)
 
 
 ##
@@ -1178,15 +1209,14 @@ def authenticate():
         if validate_api_key_token(api_key):
             return
         else:
-            return "Invalid API Key", 402
-
+            return "Invalid API Key " + api_key, 402
+                
     auth_header = request.headers.get("Authorization")
     if auth_header:
         # debug_print(auth_header)
         auth_type, token = auth_header.split()
         if auth_type.lower() == "bearer":
             api_key_token = token
-            # debug_print(api_key_token)
             # Validate the API key token here
             if validate_api_key_token(api_key_token):
                 session["api_key_token"] = api_key_token
@@ -1207,9 +1237,9 @@ def authenticate():
             response.set_cookie(
                 "username", user
             )  
-            response.set_cookie(
-                "token", token, 
-            )  
+            # response.set_cookie(
+            #     "token", token, 
+            # )  
 
         else:
             return jsonify({'error': 'Unauthorized-v2'}), 401
@@ -1225,11 +1255,24 @@ def authenticate():
             session["user"] = (
                 username  # You can customize what you store in the session
             )
+
+            # token = generate_token(username)
+            # g.session_token = token
+
             return  # continue the request
 
         return redirect(
             url_for("show_login_form")
         )  # Redirect to login if no valid session or cookies
+
+
+# @app.after_request
+# def set_headers(response):
+#     token = g.get("session_token")
+#     if token:
+#         response.headers["X-Session-Token"] = token
+#         response.set_cookie("session_token", token)
+#     return response
 
 
 def validate_api_key_token(api_key_token):
@@ -1296,8 +1339,10 @@ def serve_css(path):
 
 @app.route("/")
 def serve_index():
+    session_token = str(uuid.uuid4())
+    response = make_response(render_template("index.html", session={"token": session_token}))
 
-    response = make_response(send_from_directory("static", "index.html"))
+    # response = make_response(send_from_directory("static", "index.html"))
     user = request.headers.get('X-Authenticated-User')  
     if user:
         response.set_cookie("username", user)  
@@ -1684,7 +1729,11 @@ def handle_file(source: str, upload_id: str):
             "upload_id": upload_id,
         }
         # socketio.emit("dashboard_file", data, to="client-" + source)
-        send_dashboard_file(data)
+        try:
+            send_dashboard_file(data)
+        except Exception as e:
+            debug_print(f"Caught exception {e}")
+            pass 
         # socketio.emit("dashboard_file", data, to=dashboard_room())
         # if source in g_sources["nodes"]: 
         #     socketio.emit("dashboard_file", data, to=source)
@@ -1731,7 +1780,7 @@ def device_revise_stats():
     #     socketio.emit("node_revise_stats", stats, to=node)
 
 
-def send_device_data():
+def send_device_data(data=None):
     global g_remote_entries
     global g_fs_info
     global g_projects
@@ -1788,10 +1837,12 @@ def send_device_data():
                 update_stat(source, uid, device_data[source]["stats"][date])
                 update_stat(source, uid, device_data[source]["stats"]["total"])
 
-    for room in g_dashboard_rooms:
-        debug_print(f"send_device_data to [{room}]")
-        # debug_print(json.dumps(device_data, indent=True))
-        socketio.emit("device_data", device_data, to=room)
+    send_to_all_dashboards("device_data", device_data)
+
+    # for room in g_dashboard_rooms:
+    #     debug_print(f"send_device_data to [{room}]")
+    #     # debug_print(json.dumps(device_data, indent=True))
+    #     socketio.emit("device_data", device_data, to=room)
 
 
 def update_stat(source, uid, stat):
@@ -1850,7 +1901,7 @@ def update_stat(source, uid, stat):
     # on_device_status({"source": source})
 
 
-def send_node_data():
+def send_node_data(data=None):
     pass 
 
     # debug_print("send")
@@ -1859,7 +1910,7 @@ def send_node_data():
     # socketio.emit("node_data", msg, to=dashboard_room())
 
 
-def send_server_data():
+def send_server_data(msg=None):
     # data = g_database.get_send_data()
     data = g_database.get_send_data_ymd_stub()
 
@@ -1875,8 +1926,11 @@ def send_server_data():
         "remote_connected": g_remote_connection.connected(),
     }
 
-    send_to_all_dashboards("server_data", server_data, with_nodes=False)
-    # socketio.emit("server_data", server_data, to=dashboard_room())
+    if msg:
+        room = dashboard_room(msg)
+        socketio.emit("server_data", server_data, to=room)
+    else:
+        send_to_all_dashboards("server_data", server_data, with_nodes=False)
 
 
 def send_report_host_data():
@@ -1909,7 +1963,7 @@ except Exception as e:
 
 def main():
     debug_print("enter")
-    socketio.run(debug=False, host="0.0.0.0", port=g_config["port"])
+    socketio.run(app=app, debug=True, host="0.0.0.0", port=g_config["port"])
 
 
 if __name__ == "__main__":

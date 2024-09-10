@@ -1,7 +1,7 @@
 import humanfriendly
 import socketio.exceptions
 from tqdm import tqdm
-
+from .debug_print import debug_print
 
 import time
 
@@ -72,6 +72,7 @@ class SocketIOTQDM(tqdm):
             self._emit_update(msg)
         except socketio.exceptions.BadNamespaceError:
             pass
+
 
     def close(self):
         super().close()

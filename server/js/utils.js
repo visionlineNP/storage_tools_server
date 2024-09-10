@@ -5,6 +5,7 @@
 
 function create_tabs(names, parent, prefix, event=null)
 {
+    session_token = window.session_token
 
     rtn = {}
 
@@ -42,7 +43,7 @@ function create_tabs(names, parent, prefix, event=null)
             // execute this function once the tab is visible for the first time
             link.addEventListener("show.bs.tab", function(e) {
                 // console.log(e, event, tab_name);
-                socket.emit(event, {tab:tab_name})
+                socket.emit(event, {tab:tab_name, session_token: session_token})
             },{once: true})
         }
     }
@@ -73,7 +74,7 @@ function create_tabs(names, parent, prefix, event=null)
         if(event && was_first) {
             // always make sure the first one is triggered. 
             // console.log(event, tab_name);
-            socket.emit(event, {tab:tab_name})
+            socket.emit(event, {tab:tab_name, session_token: session_token})
         }
     }
 

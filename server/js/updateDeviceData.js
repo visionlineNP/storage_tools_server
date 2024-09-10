@@ -511,7 +511,7 @@ function updateDeviceData(data) {
       let newSite = prompt('Enter new site name:');
       if (newSite) {
         // Emit event to add new site
-        socket.emit('add_site', { site: newSite });
+        socket.emit('add_site', { site: newSite, "session_token": window.session_token });
         // Add new site to the global sites array and update all dropdowns
         window.sites.push(newSite);
         updateAllSiteSelects();
@@ -520,7 +520,7 @@ function updateDeviceData(data) {
       }
     } else {
       // Emit event to update the site for this entry
-      socket.emit('update_entry_site', { source: source, upload_id: uploadId, site: selectedValue });
+      socket.emit('update_entry_site', { source: source, upload_id: uploadId, site: selectedValue, "session_token": window.session_token });
       window.device_data[source][uploadId].site = selectedValue;
     }
   });
@@ -535,7 +535,7 @@ function updateDeviceData(data) {
       let newRobot = prompt('Enter new robot name:');
       if (newRobot) {
         // Emit event to add new site
-        socket.emit('add_robot', { robot: newRobot });
+        socket.emit('add_robot', { robot: newRobot, "session_token": window.session_token });
         // Add new site to the global sites array and update all dropdowns
         window.robots.push(newRobot);
         updateAllRobotSelects();
@@ -545,7 +545,7 @@ function updateDeviceData(data) {
     } else {
       //console.log({ source: source, upload_id: uploadId, robot: selectedValue })
       // Emit event to update the site for this entry
-      socket.emit('update_entry_robot', { source: source, upload_id: uploadId, robot: selectedValue });
+      socket.emit('update_entry_robot', { source: source, upload_id: uploadId, robot: selectedValue, "session_token": window.session_token });
 
       // update the local value. 
       window.device_data[source][uploadId].robot_name = selectedValue;

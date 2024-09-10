@@ -17,9 +17,11 @@ $(document).ready(function () {
     }
     statusDiv.textContent = 'Online';
 
-    username = getCookie("username")
+    username = getCookie("username");
+    token = window.session_token;
 
-    socket.emit('join', {'room': 'dashboard-' + username, "type": "dashboard"})
+    // socket.emit('join', {'room': 'dashboard-' + username, "type": "dashboard"})
+    socket.emit('join', {'room': 'dashboard-' + token, "type": "dashboard", "session_token": token})
 
   });
 
@@ -203,7 +205,7 @@ $(document).ready(function () {
   document.getElementById('add-project-btn').addEventListener('click', function () {
     const projectName = document.getElementById('project-name-input').value;
     if (projectName) {
-      socket.emit('add_project', { project: projectName });
+      socket.emit('add_project', { project: projectName, "session_token": window.session_token });
       document.getElementById('project-name-input').value = '';
     }
     populateEditMenus();
@@ -213,7 +215,7 @@ $(document).ready(function () {
   document.getElementById('add-robot-btn').addEventListener('click', function () {
     const robotName = document.getElementById('robot-name-input').value;
     if (robotName) {
-      socket.emit('add_robot', { robot: robotName });
+      socket.emit('add_robot', { robot: robotName, "session_token": window.session_token });
       document.getElementById('robot-name-input').value = '';
     }
   });
@@ -221,7 +223,7 @@ $(document).ready(function () {
   document.getElementById('add-site-btn').addEventListener('click', function () {
     const siteName = document.getElementById('site-name-input').value;
     if (siteName) {
-      socket.emit('add_site', { site: siteName });
+      socket.emit('add_site', { site: siteName, "session_token": window.session_token });
       document.getElementById('site-name-input').value = '';
     }
   });
@@ -232,7 +234,7 @@ $(document).ready(function () {
     const source = input.dataset.source;
 
     if(name) {
-      socket.emit('generate_key', {"name": name, "source": source})
+      socket.emit('generate_key', {"name": name, "source": source, "session_token": window.session_token})
       input.value = "";
     }
   })
@@ -242,7 +244,7 @@ $(document).ready(function () {
     const key = document.getElementById('insert-keys-value-input').value;
 
     if( name && key) {
-      socket.emit("insert_key", {"name": name, "key": key})
+      socket.emit("insert_key", {"name": name, "key": key, "session_token": window.session_token})
 
       document.getElementById('insert-keys-name-input').value = "";
       document.getElementById('insert-keys-value-input').value = "";
@@ -253,7 +255,7 @@ $(document).ready(function () {
     const key = document.getElementById("keys-set-api-key-input").value;
 
     if( key ) {
-      socket.emit("set_api_key_token", {"key": key});
+      socket.emit("set_api_key_token", {"key": key, "session_token": window.session_token});
       document.getElementById("keys-set-api-key-input").value = "";
     }
   })
@@ -435,7 +437,7 @@ function processAddNewSite() {
     let newSite = prompt('Enter new site name:');
     if (newSite) {
       // Emit event to add new site
-      socket.emit('add_site', { site: newSite });
+      socket.emit('add_site', { site: newSite, "session_token": window.session_token });
       // Add new site to the global sites array and update all dropdowns
       window.sites.push(newSite);
       updateAllSiteSelects();
@@ -444,7 +446,7 @@ function processAddNewSite() {
     }
   } else {
     // Emit event to update the site for this entry
-    socket.emit('update_entry_site', { source: source, upload_id: uploadId, site: selectedValue });
+    socket.emit('update_entry_site', { source: source, upload_id: uploadId, site: selectedValue, "session_token": window.session_token });
     window.device_data[source][uploadId].site = selectedValue;
   }
 
@@ -482,7 +484,8 @@ function transferFiles(selectedUpdateIds, source) {
 function removeFiles(selectedUpdateIds, source) {
 
   if (selectedUpdateIds.length > 0) {
-    msg = { "source": source, "files": selectedUpdateIds };
+    msg = { "source": source, "files": selectedUpdateIds, "session_token": window.session_token };
+    console.log(msg);
     socket.emit("device_remove", msg);
   } else {
     alert('No files selected');
@@ -492,7 +495,7 @@ function removeFiles(selectedUpdateIds, source) {
 
 /// cancel transfers
 function cancelTransfers(source) {
-  socket.emit("control_msg", { "source": source, "action": "cancel" });
+  socket.emit("control_msg", { "source": source, "action": "cancel", "session_token": window.session_token });
   // $.ajax({
   //   type: 'GET',
   //   url: '/cancel/' + source,
@@ -509,7 +512,7 @@ function cancelTransfers(source) {
 
 /// rescan source
 function rescanSource(source) {
-  socket.emit("device_scan", { "source": source });
+  socket.emit("device_scan", { "source": source, "session_token": window.session_token });
   // $.ajax({
   //   type: 'GET',
   //   url: '/rescan/' + source,
@@ -716,7 +719,7 @@ function deleteKey()
   const do_it = confirm(msg);
   if(do_it) {
     // console.log("I'm doing it");
-    socket.emit("delete_key", {"key": key, "source": source, "name": name})
+    socket.emit("delete_key", {"key": key, "source": source, "name": name, "session_token": window.session_token})
   }
 }
 
@@ -790,7 +793,7 @@ function populateEditMenus() {
     const source = $(this).data('source');
     socket.emit("set_project", {
       "source": source,
-      "project": newProject
+      "project": newProject, "session_token": window.session_token
     });
 
     updateDeviceData({})
@@ -806,7 +809,8 @@ function populateEditMenus() {
 
 function debugClearData() {
   console.log("clearing the database!");
-  socket.emit('debug_clear_data');
+  data = {"session_token": window.session_token}
+  socket.emit('debug_clear_data', data);
 }
 
 function refreshTooltips() {
@@ -837,6 +841,7 @@ function logout() {
   deleteCookie("username");
   deleteCookie("api_key_token");
   deleteCookie("password");
+  deleteCookie("session_token")
   window.location.reload();
 }
 

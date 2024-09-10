@@ -54,7 +54,7 @@ class RemoteConnection:
     def connected(self):
         return self.m_sio.connected
 
-    def connect(self, server_full, username):
+    def connect(self, server_full, send_to_all_dashboards_fn):
         rtn = False
 
         try:
@@ -89,9 +89,10 @@ class RemoteConnection:
             self.m_upload_id_map = {}
             self.m_rev_upload_id_map = {}
 
+            self.send_to_all_dashboards_fn = send_to_all_dashboards_fn
+
             self.send_node_data()
 
-            self.m_username = username
             rtn = True
 
         except Exception as e:
@@ -99,19 +100,23 @@ class RemoteConnection:
                 debug_print(e)
         return rtn
 
-    def dashboard_room(self):
-        return "dashboard-" + self.m_username
+    # def dashboard_room(self):
+    #     return "dashboard-" + self.m_username
 
     def _on_connect(self):
         debug_print("node connected")
         source = self.m_config["source"]
-        self.m_local_sio.emit("remote_connection", {"source": source, "address": self.m_server, "connected": True}, to=self.dashboard_room())
+        msg = {"source": source, "address": self.m_server, "connected": True}
+        self.send_to_all_dashboards_fn("remote_connection", msg)
+        # self.m_local_sio.emit("remote_connection", {"source": source, "address": self.m_server, "connected": True}, to=self.dashboard_room())
         self.m_sio.emit("server_refresh")
 
     def _on_disconnect(self):
         debug_print("node disconnected")
         source = self.m_config["source"]
-        self.m_local_sio.emit("remote_connection", {"source": source, "connected": False}, to=self.dashboard_room())
+        msg = {"source": source, "connected": False}
+        self.send_to_all_dashboards_fn("remote_connection", msg)
+        # self.m_local_sio.emit("remote_connection", {"source": source, "connected": False}, to=self.dashboard_room())
         
 
     def _on_dashboard_info(self, data):
@@ -131,7 +136,8 @@ class RemoteConnection:
         local_id = self.m_upload_id_map.get(upload_id, None)
         if( local_id):
             data["upload_id"] = local_id
-            self.m_local_sio.emit("dashboard_update", data, to=self.dashboard_room())
+            # self.m_local_sio.emit("dashboard_update", data, to=self.dashboard_room())
+            self.send_to_all_dashboards_fn("dashboard_update", data)
         else:
             debug_print(f"Didn't get mapping for {upload_id}")
         # self.m_local_sio.emit("dashboard_file_server", data)
@@ -163,7 +169,8 @@ class RemoteConnection:
                 "on_local": on_remote,
                 "upload_id": upload_id
             }
-            self.m_local_sio.emit("dashboard_file_server", msg, to=self.dashboard_room())
+            self.send_to_all_dashboards_fn("dashboard_file_server", msg)
+            # self.m_local_sio.emit("dashboard_file_server", msg, to=self.dashboard_room())
 
 
             pass 
@@ -253,6 +260,9 @@ class RemoteConnection:
 
 
     def send_node_data(self):
+        if not self.connected():
+            return 
+        
         debug_print("Sending node data")
         data = self.m_database.get_send_data()
             
@@ -446,7 +456,7 @@ class RemoteConnection:
                                 response = session.post(url + f"/{source}/{upload_id}", params=params, data=read_and_update(), headers=headers)
 
                             if response.status_code != 200:
-                                print("Error uploading file:", response.text)
+                                debug_print(("Error uploading file:", response.text, response.status_code))
 
                             # main_pbar.update()
         

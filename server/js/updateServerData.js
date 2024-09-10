@@ -114,7 +114,7 @@ function processServerTransferSelections() {
 
     msg = {
         "source": source,
-        "upload_ids": selectedUpdateIds
+        "upload_ids": selectedUpdateIds, "session_token": window.session_token
     }
     socket.emit("server_transfer_files", msg)
   }
@@ -122,7 +122,7 @@ function processServerTransferSelections() {
 
 function processServerCancelTransfer() {
     const source = $(this)[0].dataset.source;
-    socket.emit("control_msg", { "source": source, "action": "cancel" });
+    socket.emit("control_msg", { "source": source, "action": "cancel", "session_token": window.session_token });
 
 }
 
@@ -473,6 +473,7 @@ function updateServerData(data) {
         linkButton.dataset.connected = data.remote_connected
         if (data.remote_connected) {
             linkButton.textContent = "Disconnect";
+            msg = {"session_token": window.session_token}
             socket.emit("server_refresh");
 
         } else {
@@ -481,7 +482,8 @@ function updateServerData(data) {
         linkButton.addEventListener('click', () => {
             if (linkButton.dataset.connected == "true") {
                 console.log("Try to disconnect")
-                socket.emit("server_disconnect")
+                msg = {"session_token": window.session_token}
+                socket.emit("server_disconnect", msg)
             } else {
                 const selectOption = selectElement.value;
                 console.log("Try to connect to ", selectOption)
@@ -495,6 +497,7 @@ function updateServerData(data) {
         refreshButton.textContent = "Refresh";
         refreshButton.disabled = !data.remote_connected;
         refreshButton.addEventListener('click', () => {
+            msg = {"session_token": window.session_token} 
             socket.emit("server_refresh");
         })
 
