@@ -1225,7 +1225,7 @@ def authenticate():
         elif auth_type.lower() == "basic":
 
             user = request.headers.get('X-Authenticated-User')  # Header set by Nginx after LDAP auth
-            debug_print(user)
+            # debug_print(user)
             if not user:
                 return jsonify({'error': 'Unauthorized-v1'}), 401
 
@@ -1303,7 +1303,7 @@ def login():
         )  # Not recommended to store password directly
 
         api_key_token = None
-        for key in g_config["keys"]:
+        for key in g_config.get("keys", {}):
             if g_config["keys"][key].lower() == username.lower():
                 api_key_token = key
                 break
@@ -1363,6 +1363,11 @@ def handle_node_data():
     debug_print(f"Got data from node {source}")
 
     on_remote_node_data(data)
+
+    g_node_entries[source] = data
+
+
+    send_node_data()
 
     return jsonify("Received")
 
@@ -1900,14 +1905,34 @@ def update_stat(source, uid, stat):
 
     # on_device_status({"source": source})
 
+def create_node_data_stub():
+    rtn = {}
 
-def send_node_data(data=None):
-    pass 
+    for source_name, source_items in g_node_entries.items():
+        rtn[source_name] = {}
+        entries = source_items.get("entries", {})
+        for project_name, project_items in entries.items():
+            rtn[source_name][project_name] = {}
+            for ymd in sorted(project_items):
+                rtn[source_name][project_name][ymd] = {}
 
-    # debug_print("send")
-    # msg = {"entries": g_node_entries}
 
-    # socketio.emit("node_data", msg, to=dashboard_room())
+    return rtn 
+
+
+def send_node_data(msg=None):
+
+    node_data = {
+        "entries": create_node_data_stub(),
+        "fs_info": {}
+        }
+
+    if msg:
+        room = dashboard_room(msg)
+        socketio.emit("node_data", node_data, to=room)
+    else:
+        send_to_all_dashboards("node_data", node_data, with_nodes=False)
+
 
 
 def send_server_data(msg=None):
