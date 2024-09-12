@@ -783,7 +783,7 @@ def save_keys():
 
     write_data = {
         "keys": g_config["keys"],
-        "API_KEY_TOKEN": g_config["API_KEY_TOKEN"]
+        "API_KEY_TOKEN": g_config.get("API_KEY_TOKEN", "")
         }
     yaml.dump(write_data, open(g_keys_filename, "w"))
 
@@ -1402,6 +1402,19 @@ def transfer_selected():
 
     # # debug_print(data)
     return jsonify("Received")
+
+
+@app.route("/download/<string:upload_id>")
+def download_file(upload_id):
+
+    localpath = g_database.get_localpath(upload_id)
+    if localpath:
+        directory = os.path.dirname(localpath)
+        filename = os.path.basename(localpath)
+        debug_print(f"Download {localpath}")
+        return send_from_directory(directory=directory, path=filename, as_attachment=True)
+    
+    return "File Not Found", 404
 
 
 def update_fs_info():

@@ -287,8 +287,8 @@ function processServerYMD(data)
         run_dl.appendChild(run_dd);
 
 
-        const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "Status"]
-        const item_names = ["site", "datetime", "run_name", "basename", "hsize"]
+        const header_names = ["Select", "Site", "Date", "Run", "Basename", "Path", "Size", "Status"]
+        const item_names = ["site", "datetime", "run_name", "basename", "localpath", "hsize"]
 
         // const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
         // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]
@@ -355,6 +355,23 @@ function processServerYMD(data)
                 item_names.forEach((key) => {
                     const td = document.createElement("td");
                     td.innerHTML = detail[key];
+
+                    if (key == "localpath") {
+                        td.innerHTML = "";
+                        const icon = document.createElement("i")
+                        icon.className = "bi bi-copy"
+                        icon.title = "Copy to clipboard: " + detail.localpath;
+                        icon.dataset.localpath = detail.localpath;
+                        icon.setAttribute("data-bs-toggle", "tooltip");
+
+                        icon.addEventListener('click', function()
+                        {
+                          const localpath = $(this)[0].dataset.localpath;    
+                          navigator.clipboard.writeText(localpath);
+                        })
+                    
+                        td.appendChild(icon)
+                    }
 
                     if (key == "basename") {
                         let topics = null;
@@ -425,6 +442,34 @@ function processServerYMD(data)
                 }
                 statusDiv.appendChild(onRemote);
 
+                /*
+                // download isn't working with nginx. getting 401 error.  need to debug more
+                const download = document.createElement("i")
+                download.className = "bi bi-download"
+                download.title = "Download "
+                download.id = `download_${detail.upload_id}`;
+                download.dataset.upload_id = detail.upload_id;
+                download.dataset.basename = detail.basename;
+                download.setAttribute("data-bs-toggle", "tooltip");
+                download.addEventListener("click", function () {
+                    const upload_id = $(this)[0].dataset.upload_id;
+                    const basename = $(this)[0].dataset.basename;
+
+                    const link = document.createElement("a")
+                    link.href = `/download/${upload_id}`
+                    link.download = basename;
+                    link.style.display = 'none';
+
+                    document.body.appendChild(link);
+                    link.click()
+                    document.body.removeChild(link);
+
+                })
+                const spacer = document.createElement("span");
+                spacer.innerHTML = "&nbsp;&nbsp;"
+                statusDiv.appendChild(spacer)
+                statusDiv.appendChild(download);
+                */ 
 
                 tdStatus.appendChild(statusDiv);
                 tr.appendChild(tdStatus);

@@ -244,7 +244,7 @@ class Database:
                 for i, item in enumerate(self.database["data"])
             }
         if fullpath in name_to_index:
-            return name_to_index[fullpath]
+            return 
         else:
             self.add_project(project, "")
             self.add_robot_name(robot, "")
@@ -357,6 +357,7 @@ class Database:
             site = entry["site"]
             topics = entry.get("topics", [])
             upload_id = entry["upload_id"]
+            localpath = entry["localpath"]
 
             rtn[run] = rtn.get(run, {})
             rtn[run][relpath] = rtn[run].get(relpath, [])
@@ -374,6 +375,7 @@ class Database:
                     "hsize": humanfriendly.format_size(size),
                     "topics": topics,
                     "upload_id": upload_id,
+                    "localpath": localpath
                 }
             )
             count += 1
@@ -385,6 +387,12 @@ class Database:
         rtnarr.append(rtn)
         return rtnarr
 
+
+    def get_localpath(self, upload_id):
+        for entry in self.database["data"]:
+            if entry["upload_id"] == upload_id:
+                return entry["localpath"]
+        return None
 
     """
     returns project -> ymd -> run## -> relpath -> list of entries
