@@ -1416,6 +1416,47 @@ def download_file(upload_id):
     return "File Not Found", 404
 
 
+@app.route('/downloadKeys')
+def download_keys():
+    fullpath = g_keys_filename
+    if not fullpath.startswith("/"):
+        fullpath = os.path.join(os.environ["PWD"], fullpath)
+
+    debug_print(f"Download {fullpath}")
+    directory = os.path.dirname(fullpath)
+    filename = os.path.basename(fullpath)
+    return send_from_directory(directory=directory, path=filename, as_attachment=True)
+
+
+@app.route("/uploadKeys", methods=["POST"])
+def upload_keys():
+    if 'file' not in request.files:
+        return jsonify({'message': 'No file part'}), 400
+    
+    file = request.files['file']
+
+    if file.filename == '':
+        return jsonify({'message': 'No selected file'}), 400
+
+    if file:
+        try: 
+            yaml_content = yaml.safe_load(file.read())
+            keys = yaml_content.get("keys", None)
+            if not keys:
+                return jsonify({'message': f"Error. {file.filename} did not contain any keys"}), 400
+            g_config["keys"] = keys
+            save_keys()
+            on_request_keys(None)
+
+            return jsonify({'message': 'Keys updated.'}), 200
+        
+        except yaml.YAMLError as e:
+            return jsonify({'message': f'Error parsing YAML file: {str(e)}'}), 400
+        except Exception as e:
+            return jsonify({'message': f'Error saving file: {str(e)}'}), 500            
+
+
+
 def update_fs_info():
     global g_fs_info
     source = g_config["source"]

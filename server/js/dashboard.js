@@ -21,7 +21,7 @@ $(document).ready(function () {
     token = window.session_token;
 
     // socket.emit('join', {'room': 'dashboard-' + username, "type": "dashboard"})
-    socket.emit('join', {'room': 'dashboard-' + token, "type": "dashboard", "session_token": token})
+    socket.emit('join', { 'room': 'dashboard-' + token, "type": "dashboard", "session_token": token })
 
   });
 
@@ -46,8 +46,8 @@ $(document).ready(function () {
     updateDeviceStatus(data);
   });
 
-  socket.on('device_revise_stats', function(data) {
-    $.each(data, function( source_name, stats) {
+  socket.on('device_revise_stats', function (data) {
+    $.each(data, function (source_name, stats) {
       updateDeviceStats(source_name, stats);
     })
   })
@@ -61,11 +61,11 @@ $(document).ready(function () {
   }
   );
 
-  socket.on("server_status_tqdm", function(msg) {
+  socket.on("server_status_tqdm", function (msg) {
     updateProgress(msg, "server-status-tqdm");
   })
 
-  socket.on("server_ymd_data", function(msg) {
+  socket.on("server_ymd_data", function (msg) {
     accumulateServerYMD(msg);
   })
 
@@ -79,7 +79,7 @@ $(document).ready(function () {
     updateNodeData(data);
   });
 
-  socket.on('node_ymd_data', function(msg) {
+  socket.on('node_ymd_data', function (msg) {
     processNodeYMD(msg);
   })
 
@@ -179,7 +179,7 @@ $(document).ready(function () {
 
   });
 
-  socket.on("remote_connection", function(msg) {
+  socket.on("remote_connection", function (msg) {
     on_remote_connection(msg);
   })
 
@@ -228,34 +228,34 @@ $(document).ready(function () {
     }
   });
 
-  document.getElementById('make-key-btn').addEventListener('click', function() {
-    const input = document.getElementById('keys-name-input') 
+  document.getElementById('make-key-btn').addEventListener('click', function () {
+    const input = document.getElementById('keys-name-input')
     const name = input.value;
     const source = input.dataset.source;
 
-    if(name) {
-      socket.emit('generate_key', {"name": name, "source": source, "session_token": window.session_token})
+    if (name) {
+      socket.emit('generate_key', { "name": name, "source": source, "session_token": window.session_token })
       input.value = "";
     }
   })
 
-  document.getElementById("insert-key-btn").addEventListener('click', function() {
+  document.getElementById("insert-key-btn").addEventListener('click', function () {
     const name = document.getElementById('insert-keys-name-input').value;
     const key = document.getElementById('insert-keys-value-input').value;
 
-    if( name && key) {
-      socket.emit("insert_key", {"name": name, "key": key, "session_token": window.session_token})
+    if (name && key) {
+      socket.emit("insert_key", { "name": name, "key": key, "session_token": window.session_token })
 
       document.getElementById('insert-keys-name-input').value = "";
       document.getElementById('insert-keys-value-input').value = "";
     }
   });
 
-  document.getElementById("set-key-btn").addEventListener("click", function() {
+  document.getElementById("set-key-btn").addEventListener("click", function () {
     const key = document.getElementById("keys-set-api-key-input").value;
 
-    if( key ) {
-      socket.emit("set_api_key_token", {"key": key, "session_token": window.session_token});
+    if (key) {
+      socket.emit("set_api_key_token", { "key": key, "session_token": window.session_token });
       document.getElementById("keys-set-api-key-input").value = "";
     }
   })
@@ -629,7 +629,7 @@ function updateKeyValues(keyValues) {
   current.innerHTML = keyValues.token;
 
   // attach the souce to the button so we can fetch it again. 
-  const input = document.getElementById('keys-name-input') 
+  const input = document.getElementById('keys-name-input')
   input.dataset.source = source;
 
 
@@ -658,10 +658,10 @@ function updateKeyValues(keyValues) {
   const tbody = document.createElement("tbody")
   table.appendChild(tbody);
 
-  let entries =  Object.entries(keyValues.data);
+  let entries = Object.entries(keyValues.data);
   entries = entries.sort((a, b) => a[1].localeCompare(b[1]));
 
-  for( const [key, name] of entries) {
+  for (const [key, name] of entries) {
     const tr = document.createElement("tr")
     tbody.appendChild(tr);
 
@@ -698,9 +698,8 @@ function updateKeyValues(keyValues) {
     copy.title = "Copy to clipboard";
     copy.dataset.key = key;
 
-    copy.addEventListener('click', function()
-    {
-      const key = $(this)[0].dataset.key;    
+    copy.addEventListener('click', function () {
+      const key = $(this)[0].dataset.key;
       navigator.clipboard.writeText(key);
     })
 
@@ -711,22 +710,57 @@ function updateKeyValues(keyValues) {
 }
 
 
-function deleteKey() 
-{
+function deleteKey() {
   const key = $(this)[0].dataset.key;
   const source = $(this)[0].dataset.source;
   const name = $(this)[0].dataset.name;
 
   const msg = "Do you want to delete key for : " + name;
-  console.log("Want to delete key " + key + " from "  + source );
+  console.log("Want to delete key " + key + " from " + source);
 
   const do_it = confirm(msg);
-  if(do_it) {
+  if (do_it) {
     // console.log("I'm doing it");
-    socket.emit("delete_key", {"key": key, "source": source, "name": name, "session_token": window.session_token})
+    socket.emit("delete_key", { "key": key, "source": source, "name": name, "session_token": window.session_token })
   }
 }
 
+
+function downloadKeys() {
+  console.log("download")
+
+  const link = document.createElement("a")
+  link.href = `/downloadKeys`
+  link.download = "keys.yaml";
+  link.style.display = 'none';
+
+  document.body.appendChild(link);
+  link.click()
+  document.body.removeChild(link);
+
+}
+
+function uploadKeys() {
+
+  const form = document.getElementById('uploadKeysForm');
+  const formData = new FormData(form);
+
+  fetch('/uploadKeys', {
+    method: 'POST',
+    body: formData
+  })
+    .then(response => response.json())
+    .then(data => {
+      // Display the message from the server
+      console.log(data.message)
+      //document.getElementById('message').innerText = data.message;
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      //document.getElementById('message').innerText = 'An error occurred while uploading the file.';
+    });
+
+}
 
 function populateEditMenus() {
   const siteMenu = $('.site-menu');
@@ -813,7 +847,7 @@ function populateEditMenus() {
 
 function debugClearData() {
   console.log("clearing the database!");
-  data = {"session_token": window.session_token}
+  data = { "session_token": window.session_token }
   socket.emit('debug_clear_data', data);
 }
 

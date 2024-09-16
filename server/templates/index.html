@@ -337,6 +337,15 @@
                                     <h3>Keys</h3>
                                     <div class="card card-fit">
                                         <div id="keys-list"></div>
+                                        <div>
+                                            <button class="btn btn-primary" onclick="downloadKeys()">Download keys.yaml</button>
+
+                                            <form id="uploadKeysForm" enctype="multipart/form-data">
+                                                <input type="file" name="file" accept=".yaml">
+                                                <button class="btn btn-primary" type="button" onclick="uploadKeys()">Upload keys.yaml</button>
+                                            </form>
+
+                                        </div>
                                         <br>
                                         <input type="text" id="keys-name-input" placeholder="Add New Key Name">
                                         <button class="btn btn-primary" id="make-key-btn">Generate Key</button>
