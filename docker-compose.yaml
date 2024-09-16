@@ -7,7 +7,7 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ldap_ssl_conf.d:/etc/nginx/conf.d  # Custom Nginx configuration
-      - ./nginx/logs:/var/logs/nginx
+      - ./nginx/logs:/var/log/nginx
       - ./nginx/certs:/etc/nginx/certs:ro  # Mount the SSL certificates
 
     depends_on:
@@ -30,6 +30,7 @@ services:
     expose:
      - "8091"  # Expose port 8091 to the internal Docker network
     volumes:
+      - ./config/:/app/config
       - ./uploads:/mnt/uploads  # Volume mount for uploads directory
       - /volume1:/volume1
       - /volume2:/volume2

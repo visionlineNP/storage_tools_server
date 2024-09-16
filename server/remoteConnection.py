@@ -274,7 +274,7 @@ class RemoteConnection:
                        "source": source
                         }
 
-        url = f"http://{self.m_server}/node-data"
+        url = f"http://{self.m_server}/nodedata"
 
         api_key_token = self.m_config["API_KEY_TOKEN"]
         headers = {

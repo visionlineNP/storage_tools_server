@@ -110,9 +110,11 @@ function updateDeviceData(data) {
   // save the source tabs to allow for easy updating. 
   window.source_tabs = source_tabs;
 
-  $.each(source_tabs, function (source_name, source_tab) {
+  $.each(source_tabs, function (source_name, source_tab) {    
     const source_item = data[source_name];
 
+    console.log(source_item)
+    
     window.device_data[source_name] = {};
     const project = source_item.project;
 

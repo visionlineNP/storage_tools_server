@@ -442,7 +442,6 @@ function processServerYMD(data)
                 }
                 statusDiv.appendChild(onRemote);
 
-                /*
                 // download isn't working with nginx. getting 401 error.  need to debug more
                 const download = document.createElement("i")
                 download.className = "bi bi-download"
@@ -469,7 +468,6 @@ function processServerYMD(data)
                 spacer.innerHTML = "&nbsp;&nbsp;"
                 statusDiv.appendChild(spacer)
                 statusDiv.appendChild(download);
-                */ 
 
                 tdStatus.appendChild(statusDiv);
                 tr.appendChild(tdStatus);

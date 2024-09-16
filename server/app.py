@@ -1197,7 +1197,7 @@ def on_debug_scan_server(data=None):
 # authenticate
 @app.before_request
 def authenticate():
-    # debug_print(request)
+    # debug_print(f"Requesting {request.endpoint}")
     
     # Check if the current request is for the login page
     if request.endpoint == "show_login_form" or request.endpoint == "login":
@@ -1355,7 +1355,7 @@ def serve_scratch():
     debug_print("Yo")
     return send_from_directory("static", "stratch.html")
 
-@app.route("/node-data", methods=["POST"])
+@app.route("/nodedata", methods=["POST"])
 def handle_node_data():
     data = request.get_json()
     source = data.get("source")
@@ -1406,7 +1406,6 @@ def transfer_selected():
 
 @app.route("/download/<string:upload_id>")
 def download_file(upload_id):
-
     localpath = g_database.get_localpath(upload_id)
     if localpath:
         directory = os.path.dirname(localpath)

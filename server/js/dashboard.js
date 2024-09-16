@@ -624,11 +624,15 @@ function updateSiteList(siteData) {
 function updateKeyValues(keyValues) {
   const source = keyValues.source;
 
+  // show the current api key 
+  const current = document.getElementById("current-api-key");
+  current.innerHTML = keyValues.token;
+
   // attach the souce to the button so we can fetch it again. 
   const input = document.getElementById('keys-name-input') 
   input.dataset.source = source;
 
-  
+
   let keyList = document.getElementById('keys-list');
   keyList.innerHTML = '';
 

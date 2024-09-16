@@ -28,19 +28,17 @@ body {
     /* Adjust padding to ensure buttons are not too large or small */
 }
 
-#connection_status {
+/* #connection_status {
     padding: 0.5em;
     color: white;
     background-color: green;
-    /* Default to 'online' status */
     flex-grow: 0;
 }
 
 #connection_status.offline {
     background-color: red;
-    /* Changes background color to red if offline */
     flex-grow: 0;
-}
+} */
 
 #logoff-button {
     align-items: center;
@@ -211,11 +209,20 @@ dd {
 }
 
 .tab-content {
-    overflow-x: auto; /* Enable horizontal scrolling within tabs */
     white-space: nowrap; /* Prevent line breaks to ensure horizontal scrolling */
 }
 
 
 .flex-row {
     flex: 1;
+    display: flex; /* Flex container */
+    flex-wrap: nowrap; /* Prevent flex children from wrapping */
+    overflow-x: auto; /* Allow horizontal scrolling if needed */
+    overflow-y: visible; /* No vertical scrolling */
+    width: 100%; /* Full width */
+
+}
+
+dropdown {
+    position: relative;
 }

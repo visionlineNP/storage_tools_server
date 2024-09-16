@@ -347,6 +347,7 @@
                                         <button class="btn btn-primary" id="insert-key-btn">Insert Key</button>
                                         <hr>
 
+                                        <div><span id="current-api-key"></span></div>
                                         <input type="text" id="keys-set-api-key-input" placeholder="Set API KEY TOKEN">
                                         <button class="btn btn-primary" id="set-key-btn">Set API Key</button>
                                         <hr>
@@ -424,9 +425,6 @@
 
         let protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
         let url = protocol + "//" + document.domain + ':' + location.port;
-        //let username = getCookie("username");
-
-        console.log(document.referrer);
 
         var socket = io.connect(url, { transports: ['websocket'], query: `session_token=${window.session_token}` });
 
