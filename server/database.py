@@ -150,7 +150,9 @@ class Database:
         return self._has_name("robots", name)
 
     def get_projects(self):
-        return self._get_names("projects")
+        names =self._get_names("projects")
+        names = sorted(list(set(names)))
+        return names
 
     def get_robots(self):
         return self._get_names("robots")

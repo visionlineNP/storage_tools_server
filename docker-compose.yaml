@@ -31,6 +31,7 @@ services:
      - "8091"  # Expose port 8091 to the internal Docker network
     volumes:
       - ./config/:/app/config
+      - ./config/keys.yaml:/app/config/keys.yaml
       - ./uploads:/mnt/uploads  # Volume mount for uploads directory
       - /volume1:/volume1
       - /volume2:/volume2
