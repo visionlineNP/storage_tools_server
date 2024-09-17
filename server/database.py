@@ -369,6 +369,7 @@ class Database:
                     "size": size,
                     "site": site,
                     "run_name": run,
+                    "robot_name": robot,
                     "datatype": datatype,
                     "on_local": True,
                     "on_remote": False,

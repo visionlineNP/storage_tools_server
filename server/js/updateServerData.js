@@ -287,8 +287,8 @@ function processServerYMD(data)
         run_dl.appendChild(run_dd);
 
 
-        const header_names = ["Select", "Site", "Date", "Basename", "Path", "Size", "Status"]
-        const item_names = ["site", "datetime",  "basename", "localpath", "hsize"]
+        const header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
+        const item_names = ["robot_name","site", "datetime",  "basename", "localpath", "hsize"]
 
         // const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
         // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]

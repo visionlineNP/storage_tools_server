@@ -30,8 +30,7 @@ function sync_files_by_source(event) {
 }
 
 
-function processNodeYMD(data)
-{
+function processNodeYMD(data) {
     console.log(data)
 
     const tab_name = data.tab;
@@ -39,12 +38,12 @@ function processNodeYMD(data)
     ymd_div.innerHTML = "";
 
     console.log(data.stats);
-    const ymd_name = data.ymd; 
+    const ymd_name = data.ymd;
     const project_name = data.project;
     const source_name = data.source;
 
 
-   
+
     const run_dl = document.createElement("dl");
     ymd_div.appendChild(run_dl);
 
@@ -152,6 +151,127 @@ function processNodeYMD(data)
         run_entry = Object.entries(run_entry);
         run_entry.sort((a, b) => a[0].localeCompare(b[0]));
 
+        const header_names = ["Site", "Robot", "Date", "Basename", "Size", "Status"]
+        const item_names = ["site", "robot_name" , "datetime", "basename", "hsize"]
+
+        const table = document.createElement("table");
+        table.className = "table table-striped";
+        run_dd.appendChild(table);
+
+        const thead = document.createElement("thead");
+        table.appendChild(thead);
+        const tr = document.createElement("tr");
+        thead.appendChild(tr);
+
+        header_names.forEach((header) => {
+            const th = document.createElement("th");
+            th.textContent = header;
+            tr.appendChild(th);
+        });
+
+        const tbody = document.createElement("tbody");
+        table.appendChild(tbody);
+
+
+        for ([relpath, items] of run_entry) {
+
+            const run_header_tr = document.createElement("tr");
+            run_header_tr.className = "table-active";
+            tbody.appendChild(run_header_tr);
+
+            const run_header_td = document.createElement("td");
+            run_header_td.className = "table_relpath"
+            run_header_td.setAttribute("colspan", header_names.length);
+            run_header_tr.appendChild(run_header_td);
+
+            const relpath_tag = document.createElement("span");
+            relpath_tag.className = "table_relpath";
+            relpath_tag.innerHTML = relpath;
+            run_header_td.appendChild(relpath_tag);
+        
+            items.sort((a, b) => a["datetime"].localeCompare(b["datetime"]))
+
+            $.each(items, function (_, detail) {
+                const tr = document.createElement("tr");
+                tbody.appendChild(tr);
+
+                item_names.forEach((key) => {
+                    const td = document.createElement("td");
+                    td.innerHTML = detail[key];
+                    tr.appendChild(td)
+
+                    if (key == "basename") {
+                        if (detail.topics != null && detail.topics.length > 0) {
+
+                            td.innerHTML += "&nbsp;";
+
+                            let dropdown = document.createElement("div");
+                            td.appendChild(dropdown);
+                            dropdown.className = "dropdown";
+
+
+                            let caret = document.createElement("i");
+                            caret.className = "fas fa-caret-down dropdown-toggle";
+                            caret.setAttribute("data-bs-toggle", "dropdown");
+                            caret.id = "topics-" + detail.upload_id;
+                            caret.setAttribute("aria-expanded", "false");
+                            dropdown.appendChild(caret);
+
+                            let dul = document.createElement("ul")
+                            dul.className = "dropdown-menu";
+                            dul.setAttribute("aria-labelledby", "topics-" + detail.upload_id);
+                            dropdown.appendChild(dul);
+                            let topics = detail.topics;
+                            topics.sort((a, b) => a.localeCompare(b));
+                            for (const topic of topics) {
+                                let dil = document.createElement("li")
+                                dul.appendChild(dil);
+                                dil.innerHTML = topic;
+                                dil.className = "dropdown-item";
+                            }
+                        }
+
+                    }
+
+                });
+
+                const tdStatus = document.createElement("td");
+                const statusDiv = document.createElement("div");
+                statusDiv.id = `node_status_${detail.upload_id}`;
+                statusDiv.className = "status-div";
+
+                const onLocal = document.createElement("i")
+                onLocal.className = "bi bi-server";
+                onLocal.title = "On Local";
+                onLocal.id = `node_on_local_${detail.upload_id}`;
+                onLocal.setAttribute("data-bs-toggle", "tooltip");
+                if (!detail.on_local) {
+                    onLocal.title = "Not On Local Server";
+                    onLocal.classList.add("grayed-out");
+                }
+                statusDiv.appendChild(onLocal);
+
+                const onRemote = document.createElement("i")
+                onRemote.className = "bi bi-cloud-fill";
+                onRemote.title = "On Remote";
+                onRemote.id = `node_on_remote_${detail.upload_id}`;
+                onRemote.setAttribute("data-bs-toggle", "tooltip");
+                if (!detail.on_remote) {
+                    onRemote.title = "Not On Remote Server";
+                    onRemote.classList.add("grayed-out");
+                    onRemote.className = "bi bi-cloud";
+                }
+                statusDiv.appendChild(onRemote);
+
+
+                tdStatus.appendChild(statusDiv);
+                tr.appendChild(tdStatus);
+
+            });
+        }
+
+        continue;
+
         for ([relpath, items] of run_entry) {
             const relpath_tag = document.createElement("span");
             relpath_tag.innerHTML = relpath;
@@ -167,7 +287,7 @@ function processNodeYMD(data)
             thead.appendChild(tr);
 
             // const headers = ["Select", "Site", "Date", "Basename", "Size", "Status"];
-            const headers = [ "Site", "Date", "Basename", "Size", "Status"];
+            const headers = ["Site", "Date", "Basename", "Size", "Status"];
             headers.forEach((header) => {
                 const th = document.createElement("th");
                 th.textContent = header;
@@ -273,8 +393,7 @@ function processNodeYMD(data)
 }
 
 
-function updateNodeData(data)
-{
+function updateNodeData(data) {
     const containerFsInfo = document.getElementById("node-fs-info-container");
     containerFsInfo.innerHTML = ""; // clear previous data
 
@@ -293,23 +412,23 @@ function updateNodeData(data)
     console.log(data.entries);
 
     const source_names = Object.keys(data.entries).sort();
-    
+
     const source_tabs = create_tabs(source_names, containerData, "node");
-    $.each(source_tabs, function(source_name, source_tab) {
+    $.each(source_tabs, function (source_name, source_tab) {
         const source_data = data.entries[source_name];
         console.log(source_name, source_data);
         const project_names = Object.keys(source_data);
-        const project_tabs = create_tabs(project_names, source_tab, "node:" + source_name );
-        $.each(project_tabs, function(project_name, project_tab) {
+        const project_tabs = create_tabs(project_names, source_tab, "node:" + source_name);
+        $.each(project_tabs, function (project_name, project_tab) {
 
             const project_data = source_data[project_name];
 
             const ymd_names = Object.keys(project_data).sort()
-            const ymd_tabs = create_tabs(ymd_names, project_tab, "node:" + source_name  + ":" + project_name, "request_node_ymd_data");
-            $.each(ymd_tabs, function(_, ymd_tab) {
+            const ymd_tabs = create_tabs(ymd_names, project_tab, "node:" + source_name + ":" + project_name, "request_node_ymd_data");
+            $.each(ymd_tabs, function (_, ymd_tab) {
                 add_placeholder(ymd_tab);
             })
-            
+
         });
     })
 
