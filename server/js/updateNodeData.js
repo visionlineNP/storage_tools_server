@@ -166,8 +166,8 @@ function processNodeYMD(data)
             const tr = document.createElement("tr");
             thead.appendChild(tr);
 
-            // const headers = ["Select", "Site", "Date", "Run", "Basename", "Size", "Status"];
-            const headers = [ "Site", "Date", "Run", "Basename", "Size", "Status"];
+            // const headers = ["Select", "Site", "Date", "Basename", "Size", "Status"];
+            const headers = [ "Site", "Date", "Basename", "Size", "Status"];
             headers.forEach((header) => {
                 const th = document.createElement("th");
                 th.textContent = header;
@@ -252,7 +252,7 @@ function processNodeYMD(data)
                 statusDiv.appendChild(onLocal);
 
                 const onRemote = document.createElement("i")
-                onRemote.className = "bi bi-cloud-filled";
+                onRemote.className = "bi bi-cloud-fill";
                 onRemote.title = "On Remote";
                 onRemote.id = `node_on_remote_${detail.upload_id}`;
                 onRemote.setAttribute("data-bs-toggle", "tooltip");
