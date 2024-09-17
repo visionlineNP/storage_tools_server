@@ -88,5 +88,6 @@ docker-compose up --build
 
 ## Guides
 
+* [Using the Dashboard](docs/Dashboard.md)
 * [Troubleshooting](docs/Troubleshooting.md)
 * [API Keys, Adding New Device](docs/KeyManagement.md)
