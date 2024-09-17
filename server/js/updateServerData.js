@@ -281,14 +281,14 @@ function processServerYMD(data)
 
 
         const run_dt = document.createElement("dt");
-        run_dt.innerHTML = run_name;
+        run_dt.innerHTML = "Run Name: " + run_name;
         run_dl.appendChild(run_dt);
         const run_dd = document.createElement("dd");
         run_dl.appendChild(run_dd);
 
 
-        const header_names = ["Select", "Site", "Date", "Run", "Basename", "Path", "Size", "Status"]
-        const item_names = ["site", "datetime", "run_name", "basename", "localpath", "hsize"]
+        const header_names = ["Select", "Site", "Date", "Basename", "Path", "Size", "Status"]
+        const item_names = ["site", "datetime",  "basename", "localpath", "hsize"]
 
         // const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
         // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]
@@ -442,7 +442,6 @@ function processServerYMD(data)
                 }
                 statusDiv.appendChild(onRemote);
 
-                // download isn't working with nginx. getting 401 error.  need to debug more
                 const download = document.createElement("i")
                 download.className = "bi bi-download"
                 download.title = "Download "

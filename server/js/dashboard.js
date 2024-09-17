@@ -199,6 +199,10 @@ $(document).ready(function () {
 
   socket.on('key_values', function (msg) {
     updateKeyValues(msg);
+  });
+
+  socket.on('generated_key', function (msg) {
+    navigator.clipboard.writeText(msg.key);
   })
 
 

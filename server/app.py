@@ -806,6 +806,7 @@ def on_generate_key(data):
 
     save_keys()
     socketio.emit("server_status", {"msg": "Created key", "rtn": True})
+    socketio.emit("generated_key", {"key": key})
     on_request_keys(data)
 
 @socketio.on("insert_key")
@@ -1420,7 +1421,10 @@ def download_file(upload_id):
 def download_keys():
     fullpath = g_keys_filename
     if not fullpath.startswith("/"):
-        fullpath = os.path.join(os.environ["PWD"], fullpath)
+        if "PWD" in os.environ:
+            fullpath = os.path.join(os.environ["PWD"], fullpath)
+        else:
+            fullpath = os.path.join("/app", fullpath)
 
     debug_print(f"Download {fullpath}")
     directory = os.path.dirname(fullpath)
