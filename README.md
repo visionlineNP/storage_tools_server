@@ -15,8 +15,16 @@ Edit the `config/config.yaml` file to match your configuration.
 ### REQUIRED UPDATES
 
 * `upload_dir` is the location for uploads.  This must be readable and writeable by the user running the Server.
-* `volume_root` sets the prefix for all entries in the `volume_map`.  This must be readable and writeable by the user running the Server.
-* `volume_map` is a mapping from project name to `volume_root/{path}`.  All projects must have a mapping.
+* `volume_root` sets the prefix for all entries in the `volume_map`.  This must be readable and writeable by the user running the Server. If you want to organize your data as `/mnt/data/first` and `/mnt/data/second`, you would set the `volume_root` to `/mnt/data`
+* `volume_map` is a mapping from project name to `volume_root/{path}`.  All projects must have a mapping. If you want to organize your data as `/mnt/data/first/datasets/experiments` and `/mnt/data/second/datasets/experiments`, you would set the `volume_root` to `/mnt/data`. Then set `volume_map` to
+
+    ```yaml
+    volume_root:
+      - first: /first/datasets/experiments
+      - second: /second/datasets/experiments
+    ```
+
+    All uploaded data to `first` will be under `/mnt/data/first/datasets/experiments`.  
 
 ### Optional updates
 
