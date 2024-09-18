@@ -1,0 +1,11 @@
+volume_map:
+  aerialmanipulation: /volume1/aerialmanipulation/datasets
+  aist: /volume5/aist/datasets
+  asnr: /volume6/asnr/datasets
+  chiron: /volume3/chiron/datasets
+  dsta: /volume4/dsta/datasets
+  icwerx: /volume5/icwerx/datasets
+  multidronecoordination: /volume6/multidronecoordination/datasets
+  offroad: /volume3/offroad/datasets
+  testshare: /volume1/testshare/datasets
+  wildfire: /volume3/wildfire/datasets

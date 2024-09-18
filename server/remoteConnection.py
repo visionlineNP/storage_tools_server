@@ -4,7 +4,7 @@ import socketio
 import queue 
 import requests
 from threading import Thread
-from .database import Database, get_upload_id
+from .database import Database, VolumeMapNotFound, get_upload_id
 from .SocketIOTQDM import SocketIOTQDM
 from .debug_print import debug_print
 
@@ -264,7 +264,12 @@ class RemoteConnection:
             return 
         
         debug_print("Sending node data")
-        data = self.m_database.get_send_data()
+
+        try:
+            data = self.m_database.get_send_data()
+        except VolumeMapNotFound as e:
+            self.m_local_sio.emit("server_error", {"msg": e.what()})
+            
             
         source = self.m_node_source
         stats = self.m_database.get_run_stats()

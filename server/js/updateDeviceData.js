@@ -15,7 +15,7 @@ function processClearSelections() {
 
 function processCancelTransfer() {
   const source = $(this)[0].dataset.source;
-  console.log($(this));
+  //console.log($(this));
   cancelTransfers(source);
 }
 
@@ -27,7 +27,7 @@ function processRemoveSelectedByDate() {
   $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-date="' + date + '"][data-on-server="true"][data-on-device="true"]').each(function () {
     selectedUpdateIds.push($(this).attr('id'));
   });
-  console.log(selectedUpdateIds, source);
+  //console.log(selectedUpdateIds, source);
   removeFiles(selectedUpdateIds);
 
 }
@@ -39,7 +39,7 @@ function processRemoveSelected() {
   $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-on-server="true"][data-on-device="true"]').each(function () {
     selectedUpdateIds.push($(this).attr('id'));
   });
-  console.log(selectedUpdateIds, source);
+  //console.log(selectedUpdateIds, source);
   removeFiles(selectedUpdateIds, source);
 
 }
@@ -53,7 +53,7 @@ function processRescanSource() {
 function processSelectAllNewByDate() {
   const source = $(this)[0].dataset.source;
   const date = $(this)[0].dataset.date;
-  console.log(source, date);
+  //console.log(source, date);
 
   $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-date="' + date + '"][data-on-device="true"][data-on-server="false"]').prop('checked', true);
 
@@ -74,7 +74,7 @@ function processTransferSelectionsByDate() {
   $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-date="' + date + '"]:checked').each(function () {
     selectedUpdateIds.push($(this).attr('id'));
   });
-  console.log(selectedUpdateIds, source);
+  //console.log(selectedUpdateIds, source);
   transferFiles(selectedUpdateIds, source);
 }
 
@@ -86,7 +86,7 @@ function processTransferSelections() {
   $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').each(function () {
     selectedUpdateIds.push($(this).attr('id'));
   });
-  console.log(selectedUpdateIds, source);
+  //console.log(selectedUpdateIds, source);
   transferFiles(selectedUpdateIds, source);
 }
 
@@ -197,7 +197,7 @@ function updateDeviceData(data) {
       transferSelectedButton.id = `transfer-selected-${source_name}`;
       transferSelectedButton.dataset.source = source_name;
       transferSelectedButton.onclick = processTransferSelections;
-      transferSelectedButton.textContent = 'Transfer Selected';
+      transferSelectedButton.textContent = 'Pull Selected';
       div.appendChild(transferSelectedButton);
 
       const cancelTransferButton = document.createElement('button');
@@ -206,7 +206,7 @@ function updateDeviceData(data) {
       cancelTransferButton.id = `cancel-${source_name}`;
       cancelTransferButton.dataset.source = source_name;
       cancelTransferButton.onclick = processCancelTransfer;
-      cancelTransferButton.textContent = 'Stop Transfer';
+      cancelTransferButton.textContent = 'Stop Pull';
       div.appendChild(cancelTransferButton);
 
       const removeSelectedButton = document.createElement('button');
@@ -379,7 +379,7 @@ function updateDeviceData(data) {
         transferSelectedButton.dataset.date = date;
         transferSelectedButton.dataset.source = source_name;
         transferSelectedButton.onclick = processTransferSelectionsByDate;
-        transferSelectedButton.textContent = 'Transfer Selected for Date';
+        transferSelectedButton.textContent = 'Pull Selected for Date';
         div.appendChild(transferSelectedButton);
 
         // const cancelTransferButton = document.createElement('button');

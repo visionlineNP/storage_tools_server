@@ -13,6 +13,11 @@ from tqdm import tqdm
 
 from .debug_print import debug_print
 
+class VolumeMapNotFound(Exception):
+    def __init__(self, project_name:str) -> None:
+        msg = f"Failed to find volume mapping for {project_name}"
+        super().__init__(msg)
+
 
 def get_upload_id(source: str, project: str, file: str):
     """
@@ -124,6 +129,17 @@ class Database:
 
     def add_project(self, name: str, description: str):
         self._add_name("projects", name, description)
+
+    def edit_project(self, name:str, description:str):
+        table = "projects"
+        changed = False
+        for entry in self.database[table]:
+            if entry[0] == name:
+                if entry[1] != description:
+                    entry[1] = description
+                    changed = True 
+        return changed
+
 
     def add_robot_name(self, name: str, description: str):
         if not self._has_name("robots", name):
@@ -405,6 +421,9 @@ class Database:
         rtn = {}
         for entry in self.database["data"]:
             project = entry["project"]
+            if project not in self.volume_map:
+                raise VolumeMapNotFound(project)
+
             robot = entry["robot_name"]
             run = entry["run_name"]
 
@@ -419,6 +438,7 @@ class Database:
             topics = entry.get("topics", [])
             upload_id = entry["upload_id"]
             robot_name = entry["robot_name"]
+            fullpath = entry["fullpath"]
 
             rtn[project] = rtn.get(project, {})
             rtn[project][ymd] = rtn[project].get(ymd, {})
@@ -428,6 +448,7 @@ class Database:
                 {
                     "datetime": date,
                     "relpath": relpath,
+                    "fullpath": fullpath,
                     "basename": basename,
                     "size": size,
                     "site": site,

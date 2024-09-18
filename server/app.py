@@ -122,14 +122,21 @@ def get_source_by_mac_address():
     rtn = f"SRC-{name}"
     return rtn 
 
-# config_filename = args.config
-config_filename = os.environ.get("CONFIG", "config/config.yaml")
 
-def load_config(config_filename):
+
+def load_config(config_filename, volume_map_filename):
+
+    if os.path.exists(volume_map_filename):
+        with open(volume_map_filename, "r") as f:
+            volume_map = yaml.safe_load(f)
+    else:
+        volume_map = {"volume_map": {}}
+
     debug_print(f"Using {config_filename}")
     with open(config_filename, "r") as f:
         g_config = yaml.safe_load(f)
  
+        g_config["volume_map"] = volume_map["volume_map"]
         g_config["source"] = get_source_by_mac_address() + "_" + str(g_config["port"])
         debug_print(f"Setting source name to {g_config['source']}")
 
@@ -150,7 +157,6 @@ def load_config(config_filename):
     # # this is optional. We can preload projects, sites, and robots
     # # based on the config.
         for project_name in sorted(g_config.get("volume_map", [])):
-    # for project_name in g_config.get("projects", []):
             g_database.add_project(project_name, "")
 
         for robot_name in g_config.get("robots", []):
@@ -160,7 +166,11 @@ def load_config(config_filename):
             g_database.add_site(site_name, "")
     return g_upload_dir,g_database,g_config
 
-g_upload_dir, g_database, g_config = load_config(config_filename)
+config_filename = os.environ.get("CONFIG", "config/config.yaml")
+g_volume_map_filename = os.environ.get("VOLUME_MAP", "config/volumeMap.yaml")
+
+g_upload_dir, g_database, g_config = load_config(config_filename, g_volume_map_filename)
+
 
 g_keys_filename = os.environ.get("KEYSFILE", "config/keys.yaml")
 
@@ -511,6 +521,12 @@ def on_device_files(data):
         g_remote_entries[source] = {}
         send_device_data()
 
+
+    if project not in g_config["volume_map"]:
+        socketio.emit("server_error", {"msg": f"Project: {project} does not have a volume mapping"})
+        debug_print("Error")
+
+
     # files = data.get("files")
     files = g_remote_entries_buffer.get( source, data.get("files", []))
     if source in g_remote_entries_buffer: del g_remote_entries_buffer[source]
@@ -561,6 +577,7 @@ def on_device_files(data):
             "fullpath": file,
             "size": size,
             "site": site,
+            "date": start_datetime.split(" ")[0],
             "datetime": start_datetime,
             "start_datetime": start_datetime,
             "end_datetime": end_datetime,
@@ -687,15 +704,34 @@ def on_request_node_ymd_data(data):
 @socketio.on("request_projects")
 def on_request_projects(data):
     room = dashboard_room(data)
-    names = [i[1] for i in g_database.get_projects()]
-    socketio.emit("project_names", {"data": names}, to=room)
+    items = [ {"project":i[1], "description":i[2]  }  for i in g_database.get_projects()]
+    for item in items:
+        item["volume"] = g_config["volume_map"].get(item["project"], "")
+
+    debug_print(f"Send project Names {items}")
+    socketio.emit("project_names", {"data": items}, to=room)
 
 
 @socketio.on("add_project")
 def on_add_project(data):
     global g_database
-    g_database.add_project(data.get("project"), data.get("desc", ""))
+
+    name = data.get("project")
+    desc = data.get("description", "")
+    volume = data.get("volume")
+
+    g_database.add_project(name, desc)
     g_database.commit()
+
+    volume = data.get("volume")
+    if g_config["volume_map"].get(name, "") != volume:
+        g_config["volume_map"][name] = volume
+
+    with open(g_volume_map_filename, "w") as f:
+        volume_map = {"volume_map":  g_config["volume_map"]}
+        yaml.dump(volume_map, open(g_volume_map_filename, "w"))            
+
+
     on_request_projects(data)
 
 
@@ -704,6 +740,27 @@ def on_set_project(data):
     source = data["source"]
     debug_print(data)
     socketio.emit("set_project", data, to=source)
+
+
+@socketio.on("edit_project")
+def on_edit_project(data):
+    name = data.get("project")
+    desc = data.get("description")
+    volume = data.get("volume")
+    if g_database.edit_project(name, desc):
+        g_database.commit()
+    
+    volume_map_changed = False
+    if g_config["volume_map"].get(name, "") != volume:
+        g_config["volume_map"][name] = volume
+        volume_map_changed = True
+
+    if volume_map_changed:
+        with open(g_volume_map_filename, "w") as f:
+            volume_map = {"volume_map":  g_config[volume_map]}
+            yaml.dump(volume_map, open(g_volume_map_filename, "w"))            
+
+    on_request_projects(data)
 
 
 @socketio.on("server_connect")
@@ -750,6 +807,7 @@ def on_device_status_tqdm(data):
 def on_server_refresh(msg=None):
     global g_remote_connection
     g_remote_connection.send_node_data()
+
 
 @socketio.on("request_robots")
 def on_request_robots(data=None):
@@ -1063,11 +1121,12 @@ def on_transfer_node_files(data):
         # debug_print(entry)
 
         dirroot = entry["dirroot"]
-        reldir = entry["relpath"]
-        basename = entry["basename"]
+        # reldir = entry["relpath"]
+        # basename = entry["basename"]
         offset = entry["temp_size"]
         size = entry["size"]
-        file = os.path.join(reldir, basename)
+        # file = os.path.join(reldir, basename)
+        file = entry["fullpath"]
 
         filenames.append((dirroot, file, upload_id, offset, size))
 
@@ -1579,10 +1638,15 @@ def get_file_path_from_entry(entry:dict) -> str:
 
     relpath = entry["relpath"]
     filename = entry["basename"]
+    if "date" in entry:
+        date = entry["date"]
+    else:
+        date = entry["datetime"].split(" ")[0]
+ 
     try:
-        filedir = os.path.join(root, volume, relpath)
+        filedir = os.path.join(root, volume, date, relpath)
     except TypeError as e:
-        debug_print((root, volume, relpath))
+        debug_print((root, volume, date,relpath))
         raise e
 
     filepath = os.path.join(filedir, filename)
@@ -1604,21 +1668,6 @@ def get_file_path(source: str, upload_id: str) -> str:
     entry = g_remote_entries[source][upload_id]
     return get_file_path_from_entry(entry)
     
-    # project = g_remote_entries[source][upload_id].get("project")
-    # root = g_config.get("volume_root", "/")
-    # volume = g_config["volume_map"].get(project, "").strip("/")
-
-    # relpath = g_remote_entries[source][upload_id]["relpath"]
-    # filename = g_remote_entries[source][upload_id]["basename"]
-    # try:
-    #     filedir = os.path.join(root, volume, relpath)
-    # except TypeError as e:
-    #     debug_print((root, volume, relpath))
-    #     raise e
-
-    # filepath = os.path.join(filedir, filename)
-
-    # return filepath
 
 
 def get_rel_dir(source: str, upload_id: str) -> str:
@@ -1712,6 +1761,8 @@ def handle_file(source: str, upload_id: str):
     filepath = get_file_path(source, upload_id)
     tmp_path = filepath + ".tmp"
 
+    debug_print(filepath)
+
     if os.path.exists(filepath):
         return jsonify({"message": f"File {filename} alredy uploaded"})
 
@@ -1803,6 +1854,8 @@ def handle_file(source: str, upload_id: str):
     g_remote_entries[source][upload_id]["localpath"] = filepath
     g_remote_entries[source][upload_id]["on_server"] = True
     g_remote_entries[source][upload_id]["dirroot"] = get_dirroot(g_remote_entries[source][upload_id]["project"])
+    g_remote_entries[source][upload_id]["fullpath"] = filepath.replace(g_remote_entries[source][upload_id]["dirroot"], "").strip("/")
+
 
     metadata_filename = filepath + ".metadata"
     with open(metadata_filename, "w") as fid:

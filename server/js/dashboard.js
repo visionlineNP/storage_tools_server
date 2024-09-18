@@ -74,6 +74,10 @@ $(document).ready(function () {
     updateServerData(data);
   });
 
+  socket.on('server_error', function(data) {
+    alert(data.msg);
+  }) 
+
   socket.on('node_data', function (data) {
     console.log('Received node_data:', data);
     updateNodeData(data);
@@ -206,14 +210,14 @@ $(document).ready(function () {
   })
 
 
-  document.getElementById('add-project-btn').addEventListener('click', function () {
-    const projectName = document.getElementById('project-name-input').value;
-    if (projectName) {
-      socket.emit('add_project', { project: projectName, "session_token": window.session_token });
-      document.getElementById('project-name-input').value = '';
-    }
-    populateEditMenus();
-  });
+  // document.getElementById('add-project-btn').addEventListener('click', function () {
+  //   const projectName = document.getElementById('project-name-input').value;
+  //   if (projectName) {
+  //     socket.emit('add_project', { project: projectName, "session_token": window.session_token });
+  //     document.getElementById('project-name-input').value = '';
+  //   }
+  //   populateEditMenus();
+  // });
 
 
   document.getElementById('add-robot-btn').addEventListener('click', function () {
@@ -554,25 +558,97 @@ function postDateTimeChange(source, upload_id) {
 }
 
 function updateProjectList(projectData) {
-  let projectList = document.getElementById('project-list');
-  projectList.innerHTML = ''; // Clear existing list
-  window.projects = []
 
-  // Create the <ul> element with class "list-group"
-  const ul = document.createElement('ul');
-  ul.className = 'list-group';
+    window.projects = []
 
-  // Create and append <li> elements for each project
-  projectData.forEach(item => {
-    const li = document.createElement('li');
-    li.className = 'list-group-item';
-    li.textContent = item;
-    ul.appendChild(li);
-    window.projects.push(item);
-  });
+    const tbody = document.querySelector('#projectTable tbody');
+    tbody.innerHTML = '';  // Clear the table before updating
 
-  // Append the <ul> to the project list container
-  projectList.appendChild(ul);
+    // Create and append table rows for each project
+    projectData.forEach(project => {
+        const row = document.createElement('tr');
+
+        // Project Name Cell
+        const projectCell = document.createElement('td');
+        projectCell.textContent = project.project;
+        row.appendChild(projectCell);
+
+        window.projects.push(project.project);
+
+        // Volume Cell
+        const volumeCell = document.createElement('td');
+        const volumeSpan = document.createElement("span")
+        volumeSpan.classList.add("volume")
+        volumeSpan.textContent = project.volume;
+        const volumeEdit = document.createElement("input")
+        volumeEdit.type = "text";
+        volumeEdit.classList.add("editVolume");
+        volumeEdit.value = project.volume;
+        volumeEdit.style.display = 'none';
+        volumeCell.appendChild(volumeSpan);
+        volumeCell.appendChild(volumeEdit);
+        row.appendChild(volumeCell);
+
+        // Description Cell (with edit capabilities)
+        const descriptionCell = document.createElement('td');
+        const descriptionSpan = document.createElement('span');
+        descriptionSpan.classList.add('description');
+        descriptionSpan.textContent = project.description;
+        const descriptionInput = document.createElement('input');
+        descriptionInput.type = 'text';
+        descriptionInput.classList.add('editDescription');
+        descriptionInput.value = project.description;
+        descriptionInput.style.display = 'none';
+
+        descriptionCell.appendChild(descriptionSpan);
+        descriptionCell.appendChild(descriptionInput);
+        row.appendChild(descriptionCell);
+
+        // Actions Cell (Edit/Save/Cancel buttons)
+        const actionsCell = document.createElement('td');
+        const editButton = document.createElement('button');
+        editButton.textContent = 'Edit';
+        editButton.onclick = () => editProject(project.project, project.volume, editButton);
+
+        const saveButton = document.createElement('button');
+        saveButton.textContent = 'Save';
+        saveButton.style.display = 'none';
+        saveButton.onclick = () => saveEdit(project.project, project.volume, saveButton);
+
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'Cancel';
+        cancelButton.style.display = 'none';
+        cancelButton.onclick = () => cancelEdit(cancelButton);
+
+        actionsCell.appendChild(editButton);
+        actionsCell.appendChild(saveButton);
+        actionsCell.appendChild(cancelButton);
+        row.appendChild(actionsCell);
+
+        // Append the row to the table body
+        tbody.appendChild(row);
+    });
+
+
+  // let projectList = document.getElementById('project-list');
+  // projectList.innerHTML = ''; // Clear existing list
+  // window.projects = []
+
+  // // Create the <ul> element with class "list-group"
+  // const ul = document.createElement('ul');
+  // ul.className = 'list-group';
+
+  // // Create and append <li> elements for each project
+  // projectData.forEach(item => {
+  //   const li = document.createElement('li');
+  //   li.className = 'list-group-item';
+  //   li.textContent = item;
+  //   ul.appendChild(li);
+  //   window.projects.push(item);
+  // });
+
+  // // Append the <ul> to the project list container
+  // projectList.appendChild(ul);
 }
 
 
@@ -886,6 +962,73 @@ function logout() {
   deleteCookie("session_token")
   window.location.reload();
 }
+
+
+
+        // Add a new project
+        function addProject() {
+          const project = document.getElementById('newProject').value;
+          const volume = document.getElementById('newVolume').value;
+          const description = document.getElementById('newDescription').value;
+
+          // Emit the "add_project" event
+          socket.emit('add_project', { project, volume, description, "session_token": window.session_token });
+
+          // Clear the input fields
+          document.getElementById('newProject').value = '';
+          document.getElementById('newVolume').value = '';
+          document.getElementById('newDescription').value = '';
+      }
+
+      // Edit an existing project
+      function editProject(project, volume, btn) {
+          const row = btn.closest('tr');
+          row.querySelector('.description').style.display = 'none';  // Hide description
+          row.querySelector('.editDescription').style.display = '';  // Show edit field
+          btn.style.display = 'none';  // Hide "Edit" button
+
+          row.querySelector('.volume').style.display = 'none';
+          row.querySelector('.editVolume').style.display = '';
+
+          row.querySelectorAll('button')[1].style.display = '';  // Show "Save" button
+          row.querySelectorAll('button')[2].style.display = '';  // Show "Cancel" button
+      }
+
+      // Save the edited project
+      function saveEdit(project, volume, btn) {
+          const row = btn.closest('tr');
+          const newDescription = row.querySelector('.editDescription').value;
+          const newVolume = row.querySelector('.editVolume').value
+
+          // Emit the "edit_project" event
+          socket.emit('edit_project', { project: project, volume:newVolume, description: newDescription, "session_token": window.session_token });
+
+          // Revert to display mode
+          row.querySelector('.description').textContent = newDescription;
+          row.querySelector('.description').style.display = '';  // Show description
+          row.querySelector('.editDescription').style.display = 'none';  // Hide edit field
+          row.querySelector('.volume').textContent = newVolume;
+          row.querySelector('.volume').style.display = '';
+          row.querySelector('.editVolume').style.display = 'none';
+
+          row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
+          row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
+          row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
+      }
+
+      // Cancel editing a project
+      function cancelEdit(btn) {
+          const row = btn.closest('tr');
+          row.querySelector('.description').style.display = '';  // Show description
+          row.querySelector('.editDescription').style.display = 'none';  // Hide edit field
+          row.querySelector('.volume').style.display = '';
+          row.querySelector('.editVolume').style.display = 'none';
+
+          row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
+          row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
+          row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
+      }
+
 
 
 

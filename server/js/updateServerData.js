@@ -38,7 +38,7 @@ function on_dashboard_file_server(data) {
     } else { console.log("didnt find ", "on_local_" + upload_id) }
 
     let checkbox = document.getElementById("server_select_" + upload_id)
-    if(checkbox) {
+    if (checkbox) {
         checkbox.dataset.on_local = data.on_local;
         checkbox.dataset.on_remote = data.on_remote;
         refreshTooltips();
@@ -77,7 +77,7 @@ function on_remote_connection(msg) {
         refreshTooltips();
     }
     const refresh_button = document.getElementById("refresh_button");
-    if( refresh_button) {
+    if (refresh_button) {
         refresh_button.disabled = !msg.connected;
     }
 }
@@ -88,16 +88,15 @@ function processServerSelectAllNew() {
 
 }
 
-function processServerStatus(data)
-{
+function processServerStatus(data) {
     const msg = data.msg;
     const div = document.getElementById("server-status");
-    if( !div) {
+    if (!div) {
         console.log("Did not find 'server-status'");
         return
     }
     div.innerHTML = "";
-    if( msg.size() > 1) {
+    if (msg.size() > 1) {
         div.innerHTML = "<span>" + msg + "</span>"
     }
 
@@ -105,10 +104,10 @@ function processServerStatus(data)
 
 function processServerTransferSelections() {
     const source = $(this)[0].dataset.source;
-  
+
     let selectedUpdateIds = [];
     $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').each(function () {
-      selectedUpdateIds.push($(this).attr('data-upload_id'));
+        selectedUpdateIds.push($(this).attr('data-upload_id'));
     });
     console.log(selectedUpdateIds, source);
 
@@ -117,8 +116,8 @@ function processServerTransferSelections() {
         "upload_ids": selectedUpdateIds, "session_token": window.session_token
     }
     socket.emit("server_transfer_files", msg)
-  }
-  
+}
+
 
 function processServerCancelTransfer() {
     const source = $(this)[0].dataset.source;
@@ -129,9 +128,8 @@ function processServerCancelTransfer() {
 
 window.server_accumulate = {};
 
-function accumulateServerYMD(data)
-{
-    const ymd_name = data.ymd; 
+function accumulateServerYMD(data) {
+    const ymd_name = data.ymd;
     const runs = Object.entries(data.runs);
     const project_name = data.project;
     const source = data.source;
@@ -140,8 +138,8 @@ function accumulateServerYMD(data)
     const key = source + "." + project_name + "." + ymd_name
 
 
-    acc_data =  window.server_accumulate[key]
-    if( acc_data == null) {
+    acc_data = window.server_accumulate[key]
+    if (acc_data == null) {
         acc_data = data;
         acc_data.found = 1;
     } else {
@@ -149,12 +147,12 @@ function accumulateServerYMD(data)
 
         for ([run_name, run_entry] of runs) {
             acc_data.runs[run_name] = run_entry;
-        };        
+        };
     }
     window.server_accumulate[key] = acc_data;
 
-    console.log(acc_data.found)
-    if(total == acc_data.found) {
+    // console.log(acc_data.found)
+    if (total == acc_data.found) {
         processServerYMD(acc_data);
         window.server_accumulate[key] = null;
     }
@@ -168,10 +166,10 @@ function accumulateServerYMD(data)
           "project": str(),
   }
 */
-function processServerYMD(data)
-{
-    console.log(data);
-    const ymd_name = data.ymd; 
+function processServerYMD(data) {
+
+    //console.log(data);
+    const ymd_name = data.ymd;
     const runs = Object.entries(data.runs);
     const project_name = data.project;
     const source = data.source;
@@ -287,8 +285,12 @@ function processServerYMD(data)
         run_dl.appendChild(run_dd);
 
 
-        const header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
-        const item_names = ["robot_name","site", "datetime",  "basename", "localpath", "hsize"]
+        let header_names = ["Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
+        if (window.has_remotes) {
+            header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
+        }
+
+        const item_names = ["robot_name", "site", "datetime", "basename", "localpath", "hsize"]
 
         // const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
         // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]
@@ -329,28 +331,30 @@ function processServerYMD(data)
             relpath_tag.className = "table_relpath";
             relpath_tag.innerHTML = relpath;
             run_header_td.appendChild(relpath_tag);
-        
+
             items.sort((a, b) => a["datetime"].localeCompare(b["datetime"]))
 
             $.each(items, function (_, detail) {
                 const tr = document.createElement("tr");
                 tbody.appendChild(tr);
 
-                const tdCheckbox = document.createElement("td");
-                const checkbox = document.createElement("input");
+                if (window.has_remotes) {
+                    const tdCheckbox = document.createElement("td");
+                    const checkbox = document.createElement("input");
 
-                checkbox.dataset.source = source;
-                checkbox.dataset.datetime = detail.datetime;
-                checkbox.dataset.size = detail.size;
-                checkbox.dataset.group = "table";
-                checkbox.dataset.on_local = detail.on_local;
-                checkbox.dataset.on_remote = detail.on_remote;
-                checkbox.dataset.upload_id = detail.upload_id
+                    checkbox.dataset.source = source;
+                    checkbox.dataset.datetime = detail.datetime;
+                    checkbox.dataset.size = detail.size;
+                    checkbox.dataset.group = "table";
+                    checkbox.dataset.on_local = detail.on_local;
+                    checkbox.dataset.on_remote = detail.on_remote;
+                    checkbox.dataset.upload_id = detail.upload_id
 
-                checkbox.type = "checkbox";
-                checkbox.id = "server_select_" + detail.upload_id
-                tdCheckbox.appendChild(checkbox);
-                tr.appendChild(tdCheckbox);
+                    checkbox.type = "checkbox";
+                    checkbox.id = "server_select_" + detail.upload_id
+                    tdCheckbox.appendChild(checkbox);
+                    tr.appendChild(tdCheckbox);
+                }
 
                 item_names.forEach((key) => {
                     const td = document.createElement("td");
@@ -364,12 +368,11 @@ function processServerYMD(data)
                         icon.dataset.localpath = detail.localpath;
                         icon.setAttribute("data-bs-toggle", "tooltip");
 
-                        icon.addEventListener('click', function()
-                        {
-                          const localpath = $(this)[0].dataset.localpath;    
-                          navigator.clipboard.writeText(localpath);
+                        icon.addEventListener('click', function () {
+                            const localpath = $(this)[0].dataset.localpath;
+                            navigator.clipboard.writeText(localpath);
                         })
-                    
+
                         td.appendChild(icon)
 
 
@@ -383,30 +386,30 @@ function processServerYMD(data)
                         download.addEventListener("click", function () {
                             const upload_id = $(this)[0].dataset.upload_id;
                             const basename = $(this)[0].dataset.basename;
-        
+
                             const link = document.createElement("a")
                             link.href = `/download/${upload_id}`
                             link.download = basename;
                             link.style.display = 'none';
-        
+
                             document.body.appendChild(link);
                             link.click()
                             document.body.removeChild(link);
-        
+
                         })
                         const spacer = document.createElement("span");
                         spacer.innerHTML = "&nbsp;&nbsp;"
                         td.appendChild(spacer)
-                        td.appendChild(download);                        
+                        td.appendChild(download);
                     }
 
                     if (key == "basename") {
                         let topics = null;
-                        if( detail.topics) {      
-                          topics = Object.entries(detail.topics)
+                        if (detail.topics) {
+                            topics = Object.entries(detail.topics)
                         }
-                    
-                        if (topics && topics.length > 0)  {
+
+                        if (topics && topics.length > 0) {
 
                             td.innerHTML += "&nbsp;";
 
@@ -427,11 +430,11 @@ function processServerYMD(data)
                             dul.setAttribute("aria-labelledby", "topics-" + detail.upload_id);
                             dropdown.appendChild(dul);
                             topics.sort((a, b) => a[0].localeCompare(b[0]));
-                            for (const [topic, topic_count ] of topics) {
-                              let dil = document.createElement("li");
-                              dul.appendChild(dil);
-                              dil.innerHTML = topic + " : (" + topic_count + ")";
-                              dil.className = "dropdown-item";
+                            for (const [topic, topic_count] of topics) {
+                                let dil = document.createElement("li");
+                                dul.appendChild(dil);
+                                dil.innerHTML = topic + " : (" + topic_count + ")";
+                                dil.className = "dropdown-item";
                             }
 
                         }
@@ -457,18 +460,19 @@ function processServerYMD(data)
                 }
                 statusDiv.appendChild(onLocal);
 
-                const onRemote = document.createElement("i")
-                onRemote.className = "bi bi-cloud";
-                onRemote.classList.add("remote_icon")
-                onRemote.title = "On Remote";
-                onRemote.id = `on_remote_${detail.upload_id}`;
-                onRemote.setAttribute("data-bs-toggle", "tooltip");
-                if (!detail.on_remote) {
-                    onRemote.title = "Not On Remote Server";
-                    onRemote.classList.add("grayed-out");
+                if (window.has_remotes) {
+                    const onRemote = document.createElement("i")
+                    onRemote.className = "bi bi-cloud";
+                    onRemote.classList.add("remote_icon")
+                    onRemote.title = "On Remote";
+                    onRemote.id = `on_remote_${detail.upload_id}`;
+                    onRemote.setAttribute("data-bs-toggle", "tooltip");
+                    if (!detail.on_remote) {
+                        onRemote.title = "Not On Remote Server";
+                        onRemote.classList.add("grayed-out");
+                    }
+                    statusDiv.appendChild(onRemote);
                 }
-                statusDiv.appendChild(onRemote);
-
 
 
                 tdStatus.appendChild(statusDiv);
@@ -503,7 +507,8 @@ function updateServerData(data) {
 
 
     let remote_servers = data.remotes;
-    if (remote_servers.length > 0) {
+    window.has_remotes = remote_servers.length > 0
+    if (window.has_remotes) {
         const selectElement = document.createElement("select");
         remote_servers.forEach(server => {
             const optionElement = document.createElement("option");
@@ -518,7 +523,7 @@ function updateServerData(data) {
         linkButton.dataset.connected = data.remote_connected
         if (data.remote_connected) {
             linkButton.textContent = "Disconnect";
-            msg = {"session_token": window.session_token}
+            msg = { "session_token": window.session_token }
             socket.emit("server_refresh");
 
         } else {
@@ -527,7 +532,7 @@ function updateServerData(data) {
         linkButton.addEventListener('click', () => {
             if (linkButton.dataset.connected == "true") {
                 console.log("Try to disconnect")
-                msg = {"session_token": window.session_token}
+                msg = { "session_token": window.session_token }
                 socket.emit("server_disconnect", msg)
             } else {
                 const selectOption = selectElement.value;
@@ -542,7 +547,7 @@ function updateServerData(data) {
         refreshButton.textContent = "Refresh";
         refreshButton.disabled = !data.remote_connected;
         refreshButton.addEventListener('click', () => {
-            msg = {"session_token": window.session_token} 
+            msg = { "session_token": window.session_token }
             socket.emit("server_refresh");
         })
 
@@ -577,7 +582,7 @@ function updateServerData(data) {
     $.each(project_tabs, function (project_name, project_tab) {
 
         // create to level global buttons 
-        {
+        if (window.has_remotes) {
             const div = document.createElement("div");
             project_tab.append(div)
 
@@ -616,7 +621,7 @@ function updateServerData(data) {
             transferSelectedButton.dataset.source = source;
             transferSelectedButton.dataset.project = project_name;
             transferSelectedButton.onclick = processServerTransferSelections;
-            transferSelectedButton.textContent = 'Transfer Selected';
+            transferSelectedButton.textContent = 'Push Selected';
             div.appendChild(transferSelectedButton);
 
             const cancelTransferButton = document.createElement('button');
@@ -628,7 +633,7 @@ function updateServerData(data) {
             cancelTransferButton.dataset.source = source;
             cancelTransferButton.dataset.project = project_name;
             cancelTransferButton.onclick = processServerCancelTransfer;
-            cancelTransferButton.textContent = 'Stop Transfer';
+            cancelTransferButton.textContent = 'Stop Push';
             div.appendChild(cancelTransferButton);
 
 

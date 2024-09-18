@@ -245,7 +245,7 @@ function processNodeYMD(data) {
                 onLocal.title = "On Local";
                 onLocal.id = `node_on_local_${detail.upload_id}`;
                 onLocal.setAttribute("data-bs-toggle", "tooltip");
-                if (!detail.on_local) {
+                if (!detail.on_remote) {
                     onLocal.title = "Not On Local Server";
                     onLocal.classList.add("grayed-out");
                 }
@@ -256,7 +256,7 @@ function processNodeYMD(data) {
                 onRemote.title = "On Remote";
                 onRemote.id = `node_on_remote_${detail.upload_id}`;
                 onRemote.setAttribute("data-bs-toggle", "tooltip");
-                if (!detail.on_remote) {
+                if (!detail.on_local) {
                     onRemote.title = "Not On Remote Server";
                     onRemote.classList.add("grayed-out");
                     onRemote.className = "bi bi-cloud";

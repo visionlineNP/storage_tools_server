@@ -20,19 +20,6 @@ upload_dir: "/mnt/uploads/"
 # The volume_root does not have to be the same as the upload_dir.  
 volume_root: "/mnt/uploads/"
 
-# All projects must have a volume map entry. 
-# It is recommended to have a unique directory for each project. 
-volume_map: 
-  aerialmanipulation: /volume1/aerialmanipulation/datasets
-  aist: /volume5/aist/datasets
-  asnr: /volume6/asnr/datasets
-  chiron: /volume3/chiron/datasets
-  dsta: /volume4/dsta/datasets
-  icwerx: /volume5/icwerx/datasets
-  multidronecoordination: /volume6/multidronecoordination/datasets
-  offroad: /volume3/offroad/datasets
-  wildfire: /volume3/wildfire/datasets
-
 # ----------------------------------------------
 # Optional updates
 # ----------------------------------------------
