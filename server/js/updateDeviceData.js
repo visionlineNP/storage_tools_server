@@ -578,14 +578,14 @@ function updateDeviceData_Old(data) {
 
 function updateDeviceData(data) {
   // save device data for later.  
-  console.log(data);
+  // console.log(data);
   
   window.device_data = {};
 
   let valid = true 
   $.each(data, function(source_name, source_item) {
     console.log(source_name, source_item)
-    if( source_item.stats == null) {
+    if( source_item.project && source_item.stats == null) {
       valid = false;
     }
       });
@@ -618,6 +618,8 @@ function updateDeviceData(data) {
 
     const header = document.createElement("div");
     source_tab.appendChild(header);
+
+    console.log(project)
 
     // handle case where device does not have project set. 
     if (project == null) {
