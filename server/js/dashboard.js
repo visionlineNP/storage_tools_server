@@ -42,6 +42,11 @@ $(document).ready(function () {
     updateDeviceData(data);
   });
 
+  socket.on('device_ymd_data', function (data) {
+    console.log(data)
+    accumulateDeviceYMD(data);
+  })
+
   socket.on('device_status', function (data) {
     updateDeviceStatus(data);
   });
@@ -571,6 +576,7 @@ function updateProjectList(projectData) {
         // Project Name Cell
         const projectCell = document.createElement('td');
         projectCell.textContent = project.project;
+        projectCell.classList.add("project")
         row.appendChild(projectCell);
 
         window.projects.push(project.project);
@@ -620,9 +626,17 @@ function updateProjectList(projectData) {
         cancelButton.style.display = 'none';
         cancelButton.onclick = () => cancelEdit(cancelButton);
 
+        const deleteButton = document.createElement("button");
+        deleteButton.textContent = "Delete";
+        deleteButton.style.display = 'none';
+        deleteButton.class = "btn btn-danger"
+        deleteButton.onclick = () => deleteEdit(deleteButton);
+
         actionsCell.appendChild(editButton);
         actionsCell.appendChild(saveButton);
         actionsCell.appendChild(cancelButton);
+        actionsCell.appendChild(deleteButton);
+
         row.appendChild(actionsCell);
 
         // Append the row to the table body
@@ -872,14 +886,20 @@ function populateEditMenus() {
 
   });
 
-  window.projects.forEach(project => {
-    $.each(projectMenu, function (_, menudiv) {
-      const source = menudiv.dataset.source;
-      projectMenu.append('<span class="dropdown-item update-project" data-source="' + source + '" data-project="' + project + '">' + project + '</span>');
-    });
-
-
+  // Find each project menu and update them separately
+  $('.project-menu').each(function() {
+      const projectMenu = $(this);  // Select the current project menu div
+      const source = projectMenu.data('source');  // Get the source associated with this menu
+  
+      // Clear the current menu
+      projectMenu.empty();
+  
+      // Add projects to this specific menu
+      window.projects.forEach(project => {
+          projectMenu.append('<span class="dropdown-item update-project" data-source="' + source + '" data-project="' + project + '">' + project + '</span>');
+      });
   });
+
 
 
   // Add event listeners for the site and robot menu items
@@ -992,7 +1012,8 @@ function logout() {
 
           row.querySelectorAll('button')[1].style.display = '';  // Show "Save" button
           row.querySelectorAll('button')[2].style.display = '';  // Show "Cancel" button
-      }
+          row.querySelectorAll('button')[3].style.display = '';  // Hide "Delete" button
+        }
 
       // Save the edited project
       function saveEdit(project, volume, btn) {
@@ -1014,6 +1035,7 @@ function logout() {
           row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
           row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
           row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
+          row.querySelectorAll('button')[3].style.display = 'none';  // Hide "Delete" button
       }
 
       // Cancel editing a project
@@ -1027,9 +1049,25 @@ function logout() {
           row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
           row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
           row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
+          row.querySelectorAll('button')[3].style.display = 'none';  // Hide "Delete" button
       }
 
 
+      function deleteEdit(btn) {
+        const row = btn.closest('tr');
+        const project = row.querySelector(".project").textContent
+        const answer = confirm("Really delete [" + project + "]? This only deletes the project entry, not the files associated with the project.");
+        console.log(answer);
+        if( answer ) {
+          socket.emit('delete_project', { project: project, "session_token": window.session_token });
+        }
+
+        row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
+        row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
+        row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
+        row.querySelectorAll('button')[3].style.display = 'none';  // Hide "Delete" button
+
+      }
 
 
 window.sites = [];

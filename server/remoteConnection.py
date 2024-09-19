@@ -268,7 +268,7 @@ class RemoteConnection:
         try:
             data = self.m_database.get_send_data()
         except VolumeMapNotFound as e:
-            self.m_local_sio.emit("server_error", {"msg": e.what()})
+            self.m_local_sio.emit("server_error", {"msg": str(e)})
             
             
         source = self.m_node_source
@@ -343,7 +343,7 @@ class RemoteConnection:
                 with requests.Session() as session:
                     while True:
                         try:                            
-                            dirroot, file, upload_id, offset, total_size = file_queue.get(block=False)
+                            project, file, upload_id, offset, total_size = file_queue.get(block=False)
                             offset = int(offset)
                             total_size = int(total_size)
 
@@ -354,7 +354,8 @@ class RemoteConnection:
                         if self.m_signal == "cancel":
                             break
 
-                        fullpath = os.path.join(dirroot, file.strip("/"))
+                        dirroot = self.m_config["volume_map"].get(project, "/").strip("/")
+                        fullpath = os.path.join( self.m_config["volume_root"], dirroot, file.strip("/"))
                         if not os.path.exists(fullpath):
                             local_main_pbar.update()
                             remote_main_pbar.update()

@@ -139,6 +139,8 @@ function accumulateServerYMD(data) {
 
 
     acc_data = window.server_accumulate[key]
+
+
     if (acc_data == null) {
         acc_data = data;
         acc_data.found = 1;
@@ -150,6 +152,8 @@ function accumulateServerYMD(data) {
         };
     }
     window.server_accumulate[key] = acc_data;
+
+    // console.log(data, acc_data.found)
 
     // console.log(acc_data.found)
     if (total == acc_data.found) {

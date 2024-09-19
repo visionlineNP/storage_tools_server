@@ -28,6 +28,10 @@ from engineio.payload import Payload
 import psutil
 import hashlib
 import secrets
+import traceback
+import sys 
+from threading import Lock
+
 
 from .debug_print import debug_print
 from .speed import FileSpeedEstimate
@@ -61,6 +65,9 @@ g_sources = {"devices": [], "nodes": [], "report_host": [], "report_node": []}
 
 # maps source to upload_id to file entry for files on device
 g_remote_entries = {}
+
+# to lock the entries
+g_remote_entries_lock = {}
 
 # buffer of source to entries.  
 g_remote_entries_buffer = {}
@@ -126,17 +133,19 @@ def get_source_by_mac_address():
 
 def load_config(config_filename, volume_map_filename):
 
+    volume_map = None
     if os.path.exists(volume_map_filename):
         with open(volume_map_filename, "r") as f:
             volume_map = yaml.safe_load(f)
-    else:
+
+    if volume_map is None:
         volume_map = {"volume_map": {}}
 
     debug_print(f"Using {config_filename}")
     with open(config_filename, "r") as f:
         g_config = yaml.safe_load(f)
  
-        g_config["volume_map"] = volume_map["volume_map"]
+        g_config["volume_map"] = volume_map.get("volume_map", [])
         g_config["source"] = get_source_by_mac_address() + "_" + str(g_config["port"])
         debug_print(f"Setting source name to {g_config['source']}")
 
@@ -380,6 +389,7 @@ def on_disconnect():
             break
 
     if remove:
+        debug_print(f"--- remove {remove}")
         # debug_print(f"g_remote_entries: { remove in g_remote_entries} ")
         # debug_print(f"g_remote_sockets: {remove in g_remote_sockets}")
         # for source_type in sorted(g_sources):
@@ -497,11 +507,13 @@ def on_device_scan(data):
     socketio.emit("device_scan", data)
 
 @socketio.on("device_files_items")
-def on_device_files_items(data):    
+def on_device_files_items(data): 
     global g_remote_entries_buffer
 
     source = data.get("source")
     files = data.get("files")
+
+    # debug_print(f"got {len(files)}")
 
     g_remote_entries_buffer[source] = g_remote_entries_buffer.get(source, [])
     g_remote_entries_buffer[source].extend(files)
@@ -518,6 +530,7 @@ def on_device_files(data):
     source = data.get("source")
     project = data.get("project", None)
     if project is None:
+        debug_print(f"clearing {source}")
         g_remote_entries[source] = {}
         send_device_data()
 
@@ -541,71 +554,76 @@ def on_device_files(data):
     # note, this could be emitted
     g_fs_info[source] = data.get("fs_info")
 
+    # debug_print(f"Clearing {source} with {len(files)}")
     g_remote_entries[source] = {}
+    g_remote_entries_lock[source] = Lock()
 
-    for entry in files:
-        dirroot = entry.get("dirroot")
-        file = entry.get("filename")
-        size = entry.get("size")
-        start_datetime = entry.get("start_time")
-        end_datetime = entry.get("end_time")
-        md5 = entry.get("md5")
-        robot_name = entry.get("robot_name")
-        if robot_name and len(robot_name) > 0:
-            has_robot = g_database.has_robot_name(robot_name)
-            if not has_robot:
-                g_database.add_robot_name(robot_name, "")
-                g_database.commit()
+    with g_remote_entries_lock[source]:
+        for entry in files:
+            dirroot = entry.get("dirroot")
+            file = entry.get("filename")
+            size = entry.get("size")
+            start_datetime = entry.get("start_time")
+            end_datetime = entry.get("end_time")
+            md5 = entry.get("md5")
+            robot_name = entry.get("robot_name")
+            if robot_name and len(robot_name) > 0:
+                has_robot = g_database.has_robot_name(robot_name)
+                if not has_robot:
+                    g_database.add_robot_name(robot_name, "")
+                    g_database.commit()
 
-                # send users new robot names
-                on_request_robots()
-                
-        site = entry.get("site")
-        topics = entry.get("topics", {})
-        # for dirroot, file, size, start_datetime, end_datetime, md5 in files:
-        upload_id = get_upload_id(source, project, file)
+                    # send users new robot names
+                    on_request_robots()
+                    
+            site = entry.get("site")
+            topics = entry.get("topics", {})
 
-        project = project if project else "None"
- 
-        entry = {
-            "project": project,
-            "robot_name": robot_name,
-            "run_name": None,
-            "datatype": get_datatype(file),
-            "relpath": os.path.dirname(file),
-            "basename": os.path.basename(file),
-            "fullpath": file,
-            "size": size,
-            "site": site,
-            "date": start_datetime.split(" ")[0],
-            "datetime": start_datetime,
-            "start_datetime": start_datetime,
-            "end_datetime": end_datetime,
-            "upload_id": upload_id,
-            "dirroot": dirroot,
-            "remote_dirroot": dirroot,
-            "status": None,
-            "temp_size": 0,
-            "on_device": True,
-            "on_server": False,
-            "md5": md5,
-            "topics": topics,
-        }
+            # for dirroot, file, size, start_datetime, end_datetime, md5 in files:
+            upload_id = get_upload_id(source, project, file)
 
-        g_remote_entries[source][upload_id] = entry
+            project = project if project else "None"
+    
+            entry = {
+                "project": project,
+                "robot_name": robot_name,
+                "run_name": None,
+                "datatype": get_datatype(file),
+                "relpath": os.path.dirname(file),
+                "basename": os.path.basename(file),
+                "fullpath": file,
+                "size": size,
+                "site": site,
+                "date": start_datetime.split(" ")[0],
+                "datetime": start_datetime,
+                "start_datetime": start_datetime,
+                "end_datetime": end_datetime,
+                "upload_id": upload_id,
+                "dirroot": dirroot,
+                "remote_dirroot": dirroot,
+                "status": None,
+                "temp_size": 0,
+                "on_device": True,
+                "on_server": False,
+                "md5": md5,
+                "topics": topics,
+            }
 
-        filepath = get_file_path(source, upload_id)
-        status = "On Device"
-        if os.path.exists(filepath):
-            status = "On Device and Server"
-            g_remote_entries[source][upload_id]["on_server"] = True
-        if os.path.exists(filepath + ".tmp"):
-            status = "Interrupted transfer"
-            g_remote_entries[source][upload_id]["temp_size"] = os.path.getsize(
-                filepath + ".tmp"
-            )
-        g_remote_entries[source][upload_id]["status"] = status
+            g_remote_entries[source][upload_id] = entry
 
+            filepath = get_file_path(source, upload_id)
+            status = "On Device"
+            if os.path.exists(filepath):
+                status = "On Device and Server"
+                g_remote_entries[source][upload_id]["on_server"] = True
+            if os.path.exists(filepath + ".tmp"):
+                status = "Interrupted transfer"
+                g_remote_entries[source][upload_id]["temp_size"] = os.path.getsize(
+                    filepath + ".tmp"
+                )
+            g_remote_entries[source][upload_id]["status"] = status
+
+    # debug_print("data complete")
     send_device_data()
 
 
@@ -654,11 +672,12 @@ def on_request_server_ymd_data(data):
 
 def emit_server_ymd_data(datasets, stats, project, ymd, tab, room):
     """Background task to emit data incrementally."""
-    max_rows = 2
+    # max_rows = 20
 
-    total = min(max_rows, len(datasets))
+    # total = min(max_rows, len(datasets))
+    total = len(datasets)
 
-    for i, data in enumerate(datasets[:max_rows]):
+    for i, data in enumerate(datasets):
         server_data = {
             "total": total,
             "index": i,
@@ -708,7 +727,7 @@ def on_request_projects(data):
     for item in items:
         item["volume"] = g_config["volume_map"].get(item["project"], "")
 
-    debug_print(f"Send project Names {items}")
+    # debug_print(f"Send project Names {items}")
     socketio.emit("project_names", {"data": items}, to=room)
 
 
@@ -731,6 +750,7 @@ def on_add_project(data):
         volume_map = {"volume_map":  g_config["volume_map"]}
         yaml.dump(volume_map, open(g_volume_map_filename, "w"))            
 
+    g_database.update_volume_map(g_config["volume_map"])
 
     on_request_projects(data)
 
@@ -757,10 +777,28 @@ def on_edit_project(data):
 
     if volume_map_changed:
         with open(g_volume_map_filename, "w") as f:
-            volume_map = {"volume_map":  g_config[volume_map]}
+            volume_map = {"volume_map":  g_config["volume_map"]}
             yaml.dump(volume_map, open(g_volume_map_filename, "w"))            
 
     on_request_projects(data)
+
+@socketio.on("delete_project")
+def on_delete_project(data):
+    name = data.get("project")
+    
+    if g_database.delete_project(name):
+        g_database.commit()
+
+        on_request_projects(data)
+
+    if name in g_config["volume_map"]:
+        del g_config["volume_map"][name]
+
+    with open(g_volume_map_filename, "w") as f:
+        volume_map = {"volume_map":  g_config["volume_map"]}
+        yaml.dump(volume_map, open(g_volume_map_filename, "w"))            
+
+    g_database.update_volume_map(g_config["volume_map"])
 
 
 @socketio.on("server_connect")
@@ -1121,6 +1159,7 @@ def on_transfer_node_files(data):
         # debug_print(entry)
 
         dirroot = entry["dirroot"]
+        project = entry["project"]
         # reldir = entry["relpath"]
         # basename = entry["basename"]
         offset = entry["temp_size"]
@@ -1128,7 +1167,7 @@ def on_transfer_node_files(data):
         # file = os.path.join(reldir, basename)
         file = entry["fullpath"]
 
-        filenames.append((dirroot, file, upload_id, offset, size))
+        filenames.append((project, file, upload_id, offset, size))
 
     msg = {"source": data.get("source"), "files": filenames}
 
@@ -1895,13 +1934,93 @@ def device_revise_stats():
     #     socketio.emit("node_revise_stats", stats, to=node)
 
 
-def send_device_data(data=None):
-    global g_remote_entries
-    global g_fs_info
-    global g_projects
-
+def get_device_data_ymd_stub():
     device_data = {}
+    count = 0
 
+    for source in g_remote_entries:
+        if source in g_sources["devices"]:
+            # debug_print(len(g_remote_entries[source]))
+            project = g_projects.get(source)
+            device_data[source] = {"fs_info": {}, "entries": {}, "project": project}
+            if source in g_fs_info:
+                device_data[source]["fs_info"] = g_fs_info[source]
+            for uid in g_remote_entries[source]:
+                count += 1
+                entry = {}
+                # entry.update(g_remote_entries[source][uid])
+                # debug_print(g_remote_entries[source][uid]["robot_name"])
+                for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
+                    entry[key] = g_remote_entries[source][uid][key]
+
+                entry["size"] = humanfriendly.format_size(entry["size"])
+                date = g_remote_entries[source][uid]["datetime"].split(" ")[0]
+                relpath = g_remote_entries[source][uid]["relpath"]
+                device_data[source]["entries"][date] = device_data[source]["entries"].get(date, {})
+                device_data[source]["entries"][date][relpath] = device_data[source]["entries"][date].get(relpath, [])
+    
+        debug_print(f"{source} : {len(device_data[source]['entries'])} : {count}")
+    return device_data
+
+
+def get_send_device_data_ymd_data(source, ymd):
+    rtnarr = []
+    rtn = {}
+    max_count = 50
+    count = 0 
+
+    if not source in g_remote_entries:
+        debug_print(f"Source: {source} missing")
+
+        return 
+
+    for uid in g_remote_entries[source]:
+        entry = {}
+        for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
+            entry[key] = g_remote_entries[source][uid][key]
+
+        entry["size"] = humanfriendly.format_size(entry["size"])
+        date = g_remote_entries[source][uid]["datetime"].split(" ")[0]
+        if date != ymd:
+            continue
+        relpath = g_remote_entries[source][uid]["relpath"]
+
+        rtn[relpath] = rtn.get(relpath, [])
+        rtn[relpath].append(entry)
+
+        count += 1
+        if count >= max_count:
+            rtnarr.append(rtn)
+            rtn = {}
+            count = 0
+
+    rtnarr.append(rtn)
+
+    return rtnarr 
+
+@socketio.on("request_device_ymd_data")
+def get_device_ymd_data(data):
+    tab = data.get("tab")
+    names = tab.split(":")
+
+    _, source, ymd = names
+
+    datasets = get_send_device_data_ymd_data(source, ymd)
+    room = dashboard_room(data)
+
+    stats = get_device_data_stats_by_source_ymd(source, ymd)
+
+    # Start the long-running task in the background
+
+
+
+    socketio.start_background_task(target=emit_device_ymd_data, datasets=datasets, stats=stats, source=source, ymd=ymd, tab=tab, room=room)
+    # debug_print(f"sending data! {project} {ymd} {len(datasets)}")
+    
+
+def get_device_data_stats():
+    device_data = {}
+    
     for source in g_remote_entries:
         if source in g_sources["devices"]:
             project = g_projects.get(source)
@@ -1917,10 +2036,7 @@ def send_device_data(data=None):
 
                 entry["size"] = humanfriendly.format_size(entry["size"])
                 date = g_remote_entries[source][uid]["datetime"].split(" ")[0]
-                relpath = g_remote_entries[source][uid]["relpath"]
-                device_data[source]["entries"][date] = device_data[source]["entries"].get(date, {})
-                device_data[source]["entries"][date][relpath] = device_data[source]["entries"][date].get(relpath, [])
-                device_data[source]["entries"][date][relpath].append(entry)
+                # device_data[source]["entries"][date][relpath].append(entry)
 
                 device_data[source]["stats"] = device_data[source].get(
                     "stats",
@@ -1952,7 +2068,167 @@ def send_device_data(data=None):
                 update_stat(source, uid, device_data[source]["stats"][date])
                 update_stat(source, uid, device_data[source]["stats"]["total"])
 
-    send_to_all_dashboards("device_data", device_data)
+    return device_data
+
+
+def get_device_data_stats_by_source_ymd(source, ymd):
+    device_data = {}
+    
+
+    if source in g_sources["devices"]:
+        project = g_projects.get(source)
+        device_data[source] = {"fs_info": {}, "entries": {}, "project": project}
+        if source in g_fs_info:
+            device_data[source]["fs_info"] = g_fs_info[source]
+        for uid in g_remote_entries[source]:
+            entry = {}
+            # entry.update(g_remote_entries[source][uid])
+            # debug_print(g_remote_entries[source][uid]["robot_name"])
+            for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
+                entry[key] = g_remote_entries[source][uid][key]
+
+            entry["size"] = humanfriendly.format_size(entry["size"])
+            date = g_remote_entries[source][uid]["datetime"].split(" ")[0]
+            # device_data[source]["entries"][date][relpath].append(entry)
+
+            if date != ymd:
+                continue
+
+            device_data[source]["stats"] = device_data[source].get(
+                "stats",
+                {
+                    "total": {
+                        "total_size": 0,
+                        "count": 0,
+                        "start_datetime": None,
+                        "end_datetime": None,
+                        "datatype": {},
+                        "on_server_size": 0,
+                        "on_server_count": 0,
+                    }
+                },
+            )
+            device_data[source]["stats"][date] = device_data[source]["stats"].get(
+                date,
+                {
+                    "total_size": 0,
+                    "count": 0,
+                    "start_datetime": None,
+                    "end_datetime": None,
+                    "datatype": {},
+                    "on_server_size": 0,
+                    "on_server_count": 0,
+                },
+            )
+
+            update_stat(source, uid, device_data[source]["stats"][date])
+            update_stat(source, uid, device_data[source]["stats"]["total"])
+
+    return device_data
+
+def emit_device_ymd_data(datasets, stats, source, ymd, tab, room):
+    if datasets is None:
+        return 
+    
+    total = len(datasets)
+
+    debug_print((total, source))
+
+    for i, data in enumerate(datasets):
+        device_data = {
+            "total": total,
+            "index": i,
+            "reldir": data,
+            "stats": stats,
+            "source": g_config["source"],
+            "device_source": source,
+            "ymd": ymd,
+            "tab": tab
+        }
+        socketio.emit("device_ymd_data", device_data, to=room)
+    pass
+
+def send_device_data(msg=None):
+    device_data = get_device_data_ymd_stub()    
+    valid = True
+
+    stats = get_device_data_stats()
+    for source in device_data:
+        if "stats" in stats[source]:
+            device_data[source]["stats"] = stats[source]["stats"]
+        else:
+            valid = False
+
+    if valid:
+        send_to_all_dashboards("device_data", device_data)    
+
+
+def send_device_data_old(data=None):
+    global g_remote_entries
+    global g_fs_info
+    global g_projects
+
+    device_data = {}
+    
+    valid = True
+    for source in g_remote_entries:
+        with g_remote_entries_lock[source]:
+            debug_print((source in g_sources["devices"], len(g_remote_entries[source])))
+
+            if source in g_sources["devices"]:
+                project = g_projects.get(source)
+                device_data[source] = {"fs_info": {}, "entries": {}, "project": project}
+                if source in g_fs_info:
+                    device_data[source]["fs_info"] = g_fs_info[source]
+                for uid in g_remote_entries[source]:
+                    entry = {}
+                    # entry.update(g_remote_entries[source][uid])
+                    # debug_print(g_remote_entries[source][uid]["robot_name"])
+                    for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
+                        entry[key] = g_remote_entries[source][uid][key]
+
+                    entry["size"] = humanfriendly.format_size(entry["size"])
+                    date = g_remote_entries[source][uid]["datetime"].split(" ")[0]
+                    relpath = g_remote_entries[source][uid]["relpath"]
+                    device_data[source]["entries"][date] = device_data[source]["entries"].get(date, {})
+                    device_data[source]["entries"][date][relpath] = device_data[source]["entries"][date].get(relpath, [])
+                    # device_data[source]["entries"][date][relpath].append(entry)
+
+                    device_data[source]["stats"] = device_data[source].get(
+                        "stats",
+                        {
+                            "total": {
+                                "total_size": 0,
+                                "count": 0,
+                                "start_datetime": None,
+                                "end_datetime": None,
+                                "datatype": {},
+                                "on_server_size": 0,
+                                "on_server_count": 0,
+                            }
+                        },
+                    )
+                    device_data[source]["stats"][date] = device_data[source]["stats"].get(
+                        date,
+                        {
+                            "total_size": 0,
+                            "count": 0,
+                            "start_datetime": None,
+                            "end_datetime": None,
+                            "datatype": {},
+                            "on_server_size": 0,
+                            "on_server_count": 0,
+                        },
+                    )
+
+                    update_stat(source, uid, device_data[source]["stats"][date])
+                    update_stat(source, uid, device_data[source]["stats"]["total"])
+                debug_print(( source, "stats" in device_data[source]))
+                if not "stats" in device_data[source]:
+                    valid = False
+
+    if valid:          
+        send_to_all_dashboards("device_data", device_data)
 
     # for room in g_dashboard_rooms:
     #     debug_print(f"send_device_data to [{room}]")

@@ -90,16 +90,27 @@ function processTransferSelections() {
   transferFiles(selectedUpdateIds, source);
 }
 
-function updateDeviceData(data) {
+function updateDeviceData_Old(data) {
   // save device data for later.  
   console.log(data);
   
   window.device_data = {};
 
-  const container = document.getElementById("device-data-container");
-  container.innerHTML = "";
+  let valid = true 
+  $.each(data, function(source_name, source_item) {
+    console.log(source_name, source_item)
+    if( source_item.stats == null) {
+      valid = false;
+    }
+      });
+  if(!valid) {
+    return;
+  }
 
+  const container = document.getElementById("device-data-container");
+  
   if (Object.keys(data).length == 0) {
+    container.innerHTML = "";
     return;
   }
 
@@ -163,7 +174,9 @@ function updateDeviceData(data) {
       fs_info_list.appendChild(listItem);
     });
 
-    // display top level stats
+
+    console.log(source_item);
+
     updateDeviceStats(source_name, source_item.stats["total"]);
 
     // create to level global buttons 
@@ -563,6 +576,510 @@ function updateDeviceData(data) {
 
 }
 
+function updateDeviceData(data) {
+  // save device data for later.  
+  console.log(data);
+  
+  window.device_data = {};
+
+  let valid = true 
+  $.each(data, function(source_name, source_item) {
+    console.log(source_name, source_item)
+    if( source_item.stats == null) {
+      valid = false;
+    }
+      });
+  if(!valid) {
+    return;
+  }
+
+  const container = document.getElementById("device-data-container");
+
+  container.innerHTML = "";
+
+  if (Object.keys(data).length == 0) {
+    return;
+  }
+
+  source_names = Object.keys(data).sort();
+
+  source_tabs = create_tabs(source_names, container, "devices");
+
+  // save the source tabs to allow for easy updating. 
+  window.source_tabs = source_tabs;
+
+  $.each(source_tabs, function (source_name, source_tab) {    
+    const source_item = data[source_name];
+
+    console.log(source_item)
+    
+    window.device_data[source_name] = {};
+    const project = source_item.project;
+
+    const header = document.createElement("div");
+    source_tab.appendChild(header);
+
+    // handle case where device does not have project set. 
+    if (project == null) {
+      let sourceHtml = '<h2> Unknown Project </h2>';
+      header.innerHTML = sourceHtml;
+
+      const editProjectDropdownDiv = document.createElement('div');
+      editProjectDropdownDiv.className = 'dropdown';
+
+      const editProjectButton = document.createElement('button');
+      editProjectButton.type = 'button';
+      editProjectButton.className = 'btn btn-info dropdown-toggle';
+      editProjectButton.dataset.toggle = 'dropdown';
+      editProjectButton.ariaHaspopup = true;
+      editProjectButton.ariaExpanded = false;
+      editProjectButton.textContent = 'Set Project';
+
+      const projectMenuDiv = document.createElement('div');
+      projectMenuDiv.className = 'dropdown-menu project-menu';
+      projectMenuDiv.dataset.source = source_name;
+
+      editProjectDropdownDiv.appendChild(editProjectButton);
+      editProjectDropdownDiv.appendChild(projectMenuDiv);
+      container.append(editProjectDropdownDiv)
+
+      populateEditMenus();
+      return;
+    }
+
+    // project should be set by here. 
+
+    let sourceHtml = '<h2>' + project + ' </h2>';
+    header.innerHTML = sourceHtml;
+
+    let fs_info_list = document.createElement("ul");
+    header.appendChild(fs_info_list);
+
+    $.each(source_item.fs_info, function (_, info) {
+      let listItem = document.createElement("li");
+      listItem.innerHTML = `${info[0]} : <b>${info[1]}%</b> free`;
+      fs_info_list.appendChild(listItem);
+    });
+
+
+    console.log(source_item);
+
+    updateDeviceStats(source_name, source_item.stats["total"]);
+
+    // create to level global buttons 
+    {
+      const div = document.createElement("div");
+      source_tab.append(div)
+
+      div.className = 'btn-group';
+
+      const selectAllButton = document.createElement('button');
+      selectAllButton.type = 'button';
+      selectAllButton.className = 'btn btn-primary';
+      selectAllButton.id = `select-new-${source_name}`;
+      selectAllButton.dataset.source = source_name;
+      selectAllButton.onclick = processSelectAllNew;
+      selectAllButton.textContent = 'Select All New';
+      div.appendChild(selectAllButton);
+
+      const clearSelectionsButton = document.createElement('button');
+      clearSelectionsButton.type = 'button';
+      clearSelectionsButton.className = 'btn btn-secondary';
+      clearSelectionsButton.id = `clear-all-${source_name}`;
+      clearSelectionsButton.dataset.source = source_name;
+      clearSelectionsButton.onclick = processClearSelections;
+      clearSelectionsButton.textContent = 'Clear Selections';
+      div.appendChild(clearSelectionsButton);
+
+      const transferSelectedButton = document.createElement('button');
+      transferSelectedButton.type = 'button';
+      transferSelectedButton.className = 'btn btn-success';
+      transferSelectedButton.id = `transfer-selected-${source_name}`;
+      transferSelectedButton.dataset.source = source_name;
+      transferSelectedButton.onclick = processTransferSelections;
+      transferSelectedButton.textContent = 'Pull Selected';
+      div.appendChild(transferSelectedButton);
+
+      const cancelTransferButton = document.createElement('button');
+      cancelTransferButton.type = 'button';
+      cancelTransferButton.className = 'btn btn-danger';
+      cancelTransferButton.id = `cancel-${source_name}`;
+      cancelTransferButton.dataset.source = source_name;
+      cancelTransferButton.onclick = processCancelTransfer;
+      cancelTransferButton.textContent = 'Stop Pull';
+      div.appendChild(cancelTransferButton);
+
+      const removeSelectedButton = document.createElement('button');
+      removeSelectedButton.type = 'button';
+      removeSelectedButton.className = 'btn btn-danger';
+      removeSelectedButton.id = `remove-selected-${source_name}`;
+      removeSelectedButton.dataset.source = source_name;
+      removeSelectedButton.onclick = processRemoveSelected;
+      removeSelectedButton.textContent = 'Removed Completed';
+      div.appendChild(removeSelectedButton);
+
+
+      const rescanButtonDiv = document.createElement('div');
+      rescanButtonDiv.className = 'btn-group';
+
+      const rescanButton = document.createElement('button');
+      rescanButton.type = 'button';
+      rescanButton.className = 'btn btn-primary';
+      rescanButton.id = `rescan-${source_name}`;
+      rescanButton.dataset.source = source_name;
+      rescanButton.onclick = processRescanSource;
+      rescanButton.textContent = 'Scan';
+      rescanButtonDiv.appendChild(rescanButton);
+      source_tab.append(rescanButtonDiv);
+
+      const buttonBarDiv = document.createElement('div');
+      buttonBarDiv.className = 'btn-group';
+
+      const editProjectDropdownDiv = document.createElement('div');
+      editProjectDropdownDiv.className = 'dropdown';
+
+      const editProjectButton = document.createElement('button');
+      editProjectButton.type = 'button';
+      editProjectButton.className = 'btn btn-info dropdown-toggle';
+      editProjectButton.dataset.toggle = 'dropdown';
+      editProjectButton.ariaHaspopup = true;
+      editProjectButton.ariaExpanded = false;
+      editProjectButton.textContent = 'Set Project';
+
+      const projectMenuDiv = document.createElement('div');
+      projectMenuDiv.className = 'dropdown-menu project-menu';
+      projectMenuDiv.dataset.source = source_name;
+
+      editProjectDropdownDiv.appendChild(editProjectButton);
+      editProjectDropdownDiv.appendChild(projectMenuDiv);
+      source_tab.append(editProjectDropdownDiv)
+    }
+
+    ymd_names = Object.keys(source_item.entries).sort();
+    ymd_tabs = create_tabs(ymd_names, source_tab, "device:" + source_name, "request_device_ymd_data");
+
+    $.each(ymd_tabs, function (date, ymd_tab) {
+      
+      add_placeholder(ymd_tab);
+      
+
+      //populateDeviceYMDTab(source_item, date, ymd_tab, source_name);
+
+    });
+
+  });
+
+}
+
+function populateDeviceYMDTab(source_item) {
+  console.log(source_item)
+
+  const date = source_item.ymd 
+  const ymd_tab = document.getElementById(source_item.tab)   
+  const source_name = source_item.device_source 
+  const date_items = source_item.reldir;
+
+  ymd_tab.innerHTML = ""
+
+  let ymd_stats_div = document.createElement("div");
+  ymd_stats_div.className = "container";
+  ymd_tab.appendChild(ymd_stats_div);
+
+  let stats_row_div = document.createElement("div");
+  stats_row_div.className = "row align-items-center";
+  ymd_stats_div.appendChild(stats_row_div);
+  ymd_stats_col_1 = document.createElement("div");
+  ymd_stats_col_1.className = "col";
+  stats_row_div.appendChild(ymd_stats_col_1);
+
+  ymd_stats_col_2 = document.createElement("div");
+  ymd_stats_col_2.className = "col";
+  stats_row_div.appendChild(ymd_stats_col_2);
+
+
+  stats = source_item.stats[source_name].stats[date];
+  console.log(stats)
+
+  start_time = stats["start_datetime"];
+  end_time = stats["end_datetime"];
+  duration = stats["hduration"];
+  total_size = stats["htotal_size"];
+
+
+  let stats_ul = document.createElement("ul");
+  ymd_stats_col_1.appendChild(stats_ul);
+
+  let li = document.createElement("li");
+  li.innerHTML = "<b>Start</b>: " + start_time;
+  stats_ul.appendChild(li);
+
+  li = document.createElement("li");
+  li.innerHTML = "<b>Duration</b>: " + duration;
+  stats_ul.appendChild(li);
+
+  li = document.createElement("li");
+  li.innerHTML = "<b>Size</b>: " + total_size;
+  stats_ul.appendChild(li);
+
+  let dtable = document.createElement("table");
+  dtable.className = "table table-striped";
+  ymd_stats_col_2.appendChild(dtable);
+
+  let dhead = document.createElement("thead");
+  dtable.appendChild(dhead);
+
+  let drow = document.createElement("tr");
+  dhead.appendChild(drow);
+  drow.appendChild(document.createElement("td"));
+
+  datatypes = Object.entries(stats["datatype"]);
+  datatypes.sort((a, b) => a[0].localeCompare(b[0]));
+
+  for ([datatype_name, _] of datatypes) {
+    let td = document.createElement("td");
+    drow.appendChild(td);
+    td.innerHTML = datatype_name;
+  }
+
+  let dbody = document.createElement("tbody");
+  dtable.appendChild(dbody);
+
+  drow = document.createElement("tr");
+  dbody.appendChild(drow);
+
+  td = document.createElement("td");
+  td.innerHTML = "<b>Size</b>";
+  drow.appendChild(td);
+  for ([_, datatype_entry] of datatypes) {
+    let td = document.createElement("td");
+    drow.appendChild(td);
+    td.innerHTML = datatype_entry["htotal_size"];
+  }
+
+  drow = document.createElement("tr");
+  dbody.appendChild(drow);
+
+  td = document.createElement("td");
+  td.innerHTML = "<b>Count</b>";
+  drow.appendChild(td);
+  for ([_, datatype_entry] of datatypes) {
+    let td = document.createElement("td");
+    drow.appendChild(td);
+    td.innerHTML = datatype_entry["count"];
+  }
+
+
+  {
+    const div = document.createElement('div');
+    ymd_tab.appendChild(div);
+    div.className = 'btn-group';
+
+    const selectAllButton = document.createElement('button');
+    selectAllButton.type = 'button';
+    selectAllButton.className = 'btn btn-primary';
+    selectAllButton.id = `select-new-${source_name}-${date}`;
+    selectAllButton.dataset.date = date;
+    selectAllButton.dataset.source = source_name;
+    selectAllButton.onclick = processSelectAllNewByDate;
+    selectAllButton.textContent = 'Select All New by Date';
+    div.appendChild(selectAllButton);
+
+    const clearSelectionsButton = document.createElement('button');
+    clearSelectionsButton.type = 'button';
+    clearSelectionsButton.className = 'btn btn-secondary';
+    clearSelectionsButton.id = `clear-all-${source_name}-${date}`;
+    clearSelectionsButton.dataset.date = date;
+    clearSelectionsButton.dataset.source = source_name;
+    clearSelectionsButton.onclick = processClearSelectionsByDate;
+    clearSelectionsButton.textContent = 'Clear Selections for Date';
+    div.appendChild(clearSelectionsButton);
+
+    const transferSelectedButton = document.createElement('button');
+    transferSelectedButton.type = 'button';
+    transferSelectedButton.className = 'btn btn-success';
+    transferSelectedButton.id = `transfer-selected-${source_name}-${date}`;
+    transferSelectedButton.dataset.date = date;
+    transferSelectedButton.dataset.source = source_name;
+    transferSelectedButton.onclick = processTransferSelectionsByDate;
+    transferSelectedButton.textContent = 'Pull Selected for Date';
+    div.appendChild(transferSelectedButton);
+
+    // const cancelTransferButton = document.createElement('button');
+    // cancelTransferButton.type = 'button';
+    // cancelTransferButton.className = 'btn btn-danger';
+    // cancelTransferButton.id = `cancel-${source}-${date}`;
+    // cancelTransferButton.dataset.source = source;
+    // cancelTransferButton.onclick = processCancelTransfer;
+    // cancelTransferButton.textContent = 'Stop Transfer';
+    // div.appendChild(cancelTransferButton);
+    const removeSelectedButton = document.createElement('button');
+    removeSelectedButton.type = 'button';
+    removeSelectedButton.className = 'btn btn-danger';
+    removeSelectedButton.id = `remove-selected-${source_name}-${date}`;
+    removeSelectedButton.dataset.date = date;
+    removeSelectedButton.dataset.source = source_name;
+    removeSelectedButton.onclick = processRemoveSelectedByDate;
+    removeSelectedButton.textContent = 'Removed Completed for Date';
+    div.appendChild(removeSelectedButton);
+
+    const buttonBarDiv = document.createElement('div');
+    buttonBarDiv.className = 'btn-group';
+    ymd_tab.appendChild(buttonBarDiv);
+
+    const editRobotDropdownDiv = document.createElement('div');
+    editRobotDropdownDiv.className = 'dropdown';
+
+    const editRobotButton = document.createElement('button');
+    editRobotButton.type = 'button';
+    editRobotButton.className = 'btn btn-info dropdown-toggle';
+    editRobotButton.dataset.toggle = 'dropdown';
+    editRobotButton.ariaHaspopup = true;
+    editRobotButton.ariaExpanded = false;
+    editRobotButton.textContent = 'Edit Robot';
+
+    const robotMenuDiv = document.createElement('div');
+    robotMenuDiv.className = 'dropdown-menu robot-menu';
+    robotMenuDiv.dataset.source = source_name;
+    robotMenuDiv.dataset.date = date;
+
+
+    editRobotDropdownDiv.appendChild(editRobotButton);
+    editRobotDropdownDiv.appendChild(robotMenuDiv);
+
+    const editSiteDropdownDiv = document.createElement('div');
+    editSiteDropdownDiv.className = 'dropdown';
+
+    const editSiteButton = document.createElement('button');
+    editSiteButton.type = 'button';
+    editSiteButton.className = 'btn btn-info dropdown-toggle';
+    editSiteButton.dataset.toggle = 'dropdown';
+    editSiteButton.ariaHaspopup = true;
+    editSiteButton.ariaExpanded = false;
+    editSiteButton.textContent = 'Edit Site';
+
+    const siteMenuDiv = document.createElement('div');
+    siteMenuDiv.className = 'dropdown-menu site-menu';
+    siteMenuDiv.dataset.source = source_name;
+    siteMenuDiv.dataset.date = date;
+
+    editSiteDropdownDiv.appendChild(editSiteButton);
+    editSiteDropdownDiv.appendChild(siteMenuDiv);
+
+    buttonBarDiv.appendChild(editRobotDropdownDiv);
+    buttonBarDiv.appendChild(editSiteDropdownDiv);
+
+
+  }
+
+  const thHeaders = [
+    '', 'Robot', 'Site', 'Basename', 'DateTime', 'File size', 'State'
+  ];
+
+
+  const table = document.createElement('table');
+  table.className = 'table table-striped';
+  ymd_tab.append(table);
+
+  const thead = document.createElement('thead');
+  const tr = document.createElement('tr');
+
+  thHeaders.forEach(header => {
+    const th = document.createElement('th');
+    th.textContent = header;
+    tr.appendChild(th);
+  });
+
+  thead.appendChild(tr);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  table.appendChild(tbody);
+
+  date_entries = Object.entries(date_items);
+  date_entries.sort((a, b) => a[0].localeCompare(b[0]));
+
+  date_entries.forEach((data_entry) => {
+    relpath = data_entry[0];
+    relpath_entries = data_entry[1];
+
+    const run_header_tr = document.createElement("tr");
+    run_header_tr.className = "table-active";
+    tbody.appendChild(run_header_tr);
+
+    const run_header_td = document.createElement("td");
+    run_header_td.className = "table_relpath";
+    run_header_td.setAttribute("colspan", thHeaders.length);
+    run_header_tr.appendChild(run_header_td);
+
+    const relpath_tag = document.createElement("span");
+    relpath_tag.className = "table_relpath";
+    relpath_tag.innerHTML = relpath;
+    run_header_td.appendChild(relpath_tag);
+
+    updateDeviceDataEntry(source_name, date, tbody);
+
+  });
+
+  // Add event listener for the site select elements
+  $('.site-select').on('change', function () {
+    let source = $(this).data('source');
+    let uploadId = $(this).data('upload-id');
+    let selectedValue = $(this).val();
+
+    if (selectedValue === 'add-new-site') {
+      let newSite = prompt('Enter new site name:');
+      if (newSite) {
+        // Emit event to add new site
+        socket.emit('add_site', { site: newSite, "session_token": window.session_token });
+        // Add new site to the global sites array and update all dropdowns
+        window.sites.push(newSite);
+        updateAllSiteSelects();
+        // Set the new site as the selected value
+        $(this).val(newSite);
+      }
+    } else {
+      // Emit event to update the site for this entry
+      socket.emit('update_entry_site', { source: source, upload_id: uploadId, site: selectedValue, "session_token": window.session_token });
+      window.device_data[source][uploadId].site = selectedValue;
+    }
+  });
+
+  // Add event listener for the robot select elements
+  $('.robot-select').on('change', function () {
+    let source = $(this).data('source');
+    let uploadId = $(this).data('upload-id');
+    let selectedValue = $(this).val();
+
+    if (selectedValue === 'add-new-robot') {
+      let newRobot = prompt('Enter new robot name:');
+      if (newRobot) {
+        // Emit event to add new site
+        socket.emit('add_robot', { robot: newRobot, "session_token": window.session_token });
+        // Add new site to the global sites array and update all dropdowns
+        window.robots.push(newRobot);
+        updateAllRobotSelects();
+        // Set the new site as the selected value
+        $(this).val(newRobot);
+      }
+    } else {
+      //console.log({ source: source, upload_id: uploadId, robot: selectedValue })
+      // Emit event to update the site for this entry
+      socket.emit('update_entry_robot', { source: source, upload_id: uploadId, robot: selectedValue, "session_token": window.session_token });
+
+      // update the local value. 
+      window.device_data[source][uploadId].robot_name = selectedValue;
+
+    }
+
+  });
+
+  populateEditMenus();
+
+  $('[data-bs-toggle="tooltip"]').tooltip();
+
+}
+
+
 function updateDeviceDataEntry(source_name, date, tbody) {
   for (const entry of relpath_entries) {
 
@@ -785,5 +1302,44 @@ function updateDeviceStats(source_name, stats) {
     drow.appendChild(td);
     td.innerHTML = datatype_entry["on_server_count"] + " / " + datatype_entry["count"];
   }
+}
+
+window.device_accumulate = {};
+
+function accumulateDeviceYMD(data)
+{
+  console.log(data)
+
+  const ymd_name = data.ymd;
+  const reldirs = Object.entries(data.reldir);
+  const device_source = data.device_source;
+  const source = data.source;
+  const total = data.total;
+  const index = data.index;
+
+  const key = source + "." + device_source + "." + ymd_name
+
+  acc_data = window.device_accumulate[key]
+
+  if (acc_data == null) {
+      acc_data = data;
+      acc_data.found = 1;
+  } else {
+      acc_data.found += 1;
+
+      for ([rel_dir, entry] of reldirs) {
+          acc_data.reldir[rel_dir] = entry;
+      };
+  }
+  window.device_accumulate[key] = acc_data;
+
+  console.log(data, acc_data.found, total)
+
+  // console.log(acc_data.found)
+  if (total == acc_data.found) {
+      populateDeviceYMDTab(acc_data);
+      window.device_accumulate[key] = null;
+  }
+
 }
 

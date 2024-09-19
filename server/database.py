@@ -117,6 +117,9 @@ class Database:
             with self.filename.open("w") as f:
                 json.dump(self.database, f, indent=True, sort_keys=True),
 
+    def update_volume_map(self, volume_map:dict):
+        self.volume_map = volume_map.copy()
+
     def _add_name(self, table: str, name: str, description: str):
         with self.mutex:
             name_to_index = {
@@ -140,6 +143,14 @@ class Database:
                     changed = True 
         return changed
 
+    """
+    Returns true if deleted. 
+    """
+    def delete_project(self, name:str):        
+        table = "projects"
+        origin_len = len(self.database[table])
+        self.database[table] = [entry for entry in self.database[table] if entry[0] != name]
+        return len(self.database[table]) != origin_len
 
     def add_robot_name(self, name: str, description: str):
         if not self._has_name("robots", name):
@@ -400,7 +411,7 @@ class Database:
             count += 1
             if count >= max_count:
                 rtnarr.append(rtn)
-                run = {}
+                rtn = {}
                 count = 0
 
         rtnarr.append(rtn)
