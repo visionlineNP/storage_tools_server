@@ -532,10 +532,9 @@ def on_device_files(data):
     if project is None:
         debug_print(f"clearing {source}")
         g_remote_entries[source] = {}
-        send_device_data()
+        
 
-
-    if project not in g_config["volume_map"]:
+    if project and project not in g_config["volume_map"]:
         socketio.emit("server_error", {"msg": f"Project: {project} does not have a volume mapping"})
         debug_print("Error")
 
@@ -946,6 +945,7 @@ def on_set_api_key_token(data):
 
     g_config["API_KEY_TOKEN"] = key 
     save_keys()
+    on_request_keys()
 
 
 @socketio.on("add_site")
@@ -1800,7 +1800,7 @@ def handle_file(source: str, upload_id: str):
     filepath = get_file_path(source, upload_id)
     tmp_path = filepath + ".tmp"
 
-    debug_print(filepath)
+    # debug_print(filepath)
 
     if os.path.exists(filepath):
         return jsonify({"message": f"File {filename} alredy uploaded"})
@@ -1959,7 +1959,7 @@ def get_device_data_ymd_stub():
                 device_data[source]["entries"][date] = device_data[source]["entries"].get(date, {})
                 device_data[source]["entries"][date][relpath] = device_data[source]["entries"][date].get(relpath, [])
     
-        debug_print(f"{source} : {len(device_data[source]['entries'])} : {count}")
+        # debug_print(f"{source} : {len(device_data[source]['entries'])} : {count}")
     return device_data
 
 
@@ -2150,17 +2150,14 @@ def emit_device_ymd_data(datasets, stats, source, ymd, tab, room):
 
 def send_device_data(msg=None):
     device_data = get_device_data_ymd_stub()    
-    valid = True
 
     stats = get_device_data_stats()
     for source in device_data:
         if "stats" in stats[source]:
             device_data[source]["stats"] = stats[source]["stats"]
-        else:
-            valid = False
 
-    if valid:
-        send_to_all_dashboards("device_data", device_data)    
+    send_to_all_dashboards("device_data", device_data)    
+
 
 
 def send_device_data_old(data=None):

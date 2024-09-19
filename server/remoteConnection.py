@@ -4,6 +4,8 @@ import socketio
 import queue 
 import requests
 from threading import Thread
+
+import socketio.exceptions
 from .database import Database, VolumeMapNotFound, get_upload_id
 from .SocketIOTQDM import SocketIOTQDM
 from .debug_print import debug_print
@@ -94,6 +96,10 @@ class RemoteConnection:
             self.send_node_data()
 
             rtn = True
+
+        except socketio.exceptions.ConnectionError as e:
+            debug_print("Ah-Ah-Ahh, invalid key")
+            self.m_local_sio.emit("server_invalid_key", {"key": api_key_token, "server": server_full})
 
         except Exception as e:
             if self.m_verbose:

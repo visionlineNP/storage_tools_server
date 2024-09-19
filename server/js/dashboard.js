@@ -83,6 +83,11 @@ $(document).ready(function () {
     alert(data.msg);
   }) 
 
+  socket.on("server_invalid_key", function(data)
+  {
+    serverInvalidKey(data);
+  })
+
   socket.on('node_data', function (data) {
     console.log('Received node_data:', data);
     updateNodeData(data);

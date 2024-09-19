@@ -125,6 +125,12 @@ function processServerCancelTransfer() {
 
 }
 
+function serverInvalidKey(data)
+{
+  const span = document.getElementById("server_link_status");
+  span.innerHTML = `Invalid key [<b>${data.key}</b>] for <b>${data.server}</b>`;
+}
+
 
 window.server_accumulate = {};
 
@@ -405,6 +411,28 @@ function processServerYMD(data) {
                         spacer.innerHTML = "&nbsp;&nbsp;"
                         td.appendChild(spacer)
                         td.appendChild(download);
+
+
+                        // // just for testing. will use userpath instead
+                        // if(detail.localpath.endsWith(".mcap") || detail.localpath.endsWith(".bag")) {
+
+                        //     const foxglove = document.createElement("i")
+                        //     td.appendChild(foxglove)
+                        //     foxglove.className = "bi bi-balloon"
+                        //     foxglove.title = "foxglove-studio " + detail.localpath;
+                        //     foxglove.dataset.localpath = detail.localpath;
+                        //     foxglove.setAttribute("data-bs-toggle", "tooltip");
+        
+                        //     foxglove.setAttribute("data-bs-toggle", "tooltip");
+
+                        //     foxglove.addEventListener('click', function () {
+                        //         const localpath = "foxglove-studio " + $(this)[0].dataset.localpath;
+                        //         navigator.clipboard.writeText(localpath);
+                        //     })
+    
+                            
+    
+                        // }
                     }
 
                     if (key == "basename") {
@@ -542,6 +570,7 @@ function updateServerData(data) {
                 const selectOption = selectElement.value;
                 console.log("Try to connect to ", selectOption)
                 socket.emit("server_connect", { "address": selectOption })
+                document.getElementById("server_link_status").innerHTML = ""
             }
         });
 
@@ -571,10 +600,14 @@ function updateServerData(data) {
         spanSyncStatus.appendChild(icon);
 
 
+        const linkStatusMessage = document.createElement("span")
+        linkStatusMessage.id = "server_link_status"
+        
         containerData.appendChild(spanSyncStatus);
         containerData.appendChild(selectElement);
         containerData.appendChild(linkButton);
         containerData.appendChild(refreshButton)
+        containerData.appendChild(linkStatusMessage)
 
 
     }
