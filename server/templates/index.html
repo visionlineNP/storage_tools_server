@@ -144,7 +144,13 @@
                             </div>
                         </div>
 
-                        <button type="button" class="btn btn-primary" onclick="startNewSearch()">Search</button>
+                        <button type="button" class="btn btn-primary" onclick="startNewSearch()">Search</button> 
+                        <select name="search-items-per-page" id="search-items-per-page" onchange="updateSearchItemsPerPage()">
+                            <option value="10">10</option>
+                            <option selected value="15">15</option>
+                            <option value="20">20</option>
+                            <option value="25">25</option>
+                        </select> Results per page
 
                         <div id="search-container">
 

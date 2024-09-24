@@ -2,7 +2,7 @@ var search_current_page = 0;
 var search_total_pages = 0;
 var search_current_index = 0;
 // this should be a selectable option
-var results_per_page = 25;
+var results_per_page = 15;
 
 var search_sort_name = "datetime";
 var search_sort_direction = "forward"
@@ -11,7 +11,7 @@ var search_sort_direction = "forward"
 function searchPrevPage() {
     console.log("Prev")
 
-    const start_idx = search_current_index - results_per_page;
+    const start_idx = parseInt(search_current_index) - parseInt(results_per_page);
 
     room = "dashboard-" + window.session_token;
     msg = {
@@ -27,7 +27,7 @@ function searchPrevPage() {
 function searchNextPage() {
     console.log("next")
 
-    const start_idx = search_current_index + results_per_page;
+    const start_idx = parseInt(search_current_index) + parseInt(results_per_page);
 
     room = "dashboard-" + window.session_token;
     msg = {
@@ -330,4 +330,11 @@ function clearAllFilters() {
     $('div[data-group="filter"][data-type="range"').each(function() {
         $(this)[0].reset()
     })
+}
+
+
+function updateSearchItemsPerPage() 
+{
+    const select = document.getElementById("search-items-per-page");
+    results_per_page = select.value;
 }

@@ -1206,8 +1206,8 @@ def on_search(data):
 @socketio.on("search_fetch")
 def on_search_fetch(query):
     room = query.get("room", None)
-    page_size = query.get("count")
-    start_index = query.get("start_index", 0)
+    page_size = int(query.get("count"))
+    start_index = int(query.get("start_index", 0))
 
     results = []
     if room in g_search_results:
