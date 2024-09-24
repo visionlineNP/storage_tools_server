@@ -12,6 +12,8 @@ import hashlib
 from tqdm import tqdm 
 
 from .debug_print import debug_print
+from .throttledEmit import ThrottledEmit 
+
 
 class VolumeMapNotFound(Exception):
     def __init__(self, project_name:str) -> None:
@@ -79,9 +81,13 @@ class Database:
                 ],
             }
 
-    def regenerate(self):
+    def regenerate(self, sio=None, event=None, room=None):
         # init db without file to create new db.
         self._init_db()
+
+        emit = None 
+        if sio and event:
+            emit = ThrottledEmit(sio, event, room=room)
 
         for project in sorted(self.volume_map):
             volume_root = self.volume_map[project]
@@ -95,7 +101,11 @@ class Database:
                 if skip:
                     continue
 
-                debug_print(root)
+                if emit:
+                    msg = f"Scanning {root}"
+                    emit.emit(msg)
+
+                # debug_print(root)
                 for basename in tqdm(files, desc=f"Processing {root}", leave=False):
                     if basename == "database.json":
                         continue
@@ -108,6 +118,9 @@ class Database:
                         # entry["reldir"] = root.replace(volume_root, "").strip()
                         # entry["upload_id"] = str(hex(abs(hash(filename))))
                         self.add_data(entry)
+
+        if emit:
+            emit.close()
 
         self.estimate_runs()
         self.commit()

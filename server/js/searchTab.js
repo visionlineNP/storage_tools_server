@@ -231,7 +231,7 @@ function updateSearchResults(msg) {
                         dul.className = "dropdown-menu";
                         dul.setAttribute("aria-labelledby", "topics-" + searchRow.upload_id);
                         dropdown.appendChild(dul);
-                        topics.sort((a, b) => a[1].localeCompare(b[1]));
+                        topics.sort((a, b) => a[0].localeCompare(b[0]));
                         for (const [topic, topic_count] of topics) {
                             let dil = document.createElement("li");
                             dul.appendChild(dil);

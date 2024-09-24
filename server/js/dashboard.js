@@ -79,6 +79,11 @@ $(document).ready(function () {
     updateServerData(data);
   });
 
+  socket.on("server_regen_msg", function(data) {
+    console.log(data)
+    updateServerRegen(data)
+  })
+
   socket.on('server_error', function(data) {
     alert(data.msg);
   }) 

@@ -1328,9 +1328,12 @@ def on_debug_count_to_next_task(data):
 @socketio.on("scan_server")
 def on_debug_scan_server(data=None):
 
-    debug_print("Scan Server")
+    socketio.start_background_task(scan_server_background, data)
 
-    g_database.regenerate()
+
+def scan_server_background(data):    
+    debug_print("Scan Server in background")
+    g_database.regenerate(socketio, event="server_regen_msg")
 
     for project_name in g_config.get("projects", []):
         g_database.add_project(project_name, "")

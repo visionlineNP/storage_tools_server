@@ -690,3 +690,11 @@ function updateServerData(data) {
     });
 
 }
+
+
+function updateServerRegen(data) {
+    const div = document.getElementById("server_regen_msg")
+    if(div) {
+        div.innerHTML = data;
+    }
+}
