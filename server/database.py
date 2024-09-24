@@ -647,7 +647,7 @@ class Database:
         return True 
 
     def search(self, filter:dict, sort_key:str, reverse:bool):
-        debug_print(filter)
+        # debug_print(filter)
         keys = ["project", "site", "robot_name", "datetime", "basename", "topics", "size", "upload_id"]
         rtn = []
         for entry in self.database["data"]:

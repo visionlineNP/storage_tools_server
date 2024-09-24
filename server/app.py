@@ -1186,7 +1186,7 @@ def on_search(data):
     room = data.get("room", None)
     filter = data.get("filter", {})
     sort_key = data.get("sort-key", "datetime")
-    reverse = data.get("reverse", False)
+    reverse = data.get("sort-direction", "forward") == "reverse"
     page_size = data.get("results-per-page", 25)
 
     if room is None:

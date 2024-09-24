@@ -4,6 +4,9 @@ var search_current_index = 0;
 // this should be a selectable option
 var results_per_page = 25;
 
+var search_sort_name = "datetime";
+var search_sort_direction = "forward"
+
 
 function searchPrevPage() {
     console.log("Prev")
@@ -273,8 +276,32 @@ function startNewSearch() {
     msg = {
         "room": room,
         "filter": filter,
-        "sort-key": "datetime",
+        "sort-key": search_sort_name,
+        "sort-direction": search_sort_direction,
         "results-per-page": results_per_page
     }
     socket.emit("search", msg)
+}
+
+function setSearchSort(name) {
+    const prior_icon = document.getElementById("search-sort-" + search_sort_name + "-dir")
+
+    const seleted_td = document.getElementById("search-sort-" + name)
+    const selected_icon = document.getElementById("search-sort-" + name + "-dir")
+
+    if( name == search_sort_name) {
+        if( search_sort_direction == "forward") {
+            search_sort_direction = "reverse"
+            selected_icon.className = "bi bi-caret-up-fill"
+        } else {
+            search_sort_direction = "forward"
+            selected_icon.className = "bi bi-caret-down-fill"
+        }
+    } else {
+        prior_icon.className = ""
+        search_sort_name = name 
+        search_sort_direction = "forward"
+        selected_icon.className = "bi bi-caret-down-fill"
+    }
+    startNewSearch()
 }
