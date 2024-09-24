@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+import math
 import shutil
 import uuid
 from flask import (
@@ -369,6 +370,7 @@ def send_all_data(data):
     on_request_robots(data)
     on_request_sites(data)
     on_request_keys(data)
+    on_request_search_filters(data)
     debug_print("Sent all data")
 
 
@@ -390,10 +392,6 @@ def on_disconnect():
 
     if remove:
         debug_print(f"--- remove {remove}")
-        # debug_print(f"g_remote_entries: { remove in g_remote_entries} ")
-        # debug_print(f"g_remote_sockets: {remove in g_remote_sockets}")
-        # for source_type in sorted(g_sources):
-        #     debug_print(f"g_sources[\"{source_type}\"]:  {remove in g_sources[source_type]}")
 
         if remove in g_remote_entries:
             del g_remote_entries[remove]
@@ -420,12 +418,10 @@ def on_disconnect():
         if remove in g_dashboard_rooms:
             g_dashboard_rooms.pop(g_dashboard_rooms.index(remove))
 
+        if remove in g_search_results:
+            del g_search_results[remove]
+
         debug_print(f"Got disconnect: {remove}")
-    # else:
-    #     room = dashboard_room()
-    #     if room in g_dashboard_rooms:
-    #         g_dashboard_rooms.pop(g_dashboard_rooms.index(room))
-    #     debug_print("client disconnect: " + room )
 
 @socketio.on("keep_alive")
 def on_keep_alive():
@@ -1178,6 +1174,62 @@ def on_transfer_node_files(data):
 def on_set_md5(data):
     socketio.emit("set_md5", data)
 
+
+#####
+# Search 
+#####
+
+g_search_results = {}
+
+@socketio.on("search")
+def on_search(data):
+    room = data.get("room", None)
+    filter = data.get("filter", {})
+    sort_key = data.get("sort-key", "datetime")
+    reverse = data.get("reverse", False)
+    page_size = data.get("results-per-page", 25)
+
+    if room is None:
+        debug_print("No room!")
+        return 
+    g_search_results[room] = g_database.search(filter, sort_key, reverse=reverse)
+
+
+    query = {
+        "room": room,
+        "count": page_size,
+        "start_index": 0
+    }
+
+    return on_search_fetch(query)
+
+@socketio.on("search_fetch")
+def on_search_fetch(query):
+    room = query.get("room", None)
+    page_size = query.get("count")
+    start_index = query.get("start_index", 0)
+
+    results = []
+    if room in g_search_results:
+        results = g_search_results[room][start_index: (page_size+start_index)]
+
+    total = len(g_search_results[room])
+    total_pages = int(math.ceil(float(total)/float(page_size)))
+    current_page = int(start_index) // int(page_size)
+
+    msg = {
+        "total_pages": total_pages,
+        "current_page": current_page,
+        "current_index": start_index,
+        "results": results
+    }
+    socketio.emit("search_results", msg, to=room)
+
+def on_request_search_filters(data):
+    room = dashboard_room(data)
+
+    msg = g_database.get_search_filters()
+    socketio.emit("search_filters", msg, to=room)
 
 ###########################################
 # Redirect message from clients to clients

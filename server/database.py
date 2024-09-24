@@ -616,6 +616,103 @@ class Database:
             if not entry["run_name"]:
                 entry["run_name"] = "run__no_name"
 
+
+    def passes_filter(self, entry:dict, filters:dict):
+        for name, filter in filters.items():
+            entry_value = entry.get(name, "None")
+            if filter.get("type", "") == "discrete":
+                if not entry_value:
+                    entry_value = "None"
+                
+                keys = filter.get("keys", "")
+                if not entry_value in keys:
+                    return False
+            if filter.get("type", "") == "range":
+                if name == "datetime":
+                    start_time = entry.get("start_datetime", None)
+                    end_time = entry.get("end_datetime", None)
+                    if not start_time or not end_time:
+                        return False
+                    filter_min = filter.get("min", "")
+                    filter_max = filter.get("max", "")
+
+                    if end_time < filter_min or start_time > filter_max:
+                        return False
+                else:
+                    filter_min = int(filter.get("min", "0"))
+                    filter_max = int(filter.get("max", "0"))
+                    if entry_value < filter_min or entry_value > filter_max:
+                        return False
+                    
+        return True 
+
+    def search(self, filter:dict, sort_key:str, reverse:bool):
+        debug_print(filter)
+        keys = ["project", "site", "robot_name", "datetime", "basename", "topics", "size", "upload_id"]
+        rtn = []
+        for entry in self.database["data"]:
+            # apply filter.
+            if not self.passes_filter(entry, filter):
+                continue
+
+            item = {}
+            for key in keys:
+                item[key] = entry.get(key, None)
+            item["hsize"] = humanfriendly.format_size(item["size"])
+            rtn.append(item)
+
+        rtn.sort(key=lambda item: item[sort_key], reverse=reverse)
+        return rtn 
+    
+    def get_search_filters(self):
+        discrete_keys = ["project", "site", "robot_name", "topics"]
+        range_keys = ["datetime", "size", "duration"]
+
+        filters = {}
+
+        for entry in self.database["data"]:
+
+            # duration is special cased here. 
+            duration = datetime.strptime(
+                entry["end_datetime"], "%Y-%m-%d %H:%M:%S"
+            ) - datetime.strptime(entry["start_datetime"], "%Y-%m-%d %H:%M:%S")
+
+            entry["duration"] = duration.seconds
+
+            for key in discrete_keys:
+                filters[key] = filters.get(key, {"type": "discrete", "keys":set()})
+
+                if isinstance(entry[key], list):
+                    for item in entry[key]:
+                        if entry[key]:
+                            filters[key]["keys"].add(item)
+                        else:
+                            filters[key]["keys"].add("None")
+
+                elif isinstance(entry[key], dict):
+                    for item in sorted(entry[key]):
+                        if item:
+                            filters[key]["keys"].add(item)
+                        else:
+                            filters[key]["keys"].add("None")
+                else:
+                    if entry[key]:
+                        filters[key]["keys"].add(entry[key])
+                    else:
+                        filters[key]["keys"].add("None")                        
+                
+            for key in range_keys:
+                filters[key] = filters.get(key, {"type": "range", "min": entry[key], "max": entry[key]})
+                filters[key]["min"] = min(filters[key]["min"], entry[key])
+                filters[key]["max"] = max(filters[key]["max"], entry[key])
+
+            
+
+        for key in discrete_keys:
+            if key in filters:
+                filters[key]["keys"] = sorted(list(filters[key]["keys"]))
+        return filters 
+
 def group_overlapping_intervals(intervals):
     if not intervals:
         return []

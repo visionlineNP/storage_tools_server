@@ -220,6 +220,15 @@ $(document).ready(function () {
   })
 
 
+  // search
+  socket.on("search_results", function(msg) {
+    updateSearchResults(msg);
+  }) 
+
+  socket.on("search_filters", function(msg) {
+    updateSearchFilters(msg);
+  })
+
   // document.getElementById('add-project-btn').addEventListener('click', function () {
   //   const projectName = document.getElementById('project-name-input').value;
   //   if (projectName) {

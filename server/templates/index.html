@@ -18,7 +18,7 @@
     <script src="js/utils.js"></script>
     <script src="js/searchTab.js"></script>
 
-    <link href="css/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="css/bootstrap-icons.css" rel="stylesheet">
     <link href="css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" type="text/css" href="css/dashboard.css">
 
@@ -51,10 +51,10 @@
                             Nodes</a>
                     </li>
 
-                    <!-- <li class="nav-item">
-                        <a class="nav-link" data-bs-toggle="tab" href="#search-tab"><i class="bi bi-cloud"></i> &nbsp;
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#search-tab"><i class="bi bi-search"></i> &nbsp;
                             Search</a>
-                    </li> -->
+                    </li>
 
                     <!-- <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#report-host-tab">Report Host</a>
@@ -143,7 +143,7 @@
                             </div>
                         </div>
 
-
+                        <button type="button" class="btn btn-primary" onclick="startNewSearch()">Search</button>
 
                         <div id="search-container">
 
@@ -168,10 +168,10 @@
                             <!-- Pagination Controls -->
                             <nav>
                                 <ul class="pagination justify-content-center">
-                                    <li class="page-item"><button class="page-link" id="prev-page"
+                                    <li class="page-item"><button class="page-link" id="search-prev-page"
                                             onclick="searchPrevPage()">Previous</button></li>
-                                    <li class="page-item"><span class="page-link" id="current-page">1</span></li>
-                                    <li class="page-item"><button class="page-link" id="next-page"
+                                    <li class="page-item"><span class="page-link" id="search-current-page">1</span></li>
+                                    <li class="page-item"><button class="page-link" id="search-next-page"
                                             onclick="searchNextPage()">Next</button></li>
                                 </ul>
                             </nav>

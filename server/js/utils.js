@@ -99,3 +99,186 @@ function add_placeholder(div)
     });
 
 }
+
+
+function createFileSizeRangeSelector(minBytes, maxBytes, sizeSelectorDiv, name ) {
+    // Convert bytes to human-readable format
+    function bytesToHumanReadable(bytes) {
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let index = 0;
+        let readableSize = bytes;
+
+        while (readableSize >= 1024 && index < units.length - 1) {
+            readableSize /= 1024;
+            index++;
+        }
+
+        return `${readableSize.toFixed(2)} ${units[index]}`;
+    }
+
+    // Create label and input for the minimum size
+    const minLabel = document.createElement('label');
+    minLabel.textContent = `Min Size (${bytesToHumanReadable(minBytes)}): `;
+    minLabel.setAttribute('for', "filter-" + name + '-minSize');
+
+    const minInput = document.createElement('input');
+    minInput.type = 'range';
+    minInput.id = "filter-" + name + '-minSize';
+    minInput.min = minBytes;
+    minInput.max = maxBytes;
+    minInput.value = minBytes;
+    minInput.step = 1;
+
+    // Create label and input for the maximum size
+    const maxLabel = document.createElement('label');
+    maxLabel.textContent = `Max Size (${bytesToHumanReadable(maxBytes)}): `;
+    maxLabel.setAttribute('for', "filter-" + name + '-maxSize');
+
+    const maxInput = document.createElement('input');
+    maxInput.type = 'range';
+    maxInput.id = "filter-" + name + '-maxSize';
+    maxInput.min = minBytes;
+    maxInput.max = maxBytes;
+    maxInput.value = maxBytes;
+    maxInput.step = 1;
+
+    // Display the selected range
+    const rangeDisplay = document.createElement('div');
+    rangeDisplay.id = "filter-" + name + '-rangeDisplay';
+    rangeDisplay.textContent = `Selected Range: ${bytesToHumanReadable(minBytes)} - ${bytesToHumanReadable(maxBytes)}`;
+
+    // Update the display whenever the sliders change
+    function updateRangeDisplay() {
+        let minSize = parseInt(minInput.value, 10);
+        let maxSize = parseInt(maxInput.value, 10);
+
+        // Ensure minSize is not greater than maxSize
+        if (minSize > maxSize) {
+            if (this === minInput) {
+                maxInput.value = minSize;
+                maxSize = minSize;
+            } else {
+                minInput.value = maxSize;
+                minSize = maxSize;
+            }
+        }
+
+        sizeSelectorDiv.dataset.min = minSize;
+        sizeSelectorDiv.dataset.max = maxSize;
+    
+        rangeDisplay.textContent = `Selected Range: ${bytesToHumanReadable(minSize)} - ${bytesToHumanReadable(maxSize)}`;
+    }
+
+    minInput.addEventListener('input', updateRangeDisplay);
+    maxInput.addEventListener('input', updateRangeDisplay);
+
+    // Append elements to the size_selector div
+    sizeSelectorDiv.appendChild(minLabel);
+    sizeSelectorDiv.appendChild(minInput);
+    sizeSelectorDiv.appendChild(document.createElement('br')); // Line break
+    sizeSelectorDiv.appendChild(maxLabel);
+    sizeSelectorDiv.appendChild(maxInput);
+    sizeSelectorDiv.appendChild(document.createElement('br')); // Line break
+    sizeSelectorDiv.appendChild(rangeDisplay);
+
+    sizeSelectorDiv.dataset.type = "range"
+    sizeSelectorDiv.dataset.group = "filter"
+    sizeSelectorDiv.dataset.name = name
+    sizeSelectorDiv.dataset.min = minBytes;
+    sizeSelectorDiv.dataset.max = maxBytes;
+}
+
+function createFileDurationRangeSelector(minSeconds, maxSeconds, sizeSelectorDiv, name ) {
+    // Convert seconds to human-readable format
+    function secondsToHumanReadable(seconds) {
+        const units = ['sec', 'min', 'hours', 'days'];
+        let index = 0;
+        let readableTime = seconds;
+    
+        // Convert seconds to the appropriate unit
+        while (readableTime >= 60 && index < units.length - 1) {
+            if (index === 0) {
+                readableTime /= 60;  // Convert to minutes
+            } else if (index === 1) {
+                readableTime /= 60;  // Convert to hours
+            } else if (index === 2) {
+                readableTime /= 24;  // Convert to days
+            }
+            index++;
+        }
+    
+        return `${readableTime.toFixed(2)} ${units[index]}`;
+    }
+
+    // Create label and input for the minimum size
+    const minLabel = document.createElement('label');
+    minLabel.textContent = `Min Duration (${secondsToHumanReadable(minSeconds)}): `;
+    minLabel.setAttribute('for', "filter-" + name + '-minSize');
+
+    const minInput = document.createElement('input');
+    minInput.type = 'range';
+    minInput.id = "filter-" + name + '-minSize';
+    minInput.min = minSeconds;
+    minInput.max = maxSeconds;
+    minInput.value = minSeconds;
+    minInput.step = 1;
+
+    // Create label and input for the maximum size
+    const maxLabel = document.createElement('label');
+    maxLabel.textContent = `Max Duration (${secondsToHumanReadable(maxSeconds)}): `;
+    maxLabel.setAttribute('for', "filter-" + name + '-maxSize');
+
+    const maxInput = document.createElement('input');
+    maxInput.type = 'range';
+    maxInput.id = "filter-" + name + '-maxSize';
+    maxInput.min = minSeconds;
+    maxInput.max = maxSeconds;
+    maxInput.value = maxSeconds;
+    maxInput.step = 1;
+
+    // Display the selected range
+    const rangeDisplay = document.createElement('div');
+    rangeDisplay.id = "filter-" + name + '-rangeDisplay';
+    rangeDisplay.textContent = `Selected Range: ${secondsToHumanReadable(minSeconds)} - ${secondsToHumanReadable(maxSeconds)}`;
+
+    // Update the display whenever the sliders change
+    function updateRangeDisplay() {
+        let minSize = parseInt(minInput.value, 10);
+        let maxSize = parseInt(maxInput.value, 10);
+
+        // Ensure minSize is not greater than maxSize
+        if (minSize > maxSize) {
+            if (this === minInput) {
+                maxInput.value = minSize;
+                maxSize = minSize;
+            } else {
+                minInput.value = maxSize;
+                minSize = maxSize;
+            }
+        }
+
+        sizeSelectorDiv.dataset.min = minSize;
+        sizeSelectorDiv.dataset.max = maxSize;
+
+        rangeDisplay.textContent = `Selected Range: ${secondsToHumanReadable(minSize)} - ${secondsToHumanReadable(maxSize)}`;
+    }
+
+    minInput.addEventListener('input', updateRangeDisplay);
+    maxInput.addEventListener('input', updateRangeDisplay);
+
+    // Append elements to the size_selector div
+    sizeSelectorDiv.appendChild(minLabel);
+    sizeSelectorDiv.appendChild(minInput);
+    sizeSelectorDiv.appendChild(document.createElement('br')); // Line break
+    sizeSelectorDiv.appendChild(maxLabel);
+    sizeSelectorDiv.appendChild(maxInput);
+    sizeSelectorDiv.appendChild(document.createElement('br')); // Line break
+    sizeSelectorDiv.appendChild(rangeDisplay);
+
+    sizeSelectorDiv.dataset.type = "range"
+    sizeSelectorDiv.dataset.group = "filter"
+    sizeSelectorDiv.dataset.name = name
+    sizeSelectorDiv.dataset.min = minSeconds;
+    sizeSelectorDiv.dataset.max = maxSeconds;
+
+}
