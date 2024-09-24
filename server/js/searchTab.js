@@ -49,7 +49,7 @@ function updateSearchFilters(msg) {
     container.innerHTML = "";
     container.className = "accordion accordion-flush"
     $.each(msg, function (name, entry) {
-        console.log(name, entry);
+        //console.log(name, entry);
         const cord_item = document.createElement("div")
         cord_item.className = "accordion-item"
         container.appendChild(cord_item)
@@ -107,6 +107,8 @@ function updateSearchFilters(msg) {
                 startInput.type = 'datetime-local';
                 startInput.id = 'filter-startDatetime';
                 startInput.value = start_time
+                startInput.min = start_time
+                startInput.max = end_time 
 
                 // Create label and input for end datetime
                 const endLabel = document.createElement('label');
@@ -117,6 +119,8 @@ function updateSearchFilters(msg) {
                 endInput.type = 'datetime-local';
                 endInput.id = 'filter-endDatetime';
                 endInput.value = end_time
+                endInput.min = start_time
+                endInput.max = end_time 
 
                 cord_body.appendChild(startLabel);
                 cord_body.appendChild(startInput)
@@ -140,6 +144,15 @@ function updateSearchFilters(msg) {
                     cord_body.dataset.min = start_time.replace("T", " ");
                     cord_body.dataset.max = end_time.replace("T", " ");    
                 }
+
+                function reset() {
+                    startInput.value = start_time
+                    endInput.value = end_time 
+
+                    cord_body.dataset.min = start_time.replace("T", " ");
+                    cord_body.dataset.max = end_time.replace("T", " ");    
+                }
+                cord_body.reset = reset;
             } 
             if( name == "size") {
                 const minBytes = entry.min;
@@ -218,7 +231,7 @@ function updateSearchResults(msg) {
                         dul.className = "dropdown-menu";
                         dul.setAttribute("aria-labelledby", "topics-" + searchRow.upload_id);
                         dropdown.appendChild(dul);
-                        topics.sort((a, b) => a[0].localeCompare(b[0]));
+                        topics.sort((a, b) => a[1].localeCompare(b[1]));
                         for (const [topic, topic_count] of topics) {
                             let dil = document.createElement("li");
                             dul.appendChild(dil);
@@ -270,7 +283,7 @@ function startNewSearch() {
     search_current_page = 0;
 
     filter = readFilter();
-    console.log(filter);
+    //console.log(filter);
 
     room = "dashboard-" + window.session_token;
     msg = {
@@ -285,8 +298,6 @@ function startNewSearch() {
 
 function setSearchSort(name) {
     const prior_icon = document.getElementById("search-sort-" + search_sort_name + "-dir")
-
-    const seleted_td = document.getElementById("search-sort-" + name)
     const selected_icon = document.getElementById("search-sort-" + name + "-dir")
 
     if( name == search_sort_name) {
@@ -304,4 +315,13 @@ function setSearchSort(name) {
         selected_icon.className = "bi bi-caret-down-fill"
     }
     startNewSearch()
+}
+
+
+function clearAllFilters() {
+    $('input[type="checkbox"][data-group="filter"]:checked').prop('checked', false);  
+    
+    $('div[data-group="filter"][data-type="range"').each(function() {
+        $(this)[0].reset()
+    })
 }

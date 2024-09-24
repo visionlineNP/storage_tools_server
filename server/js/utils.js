@@ -186,6 +186,17 @@ function createFileSizeRangeSelector(minBytes, maxBytes, sizeSelectorDiv, name )
     sizeSelectorDiv.dataset.name = name
     sizeSelectorDiv.dataset.min = minBytes;
     sizeSelectorDiv.dataset.max = maxBytes;
+
+    function reset() {
+        minInput.value = minBytes;
+        maxInput.value = maxBytes
+
+        sizeSelectorDiv.dataset.min = minBytes;
+        sizeSelectorDiv.dataset.max = maxBytes;    
+    }
+
+    sizeSelectorDiv.reset = reset;
+
 }
 
 function createFileDurationRangeSelector(minSeconds, maxSeconds, sizeSelectorDiv, name ) {
@@ -281,4 +292,13 @@ function createFileDurationRangeSelector(minSeconds, maxSeconds, sizeSelectorDiv
     sizeSelectorDiv.dataset.min = minSeconds;
     sizeSelectorDiv.dataset.max = maxSeconds;
 
+    function reset() {
+        minInput.value = minSeconds;
+        maxInput.value = maxSeconds
+
+        sizeSelectorDiv.dataset.min = minSeconds;
+        sizeSelectorDiv.dataset.max = maxSeconds;    
+    }
+
+    sizeSelectorDiv.reset = reset;
 }

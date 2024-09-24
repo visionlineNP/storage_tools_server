@@ -623,9 +623,18 @@ class Database:
             if filter.get("type", "") == "discrete":
                 if not entry_value:
                     entry_value = "None"
-                
+                                
                 keys = filter.get("keys", "")
-                if not entry_value in keys:
+
+                if isinstance(entry, dict):
+                    found = False 
+                    for key in keys:
+                        if key in entry_value:
+                            found = True
+                    if not found:
+                        return False 
+                    
+                elif not entry_value in keys:
                     return False
             if filter.get("type", "") == "range":
                 if name == "datetime":
