@@ -95,64 +95,9 @@ function updateSearchFilters(msg) {
             });
         } else {
             if (name == "datetime") {
-                start_time = entry.min.replace(" ", "T")
-                end_time = entry.max.replace(" ", "T")
-
-                // Create label and input for start datetime
-                const startLabel = document.createElement('label');
-                startLabel.textContent = 'Start Datetime: ';
-                startLabel.setAttribute('for', 'filter-startDatetime');
-
-                const startInput = document.createElement('input');
-                startInput.type = 'datetime-local';
-                startInput.id = 'filter-startDatetime';
-                startInput.value = start_time
-                startInput.min = start_time
-                startInput.max = end_time 
-
-                // Create label and input for end datetime
-                const endLabel = document.createElement('label');
-                endLabel.textContent = 'End Datetime: ';
-                endLabel.setAttribute('for', 'filter-endDatetime');
-
-                const endInput = document.createElement('input');
-                endInput.type = 'datetime-local';
-                endInput.id = 'filter-endDatetime';
-                endInput.value = end_time
-                endInput.min = start_time
-                endInput.max = end_time 
-
-                cord_body.appendChild(startLabel);
-                cord_body.appendChild(startInput)
-                cord_body.appendChild(document.createElement("br"))
-                cord_body.appendChild(endLabel);
-                cord_body.appendChild(endInput);
-
-                cord_body.dataset.type = "range"
-                cord_body.dataset.group = "filter"
-                cord_body.dataset.name = name
-                cord_body.dataset.min = start_time.replace("T", " ");
-                cord_body.dataset.max = end_time.replace("T", " ");
-
-                startInput.addEventListener('input', updateRangeDisplay);
-                endInput.addEventListener('input', updateRangeDisplay);
-            
-                function updateRangeDisplay()
-                {
-                    const start_time = startInput.value;
-                    const end_time = endInput.value;
-                    cord_body.dataset.min = start_time.replace("T", " ");
-                    cord_body.dataset.max = end_time.replace("T", " ");    
-                }
-
-                function reset() {
-                    startInput.value = start_time
-                    endInput.value = end_time 
-
-                    cord_body.dataset.min = start_time.replace("T", " ");
-                    cord_body.dataset.max = end_time.replace("T", " ");    
-                }
-                cord_body.reset = reset;
+                const start_time = entry.min
+                const end_time = entry.max
+                createDatetimeRangeSelector(start_time, end_time, cord_body, name);
             } 
             if( name == "size") {
                 const minBytes = entry.min;
@@ -168,6 +113,67 @@ function updateSearchFilters(msg) {
             }
         }
     })
+}
+
+function createDatetimeRangeSelector(start_time_, end_time_, cord_body, name) {
+
+    const start_time = start_time_.replace(" ", "T");
+    const end_time = end_time_.replace(" ", "T");
+
+    // Create label and input for start datetime
+    const startLabel = document.createElement('label');
+    startLabel.textContent = 'Start Datetime: ';
+    startLabel.setAttribute('for', 'filter-startDatetime');
+
+    const startInput = document.createElement('input');
+    startInput.type = 'datetime-local';
+    startInput.id = 'filter-startDatetime';
+    startInput.value = start_time;
+    startInput.min = start_time;
+    startInput.max = end_time;
+
+    // Create label and input for end datetime
+    const endLabel = document.createElement('label');
+    endLabel.textContent = 'End Datetime: ';
+    endLabel.setAttribute('for', 'filter-endDatetime');
+
+    const endInput = document.createElement('input');
+    endInput.type = 'datetime-local';
+    endInput.id = 'filter-endDatetime';
+    endInput.value = end_time;
+    endInput.min = start_time;
+    endInput.max = end_time;
+
+    cord_body.appendChild(startLabel);
+    cord_body.appendChild(startInput);
+    cord_body.appendChild(document.createElement("br"));
+    cord_body.appendChild(endLabel);
+    cord_body.appendChild(endInput);
+
+    cord_body.dataset.type = "range";
+    cord_body.dataset.group = "filter";
+    cord_body.dataset.name = name;
+    cord_body.dataset.min = start_time.replace("T", " ");
+    cord_body.dataset.max = end_time.replace("T", " ");
+
+    startInput.addEventListener('input', updateRangeDisplay);
+    endInput.addEventListener('input', updateRangeDisplay);
+
+    function updateRangeDisplay() {
+        const start_time = startInput.value;
+        const end_time = endInput.value;
+        cord_body.dataset.min = start_time.replace("T", " ");
+        cord_body.dataset.max = end_time.replace("T", " ");
+    }
+
+    function reset() {
+        startInput.value = start_time_.replace(" ", "T");
+        endInput.value = end_time.replace(" ", "T");
+
+        cord_body.dataset.min = start_time_;
+        cord_body.dataset.max = end_time_;
+    }
+    cord_body.reset = reset;
 }
 
 function updateSearchResults(msg) {
@@ -283,7 +289,7 @@ function startNewSearch() {
     search_current_page = 0;
 
     filter = readFilter();
-    //console.log(filter);
+    console.log(filter);
 
     room = "dashboard-" + window.session_token;
     msg = {

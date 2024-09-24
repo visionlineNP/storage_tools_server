@@ -670,7 +670,7 @@ class Database:
 
     def search(self, filter:dict, sort_key:str, reverse:bool):
         # debug_print(filter)
-        keys = ["project", "site", "robot_name", "datetime", "basename", "topics", "size", "upload_id"]
+        keys = ["project", "site", "robot_name", "datetime", "basename", "topics", "size", "upload_id", "datatype"]
         rtn = []
         for entry in self.database["data"]:
             # apply filter.
@@ -687,7 +687,7 @@ class Database:
         return rtn 
     
     def get_search_filters(self):
-        discrete_keys = ["project", "site", "robot_name", "topics"]
+        discrete_keys = ["project", "site", "robot_name", "topics", "datatype"]
         range_keys = ["datetime", "size", "duration"]
 
         filters = {}
