@@ -17,6 +17,7 @@ from flask import (
 )
 from flask_socketio import SocketIO, disconnect, join_room, leave_room
 import os
+import gevent
 import yaml
 import json
 import humanfriendly
@@ -38,8 +39,7 @@ from .debug_print import debug_print
 from .speed import FileSpeedEstimate
 from .database import Database, get_upload_id
 from .remoteConnection import RemoteConnection
-
-
+from .nodeConnection import NodeConnection
 
 
 
@@ -59,7 +59,7 @@ socketio = SocketIO(app, cors_allowed_origins=origins, ping_interval=25, ping_ti
 
 # global variables.
 # keeps tracks up uploads
-g_uploads = {}
+# g_uploads = {}
 
 # keeps track of which devices are connected.
 g_sources = {"devices": [], "nodes": [], "report_host": [], "report_node": []}
@@ -76,6 +76,8 @@ g_remote_entries_buffer = {}
 # maps source to node data for files on remote nodes (other servers)
 g_node_entries = {}
 
+# used to pull data from a node
+g_node_connections = {}
 
 # tracks the remote device and node sockets
 # so we can know when they disconnect
@@ -126,8 +128,14 @@ def get_source_by_mac_address():
                 # if psutil.net_if_stats()[interface].isup:
                 macs.append(addr.address.replace(":",""))
 
-    name = hashlib.sha256("_".join(macs).encode()).hexdigest()[:16]
-    rtn = f"SRC-{name}"
+    name = hashlib.sha256("_".join(macs).encode()).hexdigest()[:8]
+
+    debug_print(os.environ.get("SERVERNAME"))
+    if "SERVERNAME" in os.environ:
+        rtn = f"SRC-{os.environ['SERVERNAME']}-{name}"
+    else:
+        rtn = f"SRC-{name}"
+    debug_print(rtn)
     return rtn 
 
 
@@ -253,21 +261,13 @@ def generate_token(user):
 def dashboard_room(data=None):
     room = None 
     if data:
-        room = data.get("session_token", None)
-    # room = request.cookies.get("session_token")
+        room = data.get("room", None)
+        if not room and "session_token" in data:
+            room = "dashboard-" + data["session_token"]
     if not room:
-        room = "DEVICE"
+        room = "dashboard-DEVICE"
 
-    # username = request.headers.get('X-Authenticated-User')
-    # if not username:
-    #     username = request.cookies.get("username")
-    # if not username:
-    #     username = request.args.get("username")
-
-    # if not username:
-        # username = "DEVICE"
-
-    return "dashboard-" + room
+    return room
 
 
 ###############################################################################
@@ -296,7 +296,8 @@ def on_join(data):
         session_token = data.get("session_token")
         send_all_data({"session_token": session_token})
 
-    
+    if client == "node":
+        g_node_connections[room] = NodeConnection(g_config, socketio)
 
 @socketio.on("leave")
 def on_leave(data):
@@ -381,6 +382,7 @@ def on_disconnect():
     global g_remote_sockets
     global g_sources
     global g_report_node_info
+    global g_node_connections
 
     debug_print(f"session id: {request.sid}")
 
@@ -420,6 +422,9 @@ def on_disconnect():
 
         if remove in g_search_results:
             del g_search_results[remove]
+
+        if remove in g_node_connections:
+            del g_node_connections[remove]
 
         debug_print(f"Got disconnect: {remove}")
 
@@ -622,39 +627,22 @@ def on_device_files(data):
     send_device_data()
 
 
-# @socketio.on("request_server_ymd_data")
-# def on_request_server_ymd_data(data):
-#     global g_database
-#     tab = data.get("tab")
-#     names = tab.split(":")
 
-#     _, project, ymd = names
-#     datasets = g_database.get_send_data_ymd(project, ymd)
 
-#     stats = g_database.get_run_stats(project, ymd)
-    
-#     for i, data in enumerate(datasets):
-#         server_data = {
-#             "total": len(datasets),
-#             "index": i,
-#             "runs": data,
-#             "stats": stats,
-#             "source": g_config["source"],
-#             "project": project,
-#             "ymd": ymd,
-#             "tab": tab
-#         }
-
-#         socketio.emit("server_ymd_data", server_data, to=dashboard_room())
+@socketio.on("request_server_data")
+def on_request_sever_data(data):
+    debug_print(data)
+    send_server_data(data)
 
 
 @socketio.on("request_server_ymd_data")
 def on_request_server_ymd_data(data):
+    debug_print(data)
     global g_database
     tab = data.get("tab")
-    names = tab.split(":")
+    names = tab.split(":")[-2:]
 
-    _, project, ymd = names
+    project, ymd = names
     datasets = g_database.get_send_data_ymd(project, ymd)
     stats = g_database.get_run_stats(project, ymd)
     
@@ -685,9 +673,16 @@ def emit_server_ymd_data(datasets, stats, project, ymd, tab, room):
         }
 
         # Emit the data to the client
+        debug_print(f"Sending {project} {ymd} {room}")
         socketio.emit("server_ymd_data", server_data, to=room)
 
     # debug_print(f"-- complete {project} {ymd} {len(datasets)}")
+
+@socketio.on("request_remote_ymd_data")
+def on_request_remote_ymd_data(data):
+    debug_print(data)
+    g_remote_connection.request_remote_ymd_data(data)
+
 
 @socketio.on("request_node_ymd_data")
 def on_request_node_ymd_data(data):
@@ -802,7 +797,7 @@ def on_server_connect(data):
     address = data.get("address", None)
     # username = request.cookies.get("username")
     if address:
-        g_remote_connection.connect(address, send_to_all_dashboards)
+        g_remote_connection.connect(address, send_to_all_dashboards, get_file_path_from_entry_fn=get_file_path_from_entry)
 
     # debug_print(("Connection", g_remote_connection.connected()))
     source = g_config["source"]
@@ -1154,13 +1149,9 @@ def on_transfer_node_files(data):
 
         # debug_print(entry)
 
-        dirroot = entry["dirroot"]
         project = entry["project"]
-        # reldir = entry["relpath"]
-        # basename = entry["basename"]
         offset = entry["temp_size"]
         size = entry["size"]
-        # file = os.path.join(reldir, basename)
         file = entry["fullpath"]
 
         filenames.append((project, file, upload_id, offset, size))
@@ -1168,6 +1159,46 @@ def on_transfer_node_files(data):
     msg = {"source": data.get("source"), "files": filenames}
 
     socketio.emit("node_send", msg)
+
+@socketio.on("remote_request_files")
+def on_remote_request_files(data):
+    debug_print(data)
+
+    selected_files = data.get("selected_files")
+    url = data.get("url")
+    source = g_config["source"]
+
+    if g_remote_connection.connected():
+
+        msg = {
+            "files": selected_files,
+            "url": url,
+            "source": source
+        }
+        g_remote_connection.pull_files(msg)
+
+
+@socketio.on("remote_transfer_files")
+def on_remote_transfer_files(data):
+
+    debug_print(f"{data}")
+    url = data["url"]
+    files = data["files"]
+    source = data["source"]
+    selected = []
+
+    for row in files:
+        project, filepath, upload_id, offset, size, remote_id = row 
+        entry = g_database.get_entry(remote_id)
+        debug_print(entry)
+        selected.append( (project, filepath, upload_id, offset, size, entry))
+
+    nodeConnection = g_node_connections.get(source, None)
+    if not nodeConnection:
+        debug_print("No connection") 
+        return 
+
+    gevent.spawn(nodeConnection.sendFiles, selected, url)
 
 
 @socketio.on("set_md5")
@@ -1819,29 +1850,29 @@ def send_to_all_dashboards(event, msg, with_nodes:bool=False):
 
 @app.route("/file/<string:source>/<string:upload_id>", methods=["POST"])
 def handle_file(source: str, upload_id: str):
+    # debug_print(f"{source} {upload_id}")
 
-    if source not in g_remote_entries:
-        return f"Invalid Source {source}",  503
+    if source in g_remote_entries and upload_id in g_remote_entries[source]:
+        entry = g_remote_entries[source][upload_id]
+    else:
+        json_data = request.form.get('json')
+        if json_data:
+            entry = json.loads(json_data)
+        else:
 
-    if upload_id not in g_remote_entries[source]:
-        return f"Invalid ID {upload_id} for {source}", 503
+            if source not in g_remote_entries:
+                debug_print(f"Invalid Source {source}")
+                return f"Invalid Source {source}",  503
 
-    g_uploads[upload_id] = {
-        "display_filename": g_remote_entries[source][upload_id]["basename"],
-        "filepath": g_remote_entries[source][upload_id]["relpath"],
-        "project": g_remote_entries[source][upload_id]["project"],
-        "robot_name": g_remote_entries[source][upload_id]["robot_name"],
-        "datetime": g_remote_entries[source][upload_id]["datetime"],
-        "date": g_remote_entries[source][upload_id]["datetime"].split()[0],
-        "source": source,
-        "progress": FileSpeedEstimate(g_remote_entries[source][upload_id]["size"]),
-        "status": "uploading",
-    }
+            if upload_id not in g_remote_entries[source]:
+                debug_print(f"Invalid ID {upload_id} for {source}")
+                return f"Invalid ID {upload_id} for {source}", 503
+
+    debug_print(entry)
 
     offset = request.args.get("offset", 0)
     if offset == 0:
         open_mode = "wb"
-        g_uploads[upload_id]["progress"].update_existing(offset)
     else:
         open_mode = "ab"
 
@@ -1849,22 +1880,22 @@ def handle_file(source: str, upload_id: str):
     splits = request.args.get("splits")
     is_last = cid == splits
 
-    filep = request.stream
-    filename = g_remote_entries[source][upload_id]["basename"]
+    filep = request.files.get('file', request.stream)
+    filename = entry["basename"]
 
-    filepath = get_file_path(source, upload_id)
+    filepath = get_file_path_from_entry(entry)
     tmp_path = filepath + ".tmp"
 
-    # debug_print(filepath)
+    debug_print(filepath)
 
     if os.path.exists(filepath):
-        return jsonify({"message": f"File {filename} alredy uploaded"})
+        return jsonify({"message": f"File {filename} alredy uploaded"}), 409
 
-    if g_selected_action[source] == "cancel":
-        return jsonify({"message": f"File {filename} upload canceled"})
+    if g_selected_action.get(source, "") == "cancel":
+        return jsonify({"message": f"File {filename} upload canceled"}), 400
 
     # keep track of expected size. If remote canceled, we won't know.
-    expected = g_remote_entries[source][upload_id]["size"]
+    expected = entry["size"]
 
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
@@ -1878,12 +1909,14 @@ def handle_file(source: str, upload_id: str):
         "upload_id": upload_id,
     }
 
+    debug_print(f"opening {tmp_path}")
+
     # Start uploading the file in chunks
     chunk_size = 10 * 1024 * 1024  # 1MB chunks
     with open(tmp_path, open_mode) as fid:
         while True:
 
-            if g_selected_action[source] == "cancel":
+            if g_selected_action.get(source,"") == "cancel":
                 send_dashboard_file(cancel_msg)
                 # socketio.emit("dashboard_file", cancel_msg, to=dashboard_room())
                 # if source in g_sources["nodes"]: 
@@ -1893,6 +1926,7 @@ def handle_file(source: str, upload_id: str):
 
             try:
                 chunk = filep.read(chunk_size)
+
             except OSError:
                 # we lost the connection on the client side.
                 send_dashboard_file(cancel_msg)
@@ -1905,7 +1939,7 @@ def handle_file(source: str, upload_id: str):
             if not chunk:
                 break
             fid.write(chunk)
-            g_uploads[upload_id]["progress"].update(len(chunk))
+            # g_uploads[upload_id]["progress"].update(len(chunk))
 
     os.chmod(tmp_path, 0o777 )
 
@@ -1925,7 +1959,7 @@ def handle_file(source: str, upload_id: str):
             return jsonify({"message": f"File {filename} upload canceled"})
 
         os.rename(tmp_path, filepath)
-        g_uploads[upload_id]["status"] = "complete"
+        # g_uploads[upload_id]["status"] = "complete"
 
         data = {
             "div_id": f"status_{upload_id}",
@@ -1945,21 +1979,23 @@ def handle_file(source: str, upload_id: str):
         # if source in g_sources["nodes"]: 
         #     socketio.emit("dashboard_file", data, to=source)
 
-    g_remote_entries[source][upload_id]["localpath"] = filepath
-    g_remote_entries[source][upload_id]["on_server"] = True
-    g_remote_entries[source][upload_id]["dirroot"] = get_dirroot(g_remote_entries[source][upload_id]["project"])
-    g_remote_entries[source][upload_id]["fullpath"] = filepath.replace(g_remote_entries[source][upload_id]["dirroot"], "").strip("/")
+    entry["localpath"] = filepath
+    entry["on_server"] = True
+    entry["dirroot"] = get_dirroot(entry["project"])
+    entry["fullpath"] = filepath.replace(entry["dirroot"], "").strip("/")
 
 
     metadata_filename = filepath + ".metadata"
     with open(metadata_filename, "w") as fid:
-        json.dump(g_remote_entries[source][upload_id], fid, indent=True)
+        json.dump(entry, fid, indent=True)
 
     os.chmod(metadata_filename, 0o777)
 
-    g_database.add_data(g_remote_entries[source][upload_id])
+    g_database.add_data(entry)
     g_database.estimate_runs()
     g_database.commit()
+
+    # TODO: replace send_server_data with "update_server_data"
     send_server_data()
     device_revise_stats()
 
@@ -2391,8 +2427,10 @@ def send_server_data(msg=None):
 
     if msg:
         room = dashboard_room(msg)
+        debug_print(f"sending to {room}")        
         socketio.emit("server_data", server_data, to=room)
     else:
+        debug_print("Sending to all dashboards")
         send_to_all_dashboards("server_data", server_data, with_nodes=False)
 
 

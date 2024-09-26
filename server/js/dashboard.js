@@ -66,6 +66,15 @@ $(document).ready(function () {
   }
   );
 
+  socket.on("remote_data", function (msg) {
+    updateServerRemote(msg);
+  })
+
+  socket.on("remote_ymd_data", function(msg) {
+    console.log(msg)
+    updateServerRemoteYMD(msg)
+  })
+
   socket.on("server_status_tqdm", function (msg) {
     updateProgress(msg, "server-status-tqdm");
   })

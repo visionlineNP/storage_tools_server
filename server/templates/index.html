@@ -466,9 +466,8 @@
 
     <script type="text/javascript" charset="utf-8">
 
-
-        let protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-        let url = protocol + "//" + document.domain + ':' + location.port;
+        const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+        const url = protocol + "//" + location.hostname + ':' + location.port;
 
         var socket = io.connect(url, { transports: ['websocket'], query: `session_token=${window.session_token}` });
 

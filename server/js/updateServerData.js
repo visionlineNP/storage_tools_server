@@ -85,6 +85,12 @@ function on_remote_connection(msg) {
 function processServerSelectAllNew() {
     const source = $(this)[0].dataset.source;
     $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-on_local="true"][data-on_remote="false"]').prop('checked', true);
+}
+
+function processRemoteSelectAllNew() {
+    const source = $(this)[0].dataset.source;
+    const project = $(this)[0].dataset.project;
+    $('input[type="checkbox"][data-group="table"][data-project="'+project+'"][data-source="' + source + '"][data-on_local="false"][data-on_remote="true"]').prop('checked', true);
 
 }
 
@@ -119,11 +125,39 @@ function processServerTransferSelections() {
 }
 
 
+function processRemoteTransferSelections() 
+{
+    const source = $(this)[0].dataset.source;
+
+    let selectedUpdateIds = [];
+    $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').each(function () {
+        const project = $(this).attr('data-project')
+        const filepath = $(this).attr('data-fullpath')
+        const upload_id = $(this).attr('data-upload_id')        
+        const offset = $(this).attr('data-offset')
+        const size = $(this).attr('data-size')
+        const remote_id = $(this).attr('data-remote_id')        
+        selectedUpdateIds.push( [project, filepath, upload_id, offset, size, remote_id] );
+    });
+    console.log(selectedUpdateIds, source);
+
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const url = protocol + "//" + location.hostname + ':' + location.port;
+
+    msg = {
+        "source": source,
+        "selected_files": selectedUpdateIds, "session_token": window.session_token,
+        "url": url 
+    }
+    socket.emit("remote_request_files", msg)
+
+}
+
 function processServerCancelTransfer() {
     const source = $(this)[0].dataset.source;
     socket.emit("control_msg", { "source": source, "action": "cancel", "session_token": window.session_token });
-
 }
+
 
 function serverInvalidKey(data)
 {
@@ -295,12 +329,12 @@ function processServerYMD(data) {
         run_dl.appendChild(run_dd);
 
 
-        let header_names = ["Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
+        let header_names = ["Robot", "Site", "Date", "Basename", "Path", "Size", "UID", "Status"]
         if (window.has_remotes) {
-            header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
+            header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "UID", "Status"]
         }
 
-        const item_names = ["robot_name", "site", "datetime", "basename", "localpath", "hsize"]
+        const item_names = ["robot_name", "site", "datetime", "basename", "localpath", "hsize", "upload_id" ]
 
         // const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
         // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]
@@ -358,7 +392,13 @@ function processServerYMD(data) {
                     checkbox.dataset.group = "table";
                     checkbox.dataset.on_local = detail.on_local;
                     checkbox.dataset.on_remote = detail.on_remote;
-                    checkbox.dataset.upload_id = detail.upload_id
+                    checkbox.dataset.upload_id = detail.upload_id;
+                    checkbox.dataset.project = project_name;
+                    checkbox.dataset.offset = detail.offset;
+                    checkbox.dataset.fullpath = detail.fullpath;
+                    checkbox.dataset.remote_id = detail.remote_upload_id;
+                    
+
 
                     checkbox.type = "checkbox";
                     checkbox.id = "server_select_" + detail.upload_id
@@ -613,8 +653,13 @@ function updateServerData(data) {
     }
 
 
+    const host_names = ["Local", "Remote"]
+    const host_tabs = create_tabs(host_names, containerData, "host")
+    const local_tab = host_tabs.Local 
+    const remote_tab = host_names.Remote 
+
     const project_names = Object.keys(data.entries).sort();
-    const project_tabs = create_tabs(project_names, containerData, "server");
+    const project_tabs = create_tabs(project_names, local_tab, "server");
 
     $.each(project_tabs, function (project_name, project_tab) {
 
@@ -697,4 +742,90 @@ function updateServerRegen(data) {
     if(div) {
         div.innerHTML = data;
     }
+}
+
+function updateServerRemote(data) {
+    const containerData = document.getElementById("host:Remote");
+    if( !containerData) {
+        console.log("Missing 'host:Remote'")
+        return;
+    }
+
+    containerData.innerHTML = ""; // clear previous data
+
+    console.log(data);
+
+    source = data.source
+
+    const project_names = Object.keys(data.entries).sort();
+    const project_tabs = create_tabs(project_names, containerData, "host:Remote");
+    $.each(project_tabs, function (project_name, project_tab) {
+
+        const div = document.createElement("div");
+        project_tab.append(div)
+    
+        div.className = 'btn-group';
+    
+        const selectAllButton = document.createElement('button');
+        selectAllButton.type = 'button';
+        selectAllButton.className = 'btn btn-primary';
+        selectAllButton.classList.add("server_button");        
+        selectAllButton.id = `select-new-${source}-${project_name}`;
+        selectAllButton.dataset.source = source;
+        selectAllButton.dataset.project = project_name;
+        selectAllButton.onclick = processRemoteSelectAllNew;
+        selectAllButton.textContent = 'Select All New';
+        div.appendChild(selectAllButton);
+    
+        const clearSelectionsButton = document.createElement('button');
+        clearSelectionsButton.type = 'button';
+        clearSelectionsButton.className = 'btn btn-secondary';
+        clearSelectionsButton.classList.add("server_button");
+        clearSelectionsButton.id = `clear-all-${source}-${project_name}`;
+        clearSelectionsButton.dataset.source = source;
+        clearSelectionsButton.dataset.project = project_name;
+        clearSelectionsButton.onclick = processClearSelections;
+        clearSelectionsButton.textContent = 'Clear Selections';
+        div.appendChild(clearSelectionsButton);
+    
+        const transferSelectedButton = document.createElement('button');
+        transferSelectedButton.type = 'button';
+        transferSelectedButton.className = 'btn btn-success';
+        transferSelectedButton.classList.add("server_button");
+        transferSelectedButton.id = `transfer-selected-${source}-${project_name}`;
+        transferSelectedButton.dataset.source = source;
+        transferSelectedButton.dataset.project = project_name;
+        transferSelectedButton.onclick = processRemoteTransferSelections;
+        transferSelectedButton.textContent = 'Pull Selected';
+        div.appendChild(transferSelectedButton);
+    
+        const cancelTransferButton = document.createElement('button');
+        cancelTransferButton.type = 'button';
+        cancelTransferButton.className = 'btn btn-danger';
+        cancelTransferButton.classList.add("server_button");
+        cancelTransferButton.id = `cancel-${source}-${project_name}`;
+        cancelTransferButton.dataset.source = source;
+        cancelTransferButton.dataset.project = project_name;
+        cancelTransferButton.onclick = processServerCancelTransfer;
+        cancelTransferButton.textContent = 'Stop Pull';
+        div.appendChild(cancelTransferButton);
+    
+    
+
+        const project_data = data.entries[project_name];
+
+        const ymd_names = Object.keys(project_data).sort()
+        const ymd_tabs = create_tabs(ymd_names, project_tab, "host:Remote" +":" + project_name, "request_remote_ymd_data");
+        $.each(ymd_tabs, function (_, ymd_tab) {
+            add_placeholder(ymd_tab);
+        })
+
+    });
+}
+
+
+
+function updateServerRemoteYMD(data) 
+{
+  processServerYMD(data)
 }

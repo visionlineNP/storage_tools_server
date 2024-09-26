@@ -400,6 +400,7 @@ class Database:
             topics = entry.get("topics", [])
             upload_id = entry["upload_id"]
             localpath = entry["localpath"]
+            fullpath = entry["fullpath"]
 
             rtn[run] = rtn.get(run, {})
             rtn[run][relpath] = rtn[run].get(relpath, [])
@@ -418,7 +419,8 @@ class Database:
                     "hsize": humanfriendly.format_size(size),
                     "topics": topics,
                     "upload_id": upload_id,
-                    "localpath": localpath
+                    "localpath": localpath,
+                    "fullpath": fullpath
                 }
             )
             count += 1
@@ -437,6 +439,13 @@ class Database:
                 return entry["localpath"]
         return None
 
+    def get_entry(self, upload_id):
+        for entry in self.database["data"]:
+            # debug_print(f"{upload_id} vs {entry['upload_id']}")
+            if entry["upload_id"] == upload_id:
+                return entry.copy()
+        return None
+
     """
     returns project -> ymd -> run## -> relpath -> list of entries
     """
@@ -448,10 +457,7 @@ class Database:
             if project not in self.volume_map:
                 raise VolumeMapNotFound(project)
 
-            robot = entry["robot_name"]
             run = entry["run_name"]
-
-            dirroot = self.root
             datatype = entry["datatype"]
             date = entry["datetime"]
             ymd = date.split(" ")[0]
@@ -462,7 +468,7 @@ class Database:
             topics = entry.get("topics", [])
             upload_id = entry["upload_id"]
             robot_name = entry["robot_name"]
-            fullpath = entry["fullpath"]
+            fullpath = entry.get("fullpath", "")
 
             rtn[project] = rtn.get(project, {})
             rtn[project][ymd] = rtn[project].get(ymd, {})

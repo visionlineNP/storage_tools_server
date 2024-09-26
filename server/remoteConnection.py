@@ -3,7 +3,7 @@ import socket
 import socketio 
 import queue 
 import requests
-from threading import Thread
+import gevent 
 
 import socketio.exceptions
 from .database import Database, VolumeMapNotFound, get_upload_id
@@ -51,12 +51,14 @@ class RemoteConnection:
 
         # maps local id to remote 
         self.m_rev_upload_id_map =  {}
+
+        self.m_node_source = None 
         pass
 
     def connected(self):
         return self.m_sio.connected
 
-    def connect(self, server_full, send_to_all_dashboards_fn):
+    def connect(self, server_full, send_to_all_dashboards_fn, get_file_path_from_entry_fn):
         rtn = False
 
         try:
@@ -75,13 +77,15 @@ class RemoteConnection:
             self.m_sio.connect(f"http://{server}:{port}/socket.io", headers=headers, transports=['websocket'])
             self.m_sio.on('control_msg')(self._handle_control_msg)    
             self.m_sio.on("dashboard_file")(self._on_dashboard_file)
-            self.m_sio.on("node_data")(self._on_node_data)
+            # self.m_sio.on("node_data")(self._on_node_data)
             self.m_sio.on("node_data_ymd_rtn")(self._on_node_data_ymd_rtn)
             self.m_sio.on("node_send")(self._on_node_send)
             self.m_sio.on("disconnect")(self._on_disconnect)
             self.m_sio.on("connect")(self._on_connect)
             self.m_sio.on("node_revise_stats")(self._on_node_revise_stats)
             self.m_sio.on("dashboard_info")(self._on_dashboard_info)
+            self.m_sio.on("server_data")(self._on_server_data)
+            self.m_sio.on("server_ymd_data")(self._on_server_ymd_data)
             # self.m_sio.on("device_remove")(self.removeFiles)
 
             # self.m_node_source = self.m_config["source"].replace("SRC","NODE")
@@ -92,8 +96,11 @@ class RemoteConnection:
             self.m_rev_upload_id_map = {}
 
             self.send_to_all_dashboards_fn = send_to_all_dashboards_fn
+            self.get_file_path_from_entry_fn = get_file_path_from_entry_fn
 
             self.send_node_data()
+
+            self.m_sio.emit("request_server_data", {"room": self.m_node_source})
 
             rtn = True
 
@@ -178,70 +185,56 @@ class RemoteConnection:
             self.send_to_all_dashboards_fn("dashboard_file_server", msg)
             # self.m_local_sio.emit("dashboard_file_server", msg, to=self.dashboard_room())
 
-
-            pass 
-
-    def _on_node_data(self, data):
-        debug_print("Got node data")
-        for (source_name, sources) in data["entries"].items():
-            project = sources["project"]
-            runs = sources["runs"]
-            ymd = sources["ymd"]
-
-            for( reldir, items) in runs.items():
-                print(reldir, sorted(items))
-                # print(items)
-                continue
-                for entry in items:
-
-                    on_remote = entry.get("on_local")
-                    on_local = entry.get("on_remote")
-                    remote_id = entry.get("upload_id")
-
-                    file = os.path.join(entry["relpath"], entry["basename"]) 
-
-                    upload_id = get_upload_id(self.m_config["source"], project, file)
-                    self.m_upload_id_map[remote_id] = upload_id
-                    self.m_rev_upload_id_map[upload_id] = remote_id
-
-                    # debug_print((remote_id, upload_id))
-
-                    msg = {
-                        "on_local": on_local,
-                        "on_remote": on_remote,
-                        "upload_id": upload_id
-                    }
-                    self.m_local_sio.emit("dashboard_file_server", msg, to=self.dashboard_room())
-
         
-            continue
-            source_items = sources["entries"]
-            for (project, projects) in source_items.items():
-                for (ymd, ymds) in projects.items():
-                    for( run_name, runs) in ymds.items():
-                        for( reldir, items) in runs.items():
-                            for entry in items:
+    def _on_server_data(self, data):    
+        debug_print("Got server data")    
+        self.m_local_sio.emit("remote_data", data)
 
-                                on_remote = entry.get("on_local")
-                                on_local = entry.get("on_remote")
-                                remote_id = entry.get("upload_id")
+    def _on_server_ymd_data(self, data):
+        debug_print("Got Data")
 
-                                file = os.path.join(entry["relpath"], entry["basename"]) 
+        msg = {
+            "ymd": data.get("ymd", ""),
+            "project": data.get("project", ""),
+            "source": data.get("source", ""),
+            "tab": data.get("tab", ""),
+            "runs": {},
+            "stats": data.get("stats", {})
+        }
 
-                                upload_id = get_upload_id(self.m_config["source"], project, file)
-                                self.m_upload_id_map[remote_id] = upload_id
-                                self.m_rev_upload_id_map[upload_id] = remote_id
+        for run_name, run_entries in data.get("runs", {}).items():
+            msg["runs"][run_name] = {}
+            for rel_path, items in run_entries.items():
+                msg["runs"][run_name][rel_path] = []
+                for item in items:
+                    assert(isinstance(item, dict))
+                    upload_id = item["upload_id"]
+                    item["project"] = data.get("project", "")
 
-                                # debug_print((remote_id, upload_id))
+                    file = os.path.join(item["relpath"], item["basename"])
 
-                                msg = {
-                                    "on_local": on_local,
-                                    "on_remote": on_remote,
-                                    "upload_id": upload_id
-                                }
-                                self.m_local_sio.emit("dashboard_file_server", msg, to=self.dashboard_room())
 
-                                # debug_print(("on_local:", entry.get("on_local"), "on_remote", entry.get("on_remote")))
+                    local_id =  get_upload_id(self.m_config["source"], data.get("project"), file) 
+                    self.m_upload_id_map[upload_id] = local_id 
+                    self.m_rev_upload_id_map[local_id] = upload_id
+                    # self.m_upload_id_map.get(upload_id, None)
+                    item["upload_id"] = local_id
+                    item["remote_upload_id"] = upload_id
+
+                    filepath = self.get_file_path_from_entry_fn(item)
+                    item["on_remote"] = True 
+                    item["on_local"] =  os.path.exists(filepath)
+
+                    tmp = filepath + ".tmp"
+                    offset = 0
+                    if os.path.exists(tmp):
+                        offset = os.path.getsize(tmp)
+                    item["offset"] = offset 
+
+                    msg["runs"][run_name][rel_path].append(item)
+
+        self.m_local_sio.emit("remote_ymd_data", msg)
+
 
     def server_transfer_files(self, data):
         debug_print(data)
@@ -264,6 +257,16 @@ class RemoteConnection:
         if data.get("action", "") == "cancel":
             self.m_signal = "cancel"
 
+    def request_remote_ymd_data(self, data):
+        if not self.connected():
+            return 
+        tab = data.get("tab", None)
+        if not tab:
+            return 
+        msg = {"tab": tab, "room": self.m_node_source}
+
+        debug_print(msg)
+        self.m_sio.emit("request_server_ymd_data", msg)
 
     def send_node_data(self):
         if not self.connected():
@@ -292,8 +295,9 @@ class RemoteConnection:
             "Authorization": f"Bearer {api_key_token}"
             }
 
+        debug_print("sending node data")
         response = requests.post(url, json=node_data, headers=headers)
-        # debug_print(response.status_code)
+        debug_print(response.status_code)
 
 
     def _on_node_send(self, data):
@@ -411,16 +415,14 @@ class RemoteConnection:
                                 debug_print(("Error uploading file:", response.text, response.status_code))
 
                             # main_pbar.update()
-        
-
-            threads = []
+    
+            greenlets = []
             for i in range(num_threads):
-                thread = Thread(target=worker, args=(i,))
-                thread.start()
-                threads.append(thread)
+                greenlet = gevent.spawn(worker, i)  # Spawn a new green thread
+                greenlets.append(greenlet)
 
-            for thread in threads:
-                thread.join()
+            # Wait for all green threads to complete
+            gevent.joinall(greenlets)
 
         self.m_signal = None 
 
@@ -429,3 +431,8 @@ class RemoteConnection:
     def disconnect(self):
         if self.m_sio.connected:
             self.m_sio.disconnect()
+
+    def pull_files(self, data):
+        debug_print("enter")
+        if self.m_sio.connected:
+            self.m_sio.emit("remote_transfer_files", data)
