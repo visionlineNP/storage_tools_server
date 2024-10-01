@@ -118,6 +118,12 @@ class RemoteConnection:
                 debug_print(e)
         return rtn
 
+
+    def server_refresh(self):
+        self.send_node_data()
+
+        self.m_sio.emit("request_server_data", {"room": self.m_node_source})
+
     # def dashboard_room(self):
     #     return "dashboard-" + self.m_username
 

@@ -549,13 +549,14 @@ function processServerYMD(data) {
 
                 if (window.has_remotes) {
                     const onRemote = document.createElement("i")
-                    onRemote.className = "bi bi-cloud";
+                    onRemote.className = "bi bi-cloud-fill";
                     onRemote.classList.add("remote_icon")
                     onRemote.title = "On Remote";
                     onRemote.id = `on_remote_${detail.upload_id}`;
                     onRemote.setAttribute("data-bs-toggle", "tooltip");
                     if (!detail.on_remote) {
                         onRemote.title = "Not On Remote Server";
+                        onRemote.className = "bi bi-cloud";
                         onRemote.classList.add("grayed-out");
                     }
                     statusDiv.appendChild(onRemote);
@@ -971,12 +972,12 @@ function updateServerRemoteYMD(data)
         run_dl.appendChild(run_dd);
 
 
-        let header_names = ["Robot", "Site", "Date", "Basename", "Path", "Size", "UID", "Status"]
+        let header_names = ["Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
         if (window.has_remotes) {
-            header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "UID", "Status"]
+            header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
         }
 
-        const item_names = ["robot_name", "site", "datetime", "basename", "localpath", "hsize", "upload_id" ]
+        const item_names = ["robot_name", "site", "datetime", "basename", "localpath", "hsize"]
 
         // const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
         // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]
@@ -1154,7 +1155,7 @@ function updateServerRemoteYMD(data)
 
                 if (window.has_remotes) {
                     const onRemote = document.createElement("i")
-                    onRemote.className = "bi bi-cloud";
+                    onRemote.className = "bi bi-cloud-fill";
                     onRemote.classList.add("remote_icon")
                     onRemote.title = "On Remote";
                     onRemote.id = `on_remote_${detail.upload_id}`;

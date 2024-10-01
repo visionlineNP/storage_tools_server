@@ -292,6 +292,12 @@ def on_join(data):
     global g_remote_sockets
     room = data["room"]    
     client = data.get("type", None)
+
+    if client == "device" and room in g_remote_sockets:
+        # we have a duplicate connection. reject this and hold on to the current
+        disconnect(request.sid)
+        return 
+
     join_room(room)
     socketio.emit("dashboard_info", {"data": f"Joined room: {room}", "source": g_config["source"]}, to=room)
     debug_print(f"Joined room {room} from {client}")
@@ -871,7 +877,7 @@ def on_device_status_tqdm(data):
 @socketio.on("server_refresh")
 def on_server_refresh(msg=None):
     global g_remote_connection
-    g_remote_connection.send_node_data()
+    g_remote_connection.server_refresh()
 
 
 @socketio.on("request_robots")
