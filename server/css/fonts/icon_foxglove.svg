@@ -1,0 +1,12 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns="http://www.w3.org/2000/svg">
+<metadata>Copyright (C) 2024 by original authors @ fontello.com</metadata>
+<defs>
+<font id="icon_foxglove" horiz-adv-x="1000" >
+<font-face font-family="icon_foxglove" font-weight="400" font-stretch="normal" units-per-em="1000" ascent="850" descent="-150" />
+<missing-glyph horiz-adv-x="1000" />
+<glyph glyph-name="foxglove-bw-logo-icon-round" unicode="&#xe800;" d="M360 690c-54 0-98-44-98-98 0-54 44-97 98-97 23 0 44 7 60 20 22 18 49 29 79 29 30 0 58-11 80-29 16-13 37-20 60-20 54 0 98 43 98 97 0 54-44 98-98 98-23 0-44-8-60-21-22-17-50-28-80-28-30 0-57 11-79 28-16 13-37 21-60 21z m418-243a97 97 0 0 1-97-97 97 97 0 0 1 97-97 97 97 0 0 1 97 97 97 97 0 0 1-97 97z m-558 0c-54 0-97-44-97-98 0-54 43-97 97-97 23 0 44 7 61 20 21 18 49 29 79 29 30 0 57-11 79-29 17-13 38-20 60-20 54 0 98 43 98 97 0 54-44 98-98 98-22 0-43-8-60-21-22-17-49-28-79-28-30 0-58 11-79 28-17 13-38 21-61 21z m140-243a97 97 0 0 1-97-97 97 97 0 0 1 97-97 97 97 0 0 1 97 97 97 97 0 0 1-97 97z m280 0a97 97 0 0 1-97-97 97 97 0 0 1 97-97 97 97 0 0 1 97 97 97 97 0 0 1-97 97z m-452 646h625c103 0 187-84 187-187v-625c0-104-84-188-187-188h-625c-104 0-188 84-188 188v625c0 103 84 187 188 187z" horiz-adv-x="1000" />
+</font>
+</defs>
+</svg>

@@ -485,7 +485,7 @@ function processServerYMD(data) {
                             link.target = "_blank";
                             const foxglove = document.createElement("i")
                             link.appendChild(foxglove);
-                            foxglove.className = "bi bi-balloon"
+                            foxglove.className = "icon-foxglove-bw-logo-icon-round"
                             foxglove.title = "foxglove-studio " + mount + "/"  +  detail.fullpath;
                          }
                     }
@@ -1093,22 +1093,6 @@ function updateServerRemoteYMD(data)
                         spacer.innerHTML = "&nbsp;&nbsp;"
                         td.appendChild(spacer)
                         td.appendChild(download);
-
-                        const mount = getCookie("mount_" + project_name);
-                        // // just for testing. will use userpath instead
-                        if(  mount && (detail.localpath.endsWith(".mcap") || detail.localpath.endsWith(".bag"))) {
-
-                            const link = document.createElement("link")
-                            td.appendChild(link)
-
-                            link.href = "foxglovecli://" + mount + "/"  +  detail.fullpath;
-                            link.target = "_blank";
-                            const foxglove = document.createElement("i")
-                            link.appendChild(foxglove);
-                            foxglove.className = "bi bi-balloon"
-                            foxglove.title = "foxglove-studio " + mount + "/"  +  detail.fullpath;
-                         }
-
                     }
 
                     if (key == "basename") {

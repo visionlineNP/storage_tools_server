@@ -58,7 +58,7 @@ $(document).ready(function () {
   });
 
   socket.on('device_ymd_data', function (data) {
-    console.log(data)
+    // console.log(data)
     accumulateDeviceYMD(data);
   })
 

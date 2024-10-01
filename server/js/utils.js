@@ -3,7 +3,7 @@
 // parent is div element to attach the tabs
 // prefix is name for the bs-target
 
-function create_tabs(names, parent, prefix, event=null)
+function create_tabs(names, parent, prefix, event=null, auto_trigger=false)
 {
     session_token = window.session_token
 
@@ -39,7 +39,7 @@ function create_tabs(names, parent, prefix, event=null)
         link.role = "tab";
         link.setAttribute("aria-controls", tab_name);
 
-        if(event) {
+        if(event && !auto_trigger) {
             // execute this function once the tab is visible for the first time
             link.addEventListener("show.bs.tab", function(e) {
                 console.log(e, event, tab_name, session_token);
@@ -71,9 +71,9 @@ function create_tabs(names, parent, prefix, event=null)
 
         rtn[item_name] = tab_div;
 
-        if(event && was_first) {
+        if(event && (was_first || auto_trigger)) {
             // always make sure the first one is triggered. 
-            // console.log(event, tab_name);
+            console.log(event, tab_name);
             socket.emit(event, {tab:tab_name, session_token: session_token})
         }
     }
@@ -197,7 +197,7 @@ function add_placeholder(div)
     p.className = "placeholder-glow";
     p.setAttribute("aria-hidden", "true");
     div.appendChild(p);
-    const rows = [(7,4, 2), (8, 4,4),(6,9,3)];
+    const rows = [[7,4, 2], [8, 4,4],[6,9,3]];
     $.each(rows, function(_,sizes) {
         $.each(sizes, function(_, sz) {
             const span = document.createElement("span");

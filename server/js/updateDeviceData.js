@@ -758,7 +758,7 @@ function updateDeviceData(data) {
     }
 
     ymd_names = Object.keys(source_item.entries).sort();
-    ymd_tabs = create_tabs(ymd_names, source_tab, "device:" + source_name, "request_device_ymd_data");
+    ymd_tabs = create_tabs(ymd_names, source_tab, "device:" + source_name, "request_device_ymd_data", true);
 
     $.each(ymd_tabs, function (date, ymd_tab) {
       
@@ -774,7 +774,7 @@ function updateDeviceData(data) {
 }
 
 function populateDeviceYMDTab(source_item) {
-  console.log(source_item)
+  // console.log(source_item)
 
   const date = source_item.ymd 
   const ymd_tab = document.getElementById(source_item.tab)   
@@ -1310,7 +1310,7 @@ window.device_accumulate = {};
 
 function accumulateDeviceYMD(data)
 {
-  console.log(data)
+  // console.log(data)
 
   const ymd_name = data.ymd;
   const reldirs = Object.entries(data.reldir);
@@ -1335,7 +1335,7 @@ function accumulateDeviceYMD(data)
   }
   window.device_accumulate[key] = acc_data;
 
-  console.log(data, acc_data.found, total)
+  // console.log(data, acc_data.found, total)
 
   // console.log(acc_data.found)
   if (total == acc_data.found) {
