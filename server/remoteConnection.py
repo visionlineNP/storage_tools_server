@@ -57,6 +57,11 @@ class RemoteConnection:
 
     def connected(self):
         return self.m_sio.connected
+    
+    def server_name(self):
+        if self.m_sio.connected:
+            return self.m_server 
+        return None 
 
     def connect(self, server_full, send_to_all_dashboards_fn, get_file_path_from_entry_fn):
         rtn = False

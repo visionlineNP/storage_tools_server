@@ -27,3 +27,4 @@ config/upload_keys.yaml
 config/config.ssd3.yaml
 config/config.ssd.yaml
 config/config.local.yaml
+install

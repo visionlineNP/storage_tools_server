@@ -81,21 +81,134 @@ function create_tabs(names, parent, prefix, event=null)
     return rtn;
 }
 
+
+function add_single_tab(full_tab_name, event = null) {
+    const levels = full_tab_name.split(':');
+    const current_level_name = levels.shift(); // Extract the current level
+    const remaining_levels = levels.join(':'); // Remaining levels after this one
+    
+    // Assume the top-level tab is always present
+    let current_parent = document.getElementById(current_level_name);
+    if (!current_parent) {
+        console.error(`Top-level tab container "${current_level_name}" does not exist.`);
+        return null;
+    }
+
+    // Ensure there is a tab list in the current parent
+    let tablist = current_parent.querySelector('ul.nav.nav-tabs');
+    if (!tablist) {
+        tablist = document.createElement("ul");
+        tablist.className = "nav nav-tabs";
+        tablist.role = "tablist";
+        current_parent.appendChild(tablist);
+    }
+
+    // Ensure there is a tab content container in the current parent
+    let tab_contents = current_parent.querySelector('.tab-content');
+    if (!tab_contents) {
+        tab_contents = document.createElement("div");
+        tab_contents.className = "tab-content";
+        current_parent.appendChild(tab_contents);
+    }
+
+    // If there are more levels to traverse, call this function recursively
+    if (remaining_levels) {
+        let next_level_id = `${current_level_name}:${levels[0]}`;
+        let next_level_tab_content = document.getElementById(next_level_id);
+
+        // If the next level doesn't exist, create it
+        if (!next_level_tab_content) {
+            next_level_tab_content = document.createElement("div");
+            next_level_tab_content.id = next_level_id;
+            next_level_tab_content.className = "tab-pane fade hidden";
+            next_level_tab_content.role = "tabpanel";
+            next_level_tab_content.setAttribute("aria-labelledby", next_level_id);
+            next_level_tab_content.tabIndex = "0";
+            tab_contents.appendChild(next_level_tab_content);
+
+            // Also add the tab item in the nav
+            let li = document.createElement("li");
+            li.className = "nav-item";
+            li.role = "presentation";
+
+            let link = document.createElement("a");
+            link.className = "nav-link";
+            link.innerHTML = levels[0]; // Use the current level name
+            link.setAttribute("data-bs-toggle", "tab");
+            link.setAttribute("data-bs-target", `#${next_level_id}`);
+            link.type = "button";
+            link.role = "tab";
+            link.setAttribute("aria-controls", next_level_id);
+
+            li.appendChild(link);
+            tablist.appendChild(li);
+        }
+
+        // Continue the recursion to process the remaining levels
+        return add_single_tab(full_tab_name, event);
+    } else {
+        // We are at the leaf (final) level, create the tab if it doesn't exist
+        let leaf_tab = document.getElementById(full_tab_name);
+        if (!leaf_tab) {
+            // Create the tab content container
+            leaf_tab = document.createElement("div");
+            leaf_tab.id = full_tab_name;
+            leaf_tab.className = "tab-pane fade hidden";
+            leaf_tab.role = "tabpanel";
+            leaf_tab.setAttribute("aria-labelledby", full_tab_name);
+            leaf_tab.tabIndex = "0";
+            tab_contents.appendChild(leaf_tab);
+
+            // Also add the tab item to the nav list
+            let li = document.createElement("li");
+            li.className = "nav-item";
+            li.role = "presentation";
+
+            let link = document.createElement("a");
+            link.className = "nav-link";
+            link.innerHTML = current_level_name; // Use the current level name
+            link.setAttribute("data-bs-toggle", "tab");
+            link.setAttribute("data-bs-target", `#${full_tab_name}`);
+            link.type = "button";
+            link.role = "tab";
+            link.setAttribute("aria-controls", full_tab_name);
+
+            // Add the event only on the leaf tab
+            if (event) {
+                link.addEventListener("show.bs.tab", function (e) {
+                    console.log(e, event, full_tab_name, session_token);
+                    socket.emit(event, { tab: full_tab_name, session_token: window.session_token });
+                }, { once: true });
+            }
+
+            li.appendChild(link);
+            tablist.appendChild(li);
+        }
+
+        return leaf_tab; // Return the final tab content div
+    }
+}
+
+
+
 function add_placeholder(div)
 {
     const p = document.createElement("p");
     p.className = "placeholder-glow";
     p.setAttribute("aria-hidden", "true");
     div.appendChild(p);
-    const sizes = [7,4, 2, 8, 4,4,6,9];
-    $.each(sizes, function(_, sz) {
-        const span = document.createElement("span");
-        p.appendChild(span);
-        span.className = "placeholder col-" + sz;
-
-        const space = document.createElement("span");
-        p.append(space);
-        space.textContent = " ";
+    const rows = [(7,4, 2), (8, 4,4),(6,9,3)];
+    $.each(rows, function(_,sizes) {
+        $.each(sizes, function(_, sz) {
+            const span = document.createElement("span");
+            p.appendChild(span);
+            span.className = "placeholder col-" + sz;
+    
+            const space = document.createElement("span");
+            p.append(space);
+            space.textContent = " ";
+        });
+    
     });
 
 }
@@ -303,3 +416,46 @@ function createFileDurationRangeSelector(minSeconds, maxSeconds, sizeSelectorDiv
     sizeSelectorDiv.reset = reset;
 }
 
+
+function getCookie(name) {
+    let cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      let cookie = cookies[i].trim();
+      // Check if this cookie matches the name we are looking for
+      if (cookie.startsWith(name + '=')) {
+        return decodeURIComponent(cookie.substring(name.length + 1));
+      }
+    }
+    return null;
+  }
+  
+  // Function to delete a specific cookie by name
+  function deleteCookie(name) {
+    document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+}
+
+
+function setCookie(name, value, days) {
+    // Read all existing cookies
+    const existingCookies = document.cookie.split(';').reduce((cookies, cookieString) => {
+        const [key, val] = cookieString.split('=').map(c => c.trim());
+        cookies[key] = val;
+        return cookies;
+    }, {});
+
+    // Update or add the specified cookie
+    existingCookies[name] = encodeURIComponent(value);
+
+    // Set the expiration date if 'days' parameter is provided
+    let expires = "";
+    if (days) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+
+    // Rewrite all cookies, including the updated one
+    for (const [key, val] of Object.entries(existingCookies)) {
+        document.cookie = `${key}=${val}${expires}; path=/`;
+    }
+}

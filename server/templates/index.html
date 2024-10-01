@@ -35,6 +35,7 @@
                     <li class="navbar-brand"><b>AirLAB Storage</b><br>
                         <div id="connection_status">Connection: Offline </div>
                         <button type="button" class="btn btn-danger logoff-button" onclick="logout()">Log out</button>
+                        <button type="button" class="btn btn-secondary" id="new_data_button" onclick="request_new_data()">Refresh</button>
                     </li>
                     <hr>
                     <li class="nav-item">
@@ -395,6 +396,20 @@
                                 aria-labelledby="config-user-tab" tabindex="0">
                                 <div class="user-container">
                                     <H2>User settings</H2>
+
+                                    <table id="localMountTable" border="1">
+                                        <thead>
+                                            <tr>
+                                                <th>Project Name</th>
+                                                <th>Local Mount</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- Existing projects will be dynamically inserted here -->
+                                        </tbody>
+                                    </table>
+    
                                 </div>
                             </div>
                         </div>
@@ -408,6 +423,8 @@
                             <button type="button" class="btn btn-primary" id="scan-server" onclick="scanServer()">Scan
                                 Server</button>
                         </div>
+
+                        <button type="button" class="btn btn-secondary" onclick="fakeNewData()">Fake new Data</button>
 
                         <div id="server_regen_msg"></div>
 
@@ -453,6 +470,9 @@
                                 socket.emit("scan_server");
                             };
 
+                            function fakeNewData() {
+                                socket.emit("fake_new_data", {"session_token": window.session_token});
+                            }
                         </script>
 
                     </div>
@@ -470,11 +490,6 @@
         const url = protocol + "//" + location.hostname + ':' + location.port;
 
         var socket = io.connect(url, { transports: ['websocket'], query: `session_token=${window.session_token}` });
-
-        //   var socket = io.connect('https://' + document.domain + ':' + location.port, {
-        //     transports: ['websocket']
-        //   });
-
 
     </script>
 </body>

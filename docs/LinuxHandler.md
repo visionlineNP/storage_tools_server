@@ -2,15 +2,15 @@
 
 ## Install
 
-Set up the browser handler to run `foxglove-studio` from `airdata://` links.
+Set up the browser handler to run `foxglove-studio` from `foxglovecli://` links.
 
-1. Save this file as `install_airdata_handler.sh`.
+1. Save this file as `install_foxglovecli_handler.sh`.
 
     ```bash
     #!/bin/bash
 
     # Define variables
-    HANDLER_NAME="airdata-handler"
+    HANDLER_NAME="foxglovecli-handler"
     DESKTOP_FILE="$HOME/.local/share/applications/${HANDLER_NAME}.desktop"
     SCRIPT_FILE="$HOME/.local/bin/${HANDLER_NAME}.sh"
 
@@ -26,8 +26,8 @@ Set up the browser handler to run `foxglove-studio` from `airdata://` links.
     mkdir -p "$(dirname "$SCRIPT_FILE")"
     cat <<EOF > "$SCRIPT_FILE"
     #!/bin/bash
-    # Extract the path from the airdata URL
-    path="\${1#airdata://}"
+    # Extract the path from the foxglovecli URL
+    path="\${1#foxglovecli://}"
 
     # Run Foxglove Studio with the extracted path
     foxglove-studio "\$path"
@@ -41,37 +41,37 @@ Set up the browser handler to run `foxglove-studio` from `airdata://` links.
     mkdir -p "$(dirname "$DESKTOP_FILE")"
     cat <<EOF > "$DESKTOP_FILE"
     [Desktop Entry]
-    Name=AirData Handler
+    Name=Foxglovecli Handler
     Exec=$SCRIPT_FILE %u
     Type=Application
-    MimeType=x-scheme-handler/airdata;
+    MimeType=x-scheme-handler/foxglovecli;
     NoDisplay=true
     EOF
 
-    # Register the airdata:// URL scheme handler
-    echo "Registering the airdata URL scheme handler"
-    xdg-mime default "$(basename "$DESKTOP_FILE")" x-scheme-handler/airdata
+    # Register the foxglovecli:// URL scheme handler
+    echo "Registering the foxglovecli URL scheme handler"
+    xdg-mime default "$(basename "$DESKTOP_FILE")" x-scheme-handler/foxglovecli
 
-    echo "Installation complete. You should now be able to use airdata:// URLs to open files with Foxglove Studio."
+    echo "Installation complete. You should now be able to use foxglovecli:// URLs to open files with Foxglove Studio."
     ```
 
 2. Made the file executable, and run script
 
     ```bash
-    chmod +x install_airdata_handler.sh
-    ./install_airdata_hanlder.sh
+    chmod +x install_foxglovecli_handler.sh
+    ./install_foxglovecli_hanlder.sh
     ```
 
 ## Uninstall
 
-1. Save this file as `uninstall_airdata_handler.sh`
+1. Save this file as `uninstall_foxglovecli_handler.sh`
 
     ```bash
 
     #!/bin/bash
 
     # Define variables
-    HANDLER_NAME="airdata-handler"
+    HANDLER_NAME="foxglovecli-handler"
     DESKTOP_FILE="$HOME/.local/share/applications/${HANDLER_NAME}.desktop"
     SCRIPT_FILE="$HOME/.local/bin/${HANDLER_NAME}.sh"
 
@@ -91,16 +91,16 @@ Set up the browser handler to run `foxglove-studio` from `airdata://` links.
         echo "Desktop entry not found at $DESKTOP_FILE"
     fi
 
-    # Unregister the airdata URL scheme handler
-    echo "Unregistering the airdata URL scheme handler"
-    xdg-mime default x-scheme-handler/airdata
+    # Unregister the foxglovecli URL scheme handler
+    echo "Unregistering the foxglovecli URL scheme handler"
+    xdg-mime default x-scheme-handler/foxglovecli
 
-    echo "Uninstallation complete. The airdata:// URL scheme handler has been removed."
+    echo "Uninstallation complete. The foxglovecli:// URL scheme handler has been removed."
     ```
 
 2. Made the file executable, and run script
 
     ```bash
-    chmod +x uninstall_airdata_handler.sh
-    ./uninstall_airdata_hanlder.sh
+    chmod +x uninstall_foxglovecli_handler.sh
+    ./uninstall_foxglovecli_hanlder.sh
     ```

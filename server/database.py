@@ -5,7 +5,6 @@ import json
 import os
 import pathlib
 import threading
-from flask_socketio import SocketIO
 import humanfriendly
 from datetime import datetime, timedelta
 import hashlib
@@ -400,7 +399,7 @@ class Database:
             topics = entry.get("topics", [])
             upload_id = entry["upload_id"]
             localpath = entry["localpath"]
-            fullpath = entry["fullpath"]
+            fullpath = entry.get("fullpath","")
 
             rtn[run] = rtn.get(run, {})
             rtn[run][relpath] = rtn[run].get(relpath, [])

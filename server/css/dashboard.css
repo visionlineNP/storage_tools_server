@@ -194,8 +194,8 @@ dd {
 }
 
 .sidebar {
-    flex: 0 0 200px; /* Fixed width for the sidebar */
-    max-width: 200px; /* Maximum width for the sidebar */
+    flex: 0 0 210px; /* Fixed width for the sidebar */
+    max-width: 210px; /* Maximum width for the sidebar */
     min-width: 150px; /* Minimum width for the sidebar */
     background-color: #f0f0f0; /* Optional: background color for visibility */
     height: 100vh; /* Full height */

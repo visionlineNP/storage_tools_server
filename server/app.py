@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import math
 import shutil
+import urllib.parse
 import uuid
 from flask import (
     Flask,
@@ -24,6 +25,7 @@ import humanfriendly
 import socket
 import fcntl
 import struct
+import urllib 
 from zeroconf import Zeroconf, ServiceInfo
 import jwt
 from engineio.payload import Payload
@@ -36,7 +38,6 @@ from threading import Lock
 
 
 from .debug_print import debug_print
-from .speed import FileSpeedEstimate
 from .database import Database, get_upload_id
 from .remoteConnection import RemoteConnection
 from .nodeConnection import NodeConnection
@@ -112,6 +113,13 @@ g_upload_dir = None
 # stub for a real database.
 g_database = None
 
+# associate a session_token with dict of state
+# if a source has been updated since last send, set state to true
+# otherwise is set to false. 
+g_has_updates = {}
+
+# connects a room to a session token. 
+g_session_tokens = {}
 
 # dashboard clients
 # when we need to send something to every dashboard.  
@@ -294,6 +302,11 @@ def on_join(data):
             g_dashboard_rooms.append(room)
 
         session_token = data.get("session_token")
+
+        g_session_tokens[room] = session_token
+        # used to keep track of updated sources, and who knows what. 
+        g_has_updates[session_token] = {}
+
         send_all_data({"session_token": session_token})
 
     if client == "node":
@@ -374,6 +387,11 @@ def send_all_data(data):
     on_request_search_filters(data)
     debug_print("Sent all data")
 
+    # after this, there should be no new data!
+    room = dashboard_room(data)
+    socketio.emit("has_new_data", {"value": False}, to=room)
+
+
 
 @socketio.on("disconnect")
 def on_disconnect():
@@ -419,6 +437,12 @@ def on_disconnect():
 
         if remove in g_dashboard_rooms:
             g_dashboard_rooms.pop(g_dashboard_rooms.index(remove))
+
+        if remove in g_session_tokens:
+            session_token = g_session_tokens[remove]
+            if session_token in g_has_updates:
+                del g_has_updates[session_token]
+            del g_session_tokens[remove]
 
         if remove in g_search_results:
             del g_search_results[remove]
@@ -627,6 +651,19 @@ def on_device_files(data):
     send_device_data()
 
 
+@socketio.on("fake_new_data")
+def debug_on_fake_new_data(data):
+
+    room = dashboard_room(data)
+    socketio.emit("has_new_data", {"value": True}, to=room)
+
+@socketio.on("request_new_data")
+def on_request_new_data(data):
+    
+    session_token = data.get("session_token","")
+    if session_token in g_has_updates:
+        # we can be more fine tuned later. now just push everything
+        send_all_data(data)
 
 
 @socketio.on("request_server_data")
@@ -1484,7 +1521,7 @@ def login():
             "username", username, max_age=3600 * 24
         )  # Expires in 24 hour
         response.set_cookie(
-            "password", password, max_age=3600 * 24
+            "password", urllib.parse.quote(password), max_age=3600 * 24
         )  # Not recommended to store password directly
 
         api_key_token = None
@@ -1493,7 +1530,7 @@ def login():
                 api_key_token = key
                 break
         if api_key_token is not None:
-            response.set_cookie("api_key_token", api_key_token, max_age=3600 * 24)
+            response.set_cookie("api_key_token", urllib.parse.quote(api_key_token), max_age=3600 * 24)
         else:
             debug_print(f"Failed to find api_key for [{username}]")
 
@@ -1930,16 +1967,11 @@ def handle_file(source: str, upload_id: str):
             except OSError:
                 # we lost the connection on the client side.
                 send_dashboard_file(cancel_msg)
-                # socketio.emit("dashboard_file", cancel_msg, to=dashboard_room())
-                # if source in g_sources["nodes"]: 
-                #    socketio.emit("dashboard_file", cancel_msg, to=source)
-
                 return jsonify({"message": f"File {filename} upload canceled"})
 
             if not chunk:
                 break
             fid.write(chunk)
-            # g_uploads[upload_id]["progress"].update(len(chunk))
 
     os.chmod(tmp_path, 0o777 )
 
@@ -1952,14 +1984,10 @@ def handle_file(source: str, upload_id: str):
                 "Size mismatch. " + str(current_size) + " != " + str(expected)
             )
             send_dashboard_file(cancel_msg)
-            # socketio.emit("dashboard_file", cancel_msg, to=dashboard_room())
-            # if source in g_sources["nodes"]: 
-            #     socketio.emit("dashboard_file", cancel_msg, to=source)
 
             return jsonify({"message": f"File {filename} upload canceled"})
 
         os.rename(tmp_path, filepath)
-        # g_uploads[upload_id]["status"] = "complete"
 
         data = {
             "div_id": f"status_{upload_id}",
@@ -1969,12 +1997,13 @@ def handle_file(source: str, upload_id: str):
             "on_server": True,
             "upload_id": upload_id,
         }
-        # socketio.emit("dashboard_file", data, to="client-" + source)
-        try:
-            send_dashboard_file(data)
-        except Exception as e:
-            debug_print(f"Caught exception {e}")
-            pass 
+
+        send_dashboard_file(data)
+        # try:
+        #     send_dashboard_file(data)
+        # except Exception as e:
+        #     debug_print(f"Caught exception {e}")
+        #     pass 
         # socketio.emit("dashboard_file", data, to=dashboard_room())
         # if source in g_sources["nodes"]: 
         #     socketio.emit("dashboard_file", data, to=source)
@@ -1995,8 +2024,24 @@ def handle_file(source: str, upload_id: str):
     g_database.estimate_runs()
     g_database.commit()
 
-    # TODO: replace send_server_data with "update_server_data"
-    send_server_data()
+
+    # signal to the dashboards that this source has updates.  
+    for session_token in g_has_updates:
+        g_has_updates[session_token][g_config["source"]] = True
+
+        room = "dashboard-" + session_token
+        socketio.emit("has_new_data", {"value": True}, to=room)
+
+    # # TODO: replace send_server_data with "update_server_data"
+    # # send_server_data()
+
+    # ymd = entry["date"]
+    # project = entry["project"]
+    # tab = f"server:{project}:{ymd}"
+
+    # on_request_server_ymd_data({"tab": tab})
+
+
     device_revise_stats()
 
     return jsonify({"message": f"File {filename} chunk uploaded successfully"})
@@ -2247,81 +2292,11 @@ def send_device_data(msg=None):
         if "stats" in stats[source]:
             device_data[source]["stats"] = stats[source]["stats"]
 
+        # revise the has_updates  
+        for session_token in g_has_updates:
+            g_has_updates[session_token][source] = False
+
     send_to_all_dashboards("device_data", device_data)    
-
-
-
-def send_device_data_old(data=None):
-    global g_remote_entries
-    global g_fs_info
-    global g_projects
-
-    device_data = {}
-    
-    valid = True
-    for source in g_remote_entries:
-        with g_remote_entries_lock[source]:
-            debug_print((source in g_sources["devices"], len(g_remote_entries[source])))
-
-            if source in g_sources["devices"]:
-                project = g_projects.get(source)
-                device_data[source] = {"fs_info": {}, "entries": {}, "project": project}
-                if source in g_fs_info:
-                    device_data[source]["fs_info"] = g_fs_info[source]
-                for uid in g_remote_entries[source]:
-                    entry = {}
-                    # entry.update(g_remote_entries[source][uid])
-                    # debug_print(g_remote_entries[source][uid]["robot_name"])
-                    for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
-                        entry[key] = g_remote_entries[source][uid][key]
-
-                    entry["size"] = humanfriendly.format_size(entry["size"])
-                    date = g_remote_entries[source][uid]["datetime"].split(" ")[0]
-                    relpath = g_remote_entries[source][uid]["relpath"]
-                    device_data[source]["entries"][date] = device_data[source]["entries"].get(date, {})
-                    device_data[source]["entries"][date][relpath] = device_data[source]["entries"][date].get(relpath, [])
-                    # device_data[source]["entries"][date][relpath].append(entry)
-
-                    device_data[source]["stats"] = device_data[source].get(
-                        "stats",
-                        {
-                            "total": {
-                                "total_size": 0,
-                                "count": 0,
-                                "start_datetime": None,
-                                "end_datetime": None,
-                                "datatype": {},
-                                "on_server_size": 0,
-                                "on_server_count": 0,
-                            }
-                        },
-                    )
-                    device_data[source]["stats"][date] = device_data[source]["stats"].get(
-                        date,
-                        {
-                            "total_size": 0,
-                            "count": 0,
-                            "start_datetime": None,
-                            "end_datetime": None,
-                            "datatype": {},
-                            "on_server_size": 0,
-                            "on_server_count": 0,
-                        },
-                    )
-
-                    update_stat(source, uid, device_data[source]["stats"][date])
-                    update_stat(source, uid, device_data[source]["stats"]["total"])
-                debug_print(( source, "stats" in device_data[source]))
-                if not "stats" in device_data[source]:
-                    valid = False
-
-    if valid:          
-        send_to_all_dashboards("device_data", device_data)
-
-    # for room in g_dashboard_rooms:
-    #     debug_print(f"send_device_data to [{room}]")
-    #     # debug_print(json.dumps(device_data, indent=True))
-    #     socketio.emit("device_data", device_data, to=room)
 
 
 def update_stat(source, uid, stat):
@@ -2403,8 +2378,18 @@ def send_node_data(msg=None):
 
     if msg:
         room = dashboard_room(msg)
+
+        if room in g_session_tokens:
+            session_token = g_session_tokens[room]
+            for source in node_data:
+                g_has_updates[session_token][source] = False
+
         socketio.emit("node_data", node_data, to=room)
     else:
+        for session_token in g_has_updates:
+            for source in node_data:
+                g_has_updates[session_token][source] = False
+
         send_to_all_dashboards("node_data", node_data, with_nodes=False)
 
 
@@ -2423,14 +2408,24 @@ def send_server_data(msg=None):
         "source": g_config["source"],
         "remotes": g_config.get("remote", []),
         "remote_connected": g_remote_connection.connected(),
+        "remote_address": g_remote_connection.server_name()
     }
 
     if msg:
         room = dashboard_room(msg)
+
+        if room in g_session_tokens:
+            session_token = g_session_tokens[room]
+            g_has_updates[session_token][g_config["source"]] = False
+
         debug_print(f"sending to {room}")        
         socketio.emit("server_data", server_data, to=room)
     else:
         debug_print("Sending to all dashboards")
+
+        for session_token in g_has_updates:
+            g_has_updates[session_token][g_config["source"]] = False
+
         send_to_all_dashboards("server_data", server_data, with_nodes=False)
 
 

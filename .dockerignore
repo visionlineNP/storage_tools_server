@@ -3,3 +3,4 @@ Dockerfile*
 env.sh
 __pycache__/*
 uploads
+install

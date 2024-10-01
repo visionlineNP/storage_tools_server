@@ -36,6 +36,21 @@ $(document).ready(function () {
 
   });
 
+  // set new data 
+  socket.on("has_new_data", function (data) {
+    const has_new_data = data.value;
+    const button = document.getElementById("new_data_button")
+    if (button) {
+      if (has_new_data) {
+        button.innerHTML = "New Data"
+        button.className = "btn btn-success"
+      } else {
+        button.innerHTML = "Refresh"
+        button.className = "btn btn-secondary"
+      }
+    }
+  })
+
   // process data device 
   socket.on('device_data', function (data) {
     console.log('Received data_device:', data);
@@ -70,7 +85,7 @@ $(document).ready(function () {
     updateServerRemote(msg);
   })
 
-  socket.on("remote_ymd_data", function(msg) {
+  socket.on("remote_ymd_data", function (msg) {
     console.log(msg)
     updateServerRemoteYMD(msg)
   })
@@ -88,17 +103,16 @@ $(document).ready(function () {
     updateServerData(data);
   });
 
-  socket.on("server_regen_msg", function(data) {
+  socket.on("server_regen_msg", function (data) {
     console.log(data)
     updateServerRegen(data)
   })
 
-  socket.on('server_error', function(data) {
+  socket.on('server_error', function (data) {
     alert(data.msg);
-  }) 
+  })
 
-  socket.on("server_invalid_key", function(data)
-  {
+  socket.on("server_invalid_key", function (data) {
     serverInvalidKey(data);
   })
 
@@ -235,11 +249,11 @@ $(document).ready(function () {
 
 
   // search
-  socket.on("search_results", function(msg) {
+  socket.on("search_results", function (msg) {
     updateSearchResults(msg);
-  }) 
+  })
 
-  socket.on("search_filters", function(msg) {
+  socket.on("search_filters", function (msg) {
     updateSearchFilters(msg);
   })
 
@@ -327,18 +341,22 @@ function updateDeviceStatus(data) {
 
 // Update all site select elements with the latest sites
 function updateAllSiteSelects() {
-  $('.site-select').each(function () {
-    let source = $(this).attr("data-source");
-    let upload_id = $(this).attr("data-upload-id");
-    let currentSite = window.device_data[source][upload_id].site;
+  try {
+    $('.site-select').each(function () {
+      let source = $(this).attr("data-source");
+      let upload_id = $(this).attr("data-upload-id");
+      let currentSite = window.device_data[source][upload_id].site;
 
-    let siteOptions = '<option value="" disabled>Select site</option>';
-    $.each(window.sites, function (_, site) {
-      siteOptions += '<option value="' + site + '"' + (site === currentSite ? ' selected' : '') + '>' + site + '</option>';
+      let siteOptions = '<option value="" disabled>Select site</option>';
+      $.each(window.sites, function (_, site) {
+        siteOptions += '<option value="' + site + '"' + (site === currentSite ? ' selected' : '') + '>' + site + '</option>';
+      });
+      siteOptions += '<option value="add-new-site">Add New Site</option>';
+      $(this).html(siteOptions);
     });
-    siteOptions += '<option value="add-new-site">Add New Site</option>';
-    $(this).html(siteOptions);
-  });
+  } catch (error) {
+
+  }
 }
 
 // Update all site select elements with the latest sites
@@ -537,16 +555,6 @@ function removeFiles(selectedUpdateIds, source) {
 /// cancel transfers
 function cancelTransfers(source) {
   socket.emit("control_msg", { "source": source, "action": "cancel", "session_token": window.session_token });
-  // $.ajax({
-  //   type: 'GET',
-  //   url: '/cancel/' + source,
-  //   success: function (data) {
-  //     console.log('Transfers Canceled');
-  //   },
-  //   error: function (xhr, status, error) {
-  //     console.error('Error in canceling:', error);
-  //   }
-  // });
 };
 
 /// --------
@@ -554,16 +562,6 @@ function cancelTransfers(source) {
 /// rescan source
 function rescanSource(source) {
   socket.emit("device_scan", { "source": source, "session_token": window.session_token });
-  // $.ajax({
-  //   type: 'GET',
-  //   url: '/rescan/' + source,
-  //   success: function (data) {
-  //     console.log('Rescan Canceled');
-  //   },
-  //   error: function (xhr, status, error) {
-  //     console.error('Error in rescanning:', error);
-  //   }
-  // });
 };
 
 
@@ -592,105 +590,149 @@ function postDateTimeChange(source, upload_id) {
 
 function updateProjectList(projectData) {
 
-    window.projects = []
+  window.projects = []
 
+  {
     const tbody = document.querySelector('#projectTable tbody');
     tbody.innerHTML = '';  // Clear the table before updating
 
     // Create and append table rows for each project
     projectData.forEach(project => {
-        const row = document.createElement('tr');
+      const row = document.createElement('tr');
 
-        // Project Name Cell
-        const projectCell = document.createElement('td');
-        projectCell.textContent = project.project;
-        projectCell.classList.add("project")
-        row.appendChild(projectCell);
+      // Project Name Cell
+      const projectCell = document.createElement('td');
+      projectCell.textContent = project.project;
+      projectCell.classList.add("project")
+      row.appendChild(projectCell);
 
-        window.projects.push(project.project);
+      window.projects.push(project.project);
 
-        // Volume Cell
-        const volumeCell = document.createElement('td');
-        const volumeSpan = document.createElement("span")
-        volumeSpan.classList.add("volume")
-        volumeSpan.textContent = project.volume;
-        const volumeEdit = document.createElement("input")
-        volumeEdit.type = "text";
-        volumeEdit.classList.add("editVolume");
-        volumeEdit.value = project.volume;
-        volumeEdit.style.display = 'none';
-        volumeCell.appendChild(volumeSpan);
-        volumeCell.appendChild(volumeEdit);
-        row.appendChild(volumeCell);
+      // Volume Cell
+      const volumeCell = document.createElement('td');
+      const volumeSpan = document.createElement("span")
+      volumeSpan.classList.add("volume")
+      volumeSpan.textContent = project.volume;
+      const volumeEdit = document.createElement("input")
+      volumeEdit.type = "text";
+      volumeEdit.classList.add("editVolume");
+      volumeEdit.value = project.volume;
+      volumeEdit.style.display = 'none';
+      volumeCell.appendChild(volumeSpan);
+      volumeCell.appendChild(volumeEdit);
+      row.appendChild(volumeCell);
 
-        // Description Cell (with edit capabilities)
-        const descriptionCell = document.createElement('td');
-        const descriptionSpan = document.createElement('span');
-        descriptionSpan.classList.add('description');
-        descriptionSpan.textContent = project.description;
-        const descriptionInput = document.createElement('input');
-        descriptionInput.type = 'text';
-        descriptionInput.classList.add('editDescription');
-        descriptionInput.value = project.description;
-        descriptionInput.style.display = 'none';
+      // Description Cell (with edit capabilities)
+      const descriptionCell = document.createElement('td');
+      const descriptionSpan = document.createElement('span');
+      descriptionSpan.classList.add('description');
+      descriptionSpan.textContent = project.description;
+      const descriptionInput = document.createElement('input');
+      descriptionInput.type = 'text';
+      descriptionInput.classList.add('editDescription');
+      descriptionInput.value = project.description;
+      descriptionInput.style.display = 'none';
 
-        descriptionCell.appendChild(descriptionSpan);
-        descriptionCell.appendChild(descriptionInput);
-        row.appendChild(descriptionCell);
+      descriptionCell.appendChild(descriptionSpan);
+      descriptionCell.appendChild(descriptionInput);
+      row.appendChild(descriptionCell);
 
-        // Actions Cell (Edit/Save/Cancel buttons)
-        const actionsCell = document.createElement('td');
-        const editButton = document.createElement('button');
-        editButton.textContent = 'Edit';
-        editButton.onclick = () => editProject(project.project, project.volume, editButton);
+      // Actions Cell (Edit/Save/Cancel buttons)
+      const actionsCell = document.createElement('td');
+      const editButton = document.createElement('button');
+      editButton.textContent = 'Edit';
+      editButton.onclick = () => editProject(editButton);
 
-        const saveButton = document.createElement('button');
-        saveButton.textContent = 'Save';
-        saveButton.style.display = 'none';
-        saveButton.onclick = () => saveEdit(project.project, project.volume, saveButton);
+      const saveButton = document.createElement('button');
+      saveButton.textContent = 'Save';
+      saveButton.style.display = 'none';
+      saveButton.onclick = () => saveEdit(project.project, saveButton);
 
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Cancel';
-        cancelButton.style.display = 'none';
-        cancelButton.onclick = () => cancelEdit(cancelButton);
+      const cancelButton = document.createElement('button');
+      cancelButton.textContent = 'Cancel';
+      cancelButton.style.display = 'none';
+      cancelButton.onclick = () => cancelEdit(cancelButton);
 
-        const deleteButton = document.createElement("button");
-        deleteButton.textContent = "Delete";
-        deleteButton.style.display = 'none';
-        deleteButton.class = "btn btn-danger"
-        deleteButton.onclick = () => deleteEdit(deleteButton);
+      const deleteButton = document.createElement("button");
+      deleteButton.textContent = "Delete";
+      deleteButton.style.display = 'none';
+      deleteButton.class = "btn btn-danger"
+      deleteButton.onclick = () => deleteEdit(deleteButton);
 
-        actionsCell.appendChild(editButton);
-        actionsCell.appendChild(saveButton);
-        actionsCell.appendChild(cancelButton);
-        actionsCell.appendChild(deleteButton);
+      actionsCell.appendChild(editButton);
+      actionsCell.appendChild(saveButton);
+      actionsCell.appendChild(cancelButton);
+      actionsCell.appendChild(deleteButton);
 
-        row.appendChild(actionsCell);
+      row.appendChild(actionsCell);
 
-        // Append the row to the table body
-        tbody.appendChild(row);
+      // Append the row to the table body
+      tbody.appendChild(row);
     });
+  }
+  // update the user settings for project mount. 
+
+  {
+    const tbody = document.querySelector('#localMountTable tbody');
+    tbody.innerHTML = '';  // Clear the table before updating
+
+    // Create and append table rows for each project
+    projectData.forEach(project => {
+      const row = document.createElement('tr');
+
+      // Project Name Cell
+      const projectCell = document.createElement('td');
+      projectCell.textContent = project.project;
+      projectCell.classList.add("project")
+      row.appendChild(projectCell);
+
+      const cookieName = "mount_" + project.project;
+      const mountPoint = getCookie(cookieName);
+
+      // Volume Cell
+      const mountCell = document.createElement('td');
+      const mountSpan = document.createElement("span")
+      mountSpan.classList.add("mount")
+      if( mountPoint ) {
+        mountSpan.textContent = mountPoint;
+      }
+      const mountEdit = document.createElement("input")
+      mountEdit.type = "text";
+      mountEdit.classList.add("editMount");
+      mountEdit.value = mountPoint;
+      mountEdit.style.display = 'none';
+      mountCell.appendChild(mountSpan);
+      mountCell.appendChild(mountEdit);
+      row.appendChild(mountCell);
+
+      // Actions Cell (Edit/Save/Cancel buttons)
+      const actionsCell = document.createElement('td');
+      const editButton = document.createElement('button');
+      editButton.textContent = 'Edit';
+      editButton.onclick = () => editProjectMount(editButton);
+
+      const saveButton = document.createElement('button');
+      saveButton.textContent = 'Save';
+      saveButton.style.display = 'none';
+      saveButton.onclick = () => saveEditMount(project.project, saveButton);
+
+      const cancelButton = document.createElement('button');
+      cancelButton.textContent = 'Cancel';
+      cancelButton.style.display = 'none';
+      cancelButton.onclick = () => cancelEditMount(cancelButton);
 
 
-  // let projectList = document.getElementById('project-list');
-  // projectList.innerHTML = ''; // Clear existing list
-  // window.projects = []
+      actionsCell.appendChild(editButton);
+      actionsCell.appendChild(saveButton);
+      actionsCell.appendChild(cancelButton);
 
-  // // Create the <ul> element with class "list-group"
-  // const ul = document.createElement('ul');
-  // ul.className = 'list-group';
+      row.appendChild(actionsCell);
 
-  // // Create and append <li> elements for each project
-  // projectData.forEach(item => {
-  //   const li = document.createElement('li');
-  //   li.className = 'list-group-item';
-  //   li.textContent = item;
-  //   ul.appendChild(li);
-  //   window.projects.push(item);
-  // });
 
-  // // Append the <ul> to the project list container
-  // projectList.appendChild(ul);
+      // Append the row to the table body
+      tbody.appendChild(row);
+    })
+  }
 }
 
 
@@ -915,17 +957,17 @@ function populateEditMenus() {
   });
 
   // Find each project menu and update them separately
-  $('.project-menu').each(function() {
-      const projectMenu = $(this);  // Select the current project menu div
-      const source = projectMenu.data('source');  // Get the source associated with this menu
-  
-      // Clear the current menu
-      projectMenu.empty();
-  
-      // Add projects to this specific menu
-      window.projects.forEach(project => {
-          projectMenu.append('<span class="dropdown-item update-project" data-source="' + source + '" data-project="' + project + '">' + project + '</span>');
-      });
+  $('.project-menu').each(function () {
+    const projectMenu = $(this);  // Select the current project menu div
+    const source = projectMenu.data('source');  // Get the source associated with this menu
+
+    // Clear the current menu
+    projectMenu.empty();
+
+    // Add projects to this specific menu
+    window.projects.forEach(project => {
+      projectMenu.append('<span class="dropdown-item update-project" data-source="' + source + '" data-project="' + project + '">' + project + '</span>');
+    });
   });
 
 
@@ -985,22 +1027,6 @@ function refreshTooltips() {
 }
 
 
-function getCookie(name) {
-  let cookies = document.cookie.split(';');
-  for (let i = 0; i < cookies.length; i++) {
-    let cookie = cookies[i].trim();
-    // Check if this cookie matches the name we are looking for
-    if (cookie.startsWith(name + '=')) {
-      return cookie.substring(name.length + 1);
-    }
-  }
-  return null;
-}
-
-// Function to delete a specific cookie by name
-function deleteCookie(name) {
-  document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
-}
 
 function logout() {
   console.log("logout");
@@ -1013,90 +1039,140 @@ function logout() {
 
 
 
-        // Add a new project
-        function addProject() {
-          const project = document.getElementById('newProject').value;
-          const volume = document.getElementById('newVolume').value;
-          const description = document.getElementById('newDescription').value;
+// Add a new project
+function addProject() {
+  const project = document.getElementById('newProject').value;
+  const volume = document.getElementById('newVolume').value;
+  const description = document.getElementById('newDescription').value;
 
-          // Emit the "add_project" event
-          socket.emit('add_project', { project, volume, description, "session_token": window.session_token });
+  // Emit the "add_project" event
+  socket.emit('add_project', { project, volume, description, "session_token": window.session_token });
 
-          // Clear the input fields
-          document.getElementById('newProject').value = '';
-          document.getElementById('newVolume').value = '';
-          document.getElementById('newDescription').value = '';
-      }
+  // Clear the input fields
+  document.getElementById('newProject').value = '';
+  document.getElementById('newVolume').value = '';
+  document.getElementById('newDescription').value = '';
+}
 
-      // Edit an existing project
-      function editProject(project, volume, btn) {
-          const row = btn.closest('tr');
-          row.querySelector('.description').style.display = 'none';  // Hide description
-          row.querySelector('.editDescription').style.display = '';  // Show edit field
-          btn.style.display = 'none';  // Hide "Edit" button
+// Edit an existing project
+function editProject( btn) {
+  const row = btn.closest('tr');
+  row.querySelector('.description').style.display = 'none';  // Hide description
+  row.querySelector('.editDescription').style.display = '';  // Show edit field
+  btn.style.display = 'none';  // Hide "Edit" button
 
-          row.querySelector('.volume').style.display = 'none';
-          row.querySelector('.editVolume').style.display = '';
+  row.querySelector('.volume').style.display = 'none';
+  row.querySelector('.editVolume').style.display = '';
 
-          row.querySelectorAll('button')[1].style.display = '';  // Show "Save" button
-          row.querySelectorAll('button')[2].style.display = '';  // Show "Cancel" button
-          row.querySelectorAll('button')[3].style.display = '';  // Hide "Delete" button
-        }
+  row.querySelectorAll('button')[1].style.display = '';  // Show "Save" button
+  row.querySelectorAll('button')[2].style.display = '';  // Show "Cancel" button
+  row.querySelectorAll('button')[3].style.display = '';  // Hide "Delete" button
+}
 
-      // Save the edited project
-      function saveEdit(project, volume, btn) {
-          const row = btn.closest('tr');
-          const newDescription = row.querySelector('.editDescription').value;
-          const newVolume = row.querySelector('.editVolume').value
+// Save the edited project
+function saveEdit(project, btn) {
+  const row = btn.closest('tr');
+  const newDescription = row.querySelector('.editDescription').value;
+  const newVolume = row.querySelector('.editVolume').value
 
-          // Emit the "edit_project" event
-          socket.emit('edit_project', { project: project, volume:newVolume, description: newDescription, "session_token": window.session_token });
+  // Emit the "edit_project" event
+  socket.emit('edit_project', { project: project, volume: newVolume, description: newDescription, "session_token": window.session_token });
 
-          // Revert to display mode
-          row.querySelector('.description').textContent = newDescription;
-          row.querySelector('.description').style.display = '';  // Show description
-          row.querySelector('.editDescription').style.display = 'none';  // Hide edit field
-          row.querySelector('.volume').textContent = newVolume;
-          row.querySelector('.volume').style.display = '';
-          row.querySelector('.editVolume').style.display = 'none';
+  // Revert to display mode
+  row.querySelector('.description').textContent = newDescription;
+  row.querySelector('.description').style.display = '';  // Show description
+  row.querySelector('.editDescription').style.display = 'none';  // Hide edit field
+  row.querySelector('.volume').textContent = newVolume;
+  row.querySelector('.volume').style.display = '';
+  row.querySelector('.editVolume').style.display = 'none';
 
-          row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
-          row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
-          row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
-          row.querySelectorAll('button')[3].style.display = 'none';  // Hide "Delete" button
-      }
+  row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
+  row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
+  row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
+  row.querySelectorAll('button')[3].style.display = 'none';  // Hide "Delete" button
+}
 
-      // Cancel editing a project
-      function cancelEdit(btn) {
-          const row = btn.closest('tr');
-          row.querySelector('.description').style.display = '';  // Show description
-          row.querySelector('.editDescription').style.display = 'none';  // Hide edit field
-          row.querySelector('.volume').style.display = '';
-          row.querySelector('.editVolume').style.display = 'none';
+// Cancel editing a project
+function cancelEdit(btn) {
+  const row = btn.closest('tr');
+  row.querySelector('.description').style.display = '';  // Show description
+  row.querySelector('.editDescription').style.display = 'none';  // Hide edit field
+  row.querySelector('.volume').style.display = '';
+  row.querySelector('.editVolume').style.display = 'none';
 
-          row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
-          row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
-          row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
-          row.querySelectorAll('button')[3].style.display = 'none';  // Hide "Delete" button
-      }
+  row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
+  row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
+  row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
+  row.querySelectorAll('button')[3].style.display = 'none';  // Hide "Delete" button
+}
 
 
-      function deleteEdit(btn) {
-        const row = btn.closest('tr');
-        const project = row.querySelector(".project").textContent
-        const answer = confirm("Really delete [" + project + "]? This only deletes the project entry, not the files associated with the project.");
-        console.log(answer);
-        if( answer ) {
-          socket.emit('delete_project', { project: project, "session_token": window.session_token });
-        }
+function deleteEdit(btn) {
+  const row = btn.closest('tr');
+  const project = row.querySelector(".project").textContent
+  const answer = confirm("Really delete [" + project + "]? This only deletes the project entry, not the files associated with the project.");
+  console.log(answer);
+  if (answer) {
+    socket.emit('delete_project', { project: project, "session_token": window.session_token });
+  }
 
-        row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
-        row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
-        row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
-        row.querySelectorAll('button')[3].style.display = 'none';  // Hide "Delete" button
+  row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
+  row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
+  row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
+  row.querySelectorAll('button')[3].style.display = 'none';  // Hide "Delete" button
 
-      }
+}
 
+
+
+function editProjectMount( btn) {
+  const row = btn.closest('tr');
+  btn.style.display = 'none';  // Hide "Edit" button
+
+  row.querySelector('.mount').style.display = 'none';
+  row.querySelector('.editMount').style.display = '';
+
+  row.querySelectorAll('button')[1].style.display = '';  // Show "Save" button
+  row.querySelectorAll('button')[2].style.display = '';  // Show "Cancel" button
+}
+
+
+// Save the edited project
+function saveEditMount(project, btn) {
+  const row = btn.closest('tr');
+  const newMount = row.querySelector('.editMount').value
+
+  setCookie("mount_" + project, newMount)
+
+  // Revert to display mode
+  row.querySelector('.mount').textContent = newMount;
+  row.querySelector('.mount').style.display = '';
+  row.querySelector('.editMount').style.display = 'none';
+
+  row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
+  row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
+  row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
+}
+
+function cancelEditMount(btn) {
+  const row = btn.closest('tr');
+  row.querySelector('.mount').style.display = '';
+  row.querySelector('.editMount').style.display = 'none';
+
+  row.querySelectorAll('button')[0].style.display = '';  // Show "Edit" button
+  row.querySelectorAll('button')[1].style.display = 'none';  // Hide "Save" button
+  row.querySelectorAll('button')[2].style.display = 'none';  // Hide "Cancel" button
+}
+
+
+
+function request_new_data() {
+  msg = {
+    "session_token": window.session_token
+  }
+
+  socket.emit("request_new_data", msg)
+}
 
 window.sites = [];
 window.robots = [];
