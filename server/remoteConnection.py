@@ -66,12 +66,20 @@ class RemoteConnection:
     def connect(self, server_full, send_to_all_dashboards_fn, get_file_path_from_entry_fn):
         rtn = False
 
+        self.send_to_all_dashboards_fn = send_to_all_dashboards_fn
+        self.get_file_path_from_entry_fn = get_file_path_from_entry_fn
+
         try:
             self.m_server = None
             server, port = server_full.split(":")
             port = int(port)
+
+            self.send_to_all_dashboards_fn("server_link_status", {"server": server_full, "msg": f"Testing <b>{server_full}</b>"})
+
             socket.create_connection((server, port))
             debug_print(f"Connected to {server}:{port}")
+
+            self.send_to_all_dashboards_fn("server_link_status", {"server": server_full, "msg":""})
 
             if self.m_sio.connected:
                 self.m_sio.disconnect()
@@ -100,8 +108,6 @@ class RemoteConnection:
             self.m_upload_id_map = {}
             self.m_rev_upload_id_map = {}
 
-            self.send_to_all_dashboards_fn = send_to_all_dashboards_fn
-            self.get_file_path_from_entry_fn = get_file_path_from_entry_fn
 
             self.send_node_data()
 
@@ -111,18 +117,22 @@ class RemoteConnection:
 
         except socketio.exceptions.ConnectionError as e:
             debug_print("Ah-Ah-Ahh, invalid key")
-            self.m_local_sio.emit("server_invalid_key", {"key": api_key_token, "server": server_full})
+            self.send_to_all_dashboards_fn("server_invalid_key", {"key": api_key_token, "server": server_full})
 
         except Exception as e:
             if self.m_verbose:
                 debug_print(e)
+            self.send_to_all_dashboards_fn("server_link_status", {"server": server_full, "msg": f"Failed to connect to <b>{server_full}</b>: <i>{e}</i>", "timeout": 2.5})
         return rtn
 
 
     def server_refresh(self):
         self.send_node_data()
 
-        self.m_sio.emit("request_server_data", {"room": self.m_node_source})
+        try:
+            self.m_sio.emit("request_server_data", {"room": self.m_node_source})
+        except socketio.exceptions.BadNamespaceError:
+            pass 
 
     # def dashboard_room(self):
     #     return "dashboard-" + self.m_username
@@ -130,9 +140,9 @@ class RemoteConnection:
     def _on_connect(self):
         debug_print("node connected")
         source = self.m_config["source"]
+
         msg = {"source": source, "address": self.m_server, "connected": True}
         self.send_to_all_dashboards_fn("remote_connection", msg)
-        # self.m_local_sio.emit("remote_connection", {"source": source, "address": self.m_server, "connected": True}, to=self.dashboard_room())
         self.m_sio.emit("server_refresh")
 
     def _on_disconnect(self):

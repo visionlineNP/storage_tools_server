@@ -231,6 +231,10 @@ def get_ip_addresses():
                 struct.pack("256s", iface[:15].encode("utf-8")),
             )[20:24]
             ip_address = socket.inet_ntoa(ip_address)
+
+            if ip_address == "127.0.0.1":
+                continue
+
             ip_addresses.append(ip_address)
         except IOError:
             continue
@@ -239,11 +243,10 @@ def get_ip_addresses():
 
 def setup_zeroconf():
     ip_addresses = get_ip_addresses()
-    # ip_addresses = ["127.0.0.1"]
     addresses = [socket.inet_aton(ip) for ip in ip_addresses]
 
     debug_print(f"using address: {ip_addresses}")
-    desc = {}
+    desc = {"source": g_config["source"].encode("utf-8")}
     info = ServiceInfo(
         "_http._tcp.local.",
         "Airlab_storage._http._tcp.local.",
@@ -539,6 +542,7 @@ def on_device_scan(data):
 
 @socketio.on("device_files_items")
 def on_device_files_items(data): 
+    # debug_print(len(data))
     global g_remote_entries_buffer
 
     source = data.get("source")
@@ -1811,8 +1815,19 @@ def get_file_path_from_entry(entry:dict) -> str:
     else:
         date = entry["datetime"].split(" ")[0]
  
+    site = entry.get("site", "default")
+    if not site:
+        site = "default"
+
+    robot_name = entry.get("robot_name", "default")
+    if not robot_name: 
+        robot_name = "default"
+    if robot_name.lower() == "none":
+        robot_name = "default"
+
+
     try:
-        filedir = os.path.join(root, volume, date, relpath)
+        filedir = os.path.join(root, volume, date, site, robot_name, relpath)
     except TypeError as e:
         debug_print((root, volume, date,relpath))
         raise e

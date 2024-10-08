@@ -774,7 +774,7 @@ function updateDeviceData(data) {
 }
 
 function populateDeviceYMDTab(source_item) {
-  // console.log(source_item)
+  console.log(source_item)
 
   const date = source_item.ymd 
   const ymd_tab = document.getElementById(source_item.tab)   
@@ -1310,7 +1310,7 @@ window.device_accumulate = {};
 
 function accumulateDeviceYMD(data)
 {
-  // console.log(data)
+  console.log(data)
 
   const ymd_name = data.ymd;
   const reldirs = Object.entries(data.reldir);

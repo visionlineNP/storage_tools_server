@@ -116,6 +116,10 @@ $(document).ready(function () {
     serverInvalidKey(data);
   })
 
+  socket.on("server_link_status", function (data) {
+    serverLinkStatus(data);
+  })
+
   socket.on('node_data', function (data) {
     console.log('Received node_data:', data);
     updateNodeData(data);

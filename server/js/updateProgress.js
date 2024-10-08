@@ -1,5 +1,7 @@
 
 function updateProgress(msg, container) {
+  // console.log(msg)
+
   let source = msg.source;
   let position = msg.position;
   let progress = msg.progress;

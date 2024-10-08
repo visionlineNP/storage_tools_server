@@ -208,7 +208,8 @@ function add_placeholder(div)
             p.append(space);
             space.textContent = " ";
         });
-    
+        const br = document.createElement("br")
+        p.append(br);
     });
 
 }

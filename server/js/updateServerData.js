@@ -89,7 +89,7 @@ function on_remote_connection(msg) {
     }
 
     const server_remote_name = document.getElementById("server_remote_name")
-    if(server_remote_name) {
+    if (server_remote_name) {
         server_remote_name.value = msg.address
     } else {
         console.log("did not find 'server_remote_name'")
@@ -104,7 +104,7 @@ function processServerSelectAllNew() {
 function processRemoteSelectAllNew() {
     const source = $(this)[0].dataset.source;
     const project = $(this)[0].dataset.project;
-    $('input[type="checkbox"][data-group="table"][data-project="'+project+'"][data-source="' + source + '"][data-on_local="false"][data-on_remote="true"]').prop('checked', true);
+    $('input[type="checkbox"][data-group="table"][data-project="' + project + '"][data-source="' + source + '"][data-on_local="false"][data-on_remote="true"]').prop('checked', true);
 
 }
 
@@ -139,19 +139,18 @@ function processServerTransferSelections() {
 }
 
 
-function processRemoteTransferSelections() 
-{
+function processRemoteTransferSelections() {
     const source = $(this)[0].dataset.source;
 
     let selectedUpdateIds = [];
     $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').each(function () {
         const project = $(this).attr('data-project')
         const filepath = $(this).attr('data-fullpath')
-        const upload_id = $(this).attr('data-upload_id')        
+        const upload_id = $(this).attr('data-upload_id')
         const offset = $(this).attr('data-offset')
         const size = $(this).attr('data-size')
-        const remote_id = $(this).attr('data-remote_id')        
-        selectedUpdateIds.push( [project, filepath, upload_id, offset, size, remote_id] );
+        const remote_id = $(this).attr('data-remote_id')
+        selectedUpdateIds.push([project, filepath, upload_id, offset, size, remote_id]);
     });
     console.log(selectedUpdateIds, source);
 
@@ -161,7 +160,7 @@ function processRemoteTransferSelections()
     msg = {
         "source": source,
         "selected_files": selectedUpdateIds, "session_token": window.session_token,
-        "url": url 
+        "url": url
     }
     socket.emit("remote_request_files", msg)
 
@@ -173,10 +172,28 @@ function processServerCancelTransfer() {
 }
 
 
-function serverInvalidKey(data)
-{
-  const span = document.getElementById("server_link_status");
-  span.innerHTML = `Invalid key [<b>${data.key}</b>] for <b>${data.server}</b>`;
+function serverInvalidKey(data) {
+    const span = document.getElementById("server_link_status");
+    span.innerHTML = `Invalid key [<b>${data.key}</b>] for <b>${data.server}</b>`;
+
+    const timeout = 1000 * 5;
+    setTimeout(function () {
+        span.innerHTML = "";
+    }, timeout);
+
+}
+
+
+function serverLinkStatus(data) {
+    const span = document.getElementById("server_link_status");
+    span.innerHTML = data.msg
+
+    if (data.timeout) {
+        const timeout = 1000 * data.timeout;
+        setTimeout(function () {
+            span.innerHTML = "";
+        }, timeout);
+    }
 }
 
 
@@ -235,7 +252,7 @@ function processServerYMD(data) {
     const tab_name = data.tab;
     const ymd_div = document.getElementById(tab_name);
 
-    if( !ymd_div) {
+    if (!ymd_div) {
         ymd_div = add_single_tab(tab_name, "request_server_ymd_data")
     }
 
@@ -350,10 +367,10 @@ function processServerYMD(data) {
 
         let header_names = ["Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
         if (window.has_remotes) {
-            header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size",  "Status"]
+            header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
         }
 
-        const item_names = ["robot_name", "site", "datetime", "basename", "localpath", "hsize",  ]
+        const item_names = ["robot_name", "site", "datetime", "basename", "localpath", "hsize",]
 
         // const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
         // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]
@@ -416,7 +433,7 @@ function processServerYMD(data) {
                     checkbox.dataset.offset = detail.offset;
                     checkbox.dataset.fullpath = detail.fullpath;
                     checkbox.dataset.remote_id = detail.remote_upload_id;
-                    
+
 
 
                     checkbox.type = "checkbox";
@@ -475,19 +492,19 @@ function processServerYMD(data) {
                         const mount = getCookie("mount_" + project_name);
 
                         // // just for testing. will use userpath instead
-                        if(  mount && (detail.localpath.endsWith(".mcap") || detail.localpath.endsWith(".bag"))) {
+                        if (mount && (detail.localpath.endsWith(".mcap") || detail.localpath.endsWith(".bag"))) {
                             console.log(project_name, mount)
 
                             const link = document.createElement("a")
                             td.appendChild(link)
 
-                            link.href = "foxglovecli://" + mount + "/"  +  detail.fullpath;
+                            link.href = "foxglovecli://" + mount + "/" + detail.fullpath;
                             link.target = "_blank";
                             const foxglove = document.createElement("i")
                             link.appendChild(foxglove);
                             foxglove.className = "icon-foxglove-bw-logo-icon-round"
-                            foxglove.title = "foxglove-studio " + mount + "/"  +  detail.fullpath;
-                         }
+                            foxglove.title = "foxglove-studio " + mount + "/" + detail.fullpath;
+                        }
                     }
 
                     if (key == "basename") {
@@ -665,7 +682,7 @@ function updateServerData(data) {
 
         const linkStatusMessage = document.createElement("span")
         linkStatusMessage.id = "server_link_status"
-        
+
         containerData.appendChild(spanSyncStatus);
         containerData.appendChild(selectElement);
         containerData.appendChild(linkButton);
@@ -678,8 +695,8 @@ function updateServerData(data) {
 
     const host_names = ["Local", "Remote"]
     const host_tabs = create_tabs(host_names, containerData, "host")
-    const local_tab = host_tabs.Local 
-    const remote_tab = host_names.Remote 
+    const local_tab = host_tabs.Local
+    const remote_tab = host_names.Remote
 
     const project_names = Object.keys(data.entries).sort();
     const project_tabs = create_tabs(project_names, local_tab, "server");
@@ -762,14 +779,14 @@ function updateServerData(data) {
 
 function updateServerRegen(data) {
     const div = document.getElementById("server_regen_msg")
-    if(div) {
+    if (div) {
         div.innerHTML = data;
     }
 }
 
 function updateServerRemote(data) {
     const containerData = document.getElementById("host:Remote");
-    if( !containerData) {
+    if (!containerData) {
         console.log("Missing 'host:Remote'")
         return;
     }
@@ -786,20 +803,20 @@ function updateServerRemote(data) {
 
         const div = document.createElement("div");
         project_tab.append(div)
-    
+
         div.className = 'btn-group';
-    
+
         const selectAllButton = document.createElement('button');
         selectAllButton.type = 'button';
         selectAllButton.className = 'btn btn-primary';
-        selectAllButton.classList.add("server_button");        
+        selectAllButton.classList.add("server_button");
         selectAllButton.id = `select-new-${source}-${project_name}`;
         selectAllButton.dataset.source = source;
         selectAllButton.dataset.project = project_name;
         selectAllButton.onclick = processRemoteSelectAllNew;
         selectAllButton.textContent = 'Select All New';
         div.appendChild(selectAllButton);
-    
+
         const clearSelectionsButton = document.createElement('button');
         clearSelectionsButton.type = 'button';
         clearSelectionsButton.className = 'btn btn-secondary';
@@ -810,7 +827,7 @@ function updateServerRemote(data) {
         clearSelectionsButton.onclick = processClearSelections;
         clearSelectionsButton.textContent = 'Clear Selections';
         div.appendChild(clearSelectionsButton);
-    
+
         const transferSelectedButton = document.createElement('button');
         transferSelectedButton.type = 'button';
         transferSelectedButton.className = 'btn btn-success';
@@ -821,7 +838,7 @@ function updateServerRemote(data) {
         transferSelectedButton.onclick = processRemoteTransferSelections;
         transferSelectedButton.textContent = 'Pull Selected';
         div.appendChild(transferSelectedButton);
-    
+
         const cancelTransferButton = document.createElement('button');
         cancelTransferButton.type = 'button';
         cancelTransferButton.className = 'btn btn-danger';
@@ -832,13 +849,13 @@ function updateServerRemote(data) {
         cancelTransferButton.onclick = processServerCancelTransfer;
         cancelTransferButton.textContent = 'Stop Pull';
         div.appendChild(cancelTransferButton);
-    
-    
+
+
 
         const project_data = data.entries[project_name];
 
         const ymd_names = Object.keys(project_data).sort()
-        const ymd_tabs = create_tabs(ymd_names, project_tab, "host:Remote" +":" + project_name, "request_remote_ymd_data");
+        const ymd_tabs = create_tabs(ymd_names, project_tab, "host:Remote" + ":" + project_name, "request_remote_ymd_data");
         $.each(ymd_tabs, function (_, ymd_tab) {
             add_placeholder(ymd_tab);
         })
@@ -848,8 +865,7 @@ function updateServerRemote(data) {
 
 
 
-function updateServerRemoteYMD(data) 
-{
+function updateServerRemoteYMD(data) {
     //console.log(data);
     const ymd_name = data.ymd;
     const runs = Object.entries(data.runs);
@@ -859,7 +875,7 @@ function updateServerRemoteYMD(data)
     const tab_name = data.tab;
     const ymd_div = document.getElementById(tab_name);
 
-    if( !ymd_div) {
+    if (!ymd_div) {
         ymd_div = add_single_tab(tab_name, "request_server_ymd_data")
     }
 
@@ -1040,7 +1056,7 @@ function updateServerRemoteYMD(data)
                     checkbox.dataset.offset = detail.offset;
                     checkbox.dataset.fullpath = detail.fullpath;
                     checkbox.dataset.remote_id = detail.remote_upload_id;
-                    
+
 
 
                     checkbox.type = "checkbox";
