@@ -1720,23 +1720,6 @@ def get_datatype(file: str):
     return ext
 
 
-# def get_upload_id(source: str, project: str, file: str):
-#     """
-#     Generates a unique upload ID based on the provided source, project, name, and file information.
-
-#     Args:
-#         source (str): The source of the upload.
-#         project (str): The project associated with the upload.
-#         name (str): The name of the upload.
-#         file (str): The file path or name being uploaded.
-
-#     Returns:
-#         str: A unique upload ID generated from the provided information.
-#     """
-#     val  = f"{source}_{project}_{file.strip('/')}"
-#     val  = val.replace("/", "_")
-#     val  = val.replace(".", "_")
-#     return str(hex(abs(hash(val))))
 
 
 # set the date of an entry from the input type="datetime-local" field.
@@ -1958,7 +1941,7 @@ def handle_file(source: str, upload_id: str):
     filepath = get_file_path_from_entry(entry)
     tmp_path = filepath + ".tmp"
 
-    debug_print(filepath)
+    # debug_print(filepath)
 
     if os.path.exists(filepath):
         return jsonify({"message": f"File {filename} alredy uploaded"}), 409
@@ -1981,7 +1964,7 @@ def handle_file(source: str, upload_id: str):
         "upload_id": upload_id,
     }
 
-    debug_print(f"opening {tmp_path}")
+    # debug_print(f"opening {tmp_path}")
 
     # Start uploading the file in chunks
     chunk_size = 10 * 1024 * 1024  # 1MB chunks
@@ -1990,9 +1973,6 @@ def handle_file(source: str, upload_id: str):
 
             if g_selected_action.get(source,"") == "cancel":
                 send_dashboard_file(cancel_msg)
-                # socketio.emit("dashboard_file", cancel_msg, to=dashboard_room())
-                # if source in g_sources["nodes"]: 
-                #     socketio.emit("dashboard_file", cancel_msg, to=source)
 
                 return jsonify({"message": f"File {filename} upload canceled"})
 
