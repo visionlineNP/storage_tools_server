@@ -218,11 +218,25 @@ g_remote_connection = RemoteConnection(g_config, socketio, g_database)
 zeroconf = Zeroconf()
 
 
+def is_interface_up(interface):
+    path = f"/sys/class/net/{interface}/operstate"
+    with open(path, "r") as fid:
+        state = fid.read()
+
+    state = state.strip()
+    return state == "up"
+
+
 # grab all the ip address that this server has.
 def get_ip_addresses():
     interfaces = os.listdir("/sys/class/net/")
     ip_addresses = []
     for iface in interfaces:
+        
+        debug_print(f"{iface} up is {is_interface_up(iface)}")
+        if not is_interface_up(iface):
+            continue
+
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             ip_address = fcntl.ioctl(
@@ -1926,7 +1940,7 @@ def handle_file(source: str, upload_id: str):
                 debug_print(f"Invalid ID {upload_id} for {source}")
                 return f"Invalid ID {upload_id} for {source}", 503
 
-    debug_print(entry)
+    # debug_print(entry)
 
     offset = request.args.get("offset", 0)
     if offset == 0:
@@ -2020,14 +2034,6 @@ def handle_file(source: str, upload_id: str):
         }
 
         send_dashboard_file(data)
-        # try:
-        #     send_dashboard_file(data)
-        # except Exception as e:
-        #     debug_print(f"Caught exception {e}")
-        #     pass 
-        # socketio.emit("dashboard_file", data, to=dashboard_room())
-        # if source in g_sources["nodes"]: 
-        #     socketio.emit("dashboard_file", data, to=source)
 
     entry["localpath"] = filepath
     entry["on_server"] = True
