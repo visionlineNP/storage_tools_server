@@ -1,14 +1,16 @@
-pyjwt
-hvac
-xmltodict
-pyyaml
-tqdm
-requests_toolbelt
 flask
 flask-socketio 
-humanfriendly
-zeroconf
-gunicorn
 gevent
-websocket-client
+gevent-websocket
+gunicorn
+humanfriendly
+hvac
 psutil
+pyjwt
+pyyaml
+requests_toolbelt
+tqdm
+websocket-client
+xmltodict
+zeroconf
+# flask-server-timing

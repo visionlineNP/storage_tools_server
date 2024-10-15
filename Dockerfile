@@ -19,4 +19,4 @@ COPY . .
 EXPOSE 8091
 
 # Run the command to start the app when the container starts
-CMD ["gunicorn", "-k", "gevent", "-w", "1", "-b", "0.0.0.0:8091", "--timeout", "240", "server.app:app"]
+CMD ["gunicorn", "-k", "gthread", "-w", "1", "-b", "0.0.0.0:8091", "--timeout", "240", "server.app:app"]

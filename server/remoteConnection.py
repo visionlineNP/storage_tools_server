@@ -1,13 +1,17 @@
+from concurrent.futures import ThreadPoolExecutor
 import os 
 import socket
+from threading import Thread
+import uuid
 import socketio 
 import queue 
 import requests
-import gevent 
+import time 
+# import gevent 
 
 import socketio.exceptions
 from .database import Database, VolumeMapNotFound, get_upload_id
-from .SocketIOTQDM import SocketIOTQDM
+from .SocketIOTQDM import SocketIOTQDM, MultiTargetSocketIOTQDM
 from .debug_print import debug_print
 
 
@@ -28,6 +32,104 @@ def count_elements(d):
     return count
 
 
+class PosMaker:
+    def __init__(self, max_pos) -> None:
+        self.m_pos = {i: False for i in range(max_pos)}
+        self.m_max = max_pos
+    
+    def get_next_pos(self) -> int:
+        for i in sorted(self.m_pos):
+            if not self.m_pos[i]:
+                self.m_pos[i] = True 
+                return i
+            
+        # just in case things get messed up, always return a valid position
+        i = self.m_max 
+        self.m_max += 1
+        self.m_pos[i] = True
+        return i 
+    
+    def release_pos(self, i):
+        self.m_pos[i] = False
+
+
+def pbar_thread(messages:queue.Queue, total_size, source, socket_events, desc, max_threads):
+    pos_maker = PosMaker(max_threads)
+
+    positions = {}
+
+    pbars = {}
+    pbars["main_pbar"] = MultiTargetSocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=0, delay=1, desc=desc, source=source,socket_events=socket_events)
+
+    while True:
+        try:
+            action_msg = messages.get(block=True)
+
+        except queue.Empty:
+            time.sleep(0.001)
+            continue
+        except ValueError:
+            time.sleep(0.001)
+            continue
+        
+        if "close" in action_msg:
+            # debug_print("close")
+            break
+
+        if "main_pbar" in action_msg:
+            pbars["main_pbar"].update(action_msg["main_pbar"])
+            continue
+
+        if "child_pbar" in action_msg:
+            name = action_msg["child_pbar"]
+            action = action_msg["action"] 
+            if action == "start":
+                desc = action_msg["desc"]
+                position = pos_maker.get_next_pos()
+                positions[name] = position
+                size = action_msg["size"]
+                if position in pbars:
+                    pbars[position].close()
+                    del pbars[position]
+                # debug_print(f"creating {name}")
+                pbars[position] = MultiTargetSocketIOTQDM(total=size, unit="B", unit_scale=True, leave=False, position=position+1, delay=1, desc=desc, source=source,socket_events=socket_events)
+                continue
+            if action == "update":     
+                # debug_print(f"updating {name}")           
+                position = positions.get(name, None)
+                if position == None:
+                    debug_print(f"Do not have pbar for {name}")
+                    for pname in positions:
+                        debug_print(f"{pname} {positions[pname]}")
+                    continue
+                size = action_msg["size"]
+                if position in pbars:
+                    # debug_print(f"{position} : {size}")
+                    pbars[position].update(size)
+                else:
+                    debug_print(f"do not have pbar for {position}")
+                continue
+            if action == "close":
+                position = positions.get(name, None)
+                if position == None:
+                    continue
+
+                if position in pbars:
+                    pbars[position].close()
+                    del pbars[position]
+                pos_maker.release_pos(position)
+
+                # debug_print(f"removing {name}")
+                del positions[name]
+                continue
+            continue 
+
+
+    positions = pbars.keys()
+    for position in positions:
+        pbars[position].close()
+
+
 class RemoteConnection:
     """
     Args:
@@ -38,13 +140,15 @@ class RemoteConnection:
         self.m_config = config
 
         self.m_local_sio = local_sio
-        self.m_sio = socketio.Client()
+        self.m_remote_sio = socketio.Client()
         self.m_server = None 
         self.m_signal = None
+        self.m_send_threads = False 
         self.m_verbose = config.get("verbose", True)
         self.m_database = database
         self.m_source = config.get("source")
         self.m_username = ""
+        self.m_session_token = None 
 
         # maps remote to local id
         self.m_upload_id_map = {}
@@ -53,57 +157,60 @@ class RemoteConnection:
         self.m_rev_upload_id_map =  {}
 
         self.m_node_source = None 
+
+        self.send_to_al_local_dashboards_fn = None 
+        self.get_file_path_from_entry_fn = None
         pass
 
     def connected(self):
-        return self.m_sio.connected
+        return self.m_remote_sio.connected
     
     def server_name(self):
-        if self.m_sio.connected:
+        if self.m_remote_sio.connected:
             return self.m_server 
         return None 
 
     def connect(self, server_full, send_to_all_dashboards_fn, get_file_path_from_entry_fn):
         rtn = False
 
-        self.send_to_all_dashboards_fn = send_to_all_dashboards_fn
+        self.send_to_al_local_dashboards_fn = send_to_all_dashboards_fn
         self.get_file_path_from_entry_fn = get_file_path_from_entry_fn
+        self.m_session_token = str(uuid.uuid4())
 
         try:
             self.m_server = None
             server, port = server_full.split(":")
             port = int(port)
 
-            self.send_to_all_dashboards_fn("server_link_status", {"server": server_full, "msg": f"Testing <b>{server_full}</b>"})
+            self.send_to_al_local_dashboards_fn("server_link_status", {"server": server_full, "msg": f"Testing <b>{server_full}</b>"})
 
             socket.create_connection((server, port))
             debug_print(f"Connected to {server}:{port}")
 
-            self.send_to_all_dashboards_fn("server_link_status", {"server": server_full, "msg":""})
+            self.send_to_al_local_dashboards_fn("server_link_status", {"server": server_full, "msg":""})
 
-            if self.m_sio.connected:
-                self.m_sio.disconnect()
+            if self.m_remote_sio.connected:
+                self.m_remote_sio.disconnect()
 
             api_key_token = self.m_config["API_KEY_TOKEN"]
             headers = {"X-Api-Key": api_key_token}
 
-            self.m_sio.connect(f"http://{server}:{port}/socket.io", headers=headers, transports=['websocket'])
-            self.m_sio.on('control_msg')(self._handle_control_msg)    
-            self.m_sio.on("dashboard_file")(self._on_dashboard_file)
+            self.m_remote_sio.connect(f"http://{server}:{port}/socket.io", headers=headers, transports=['websocket'])
+            self.m_remote_sio.on('control_msg')(self._handle_control_msg)    
+            self.m_remote_sio.on("dashboard_file")(self._on_dashboard_file)
             # self.m_sio.on("node_data")(self._on_node_data)
-            self.m_sio.on("node_data_ymd_rtn")(self._on_node_data_ymd_rtn)
-            self.m_sio.on("node_send")(self._on_node_send)
-            self.m_sio.on("disconnect")(self._on_disconnect)
-            self.m_sio.on("connect")(self._on_connect)
-            self.m_sio.on("node_revise_stats")(self._on_node_revise_stats)
-            self.m_sio.on("dashboard_info")(self._on_dashboard_info)
-            self.m_sio.on("server_data")(self._on_server_data)
-            self.m_sio.on("server_ymd_data")(self._on_server_ymd_data)
-            # self.m_sio.on("device_remove")(self.removeFiles)
+            self.m_remote_sio.on("node_data_ymd_rtn")(self._on_node_data_ymd_rtn)
+            self.m_remote_sio.on("node_data_block_rtn")(self.on_node_data_block_rtn)
+            self.m_remote_sio.on("node_send")(self._on_node_send)
+            self.m_remote_sio.on("disconnect")(self._on_disconnect)
+            self.m_remote_sio.on("connect")(self._on_connect)
+            self.m_remote_sio.on("node_revise_stats")(self._on_node_revise_stats)
+            self.m_remote_sio.on("dashboard_info")(self._on_dashboard_info)
+            self.m_remote_sio.on("server_data")(self._on_server_data)
+            self.m_remote_sio.on("server_ymd_data")(self._on_server_ymd_data)
 
-            # self.m_node_source = self.m_config["source"].replace("SRC","NODE")
             self.m_node_source = self.m_config["source"]
-            self.m_sio.emit('join', { 'room': self.m_node_source, "type": "node" })
+            self.m_remote_sio.emit('join', { 'room': self.m_node_source, "type": "node" })
             self.m_server = server_full
             self.m_upload_id_map = {}
             self.m_rev_upload_id_map = {}
@@ -111,45 +218,46 @@ class RemoteConnection:
 
             self.send_node_data()
 
-            self.m_sio.emit("request_server_data", {"room": self.m_node_source})
+            self.m_remote_sio.emit("request_server_data", {"room": self.m_node_source})
 
             rtn = True
 
         except socketio.exceptions.ConnectionError as e:
             debug_print("Ah-Ah-Ahh, invalid key")
-            self.send_to_all_dashboards_fn("server_invalid_key", {"key": api_key_token, "server": server_full})
+            self.send_to_al_local_dashboards_fn("server_invalid_key", {"key": api_key_token, "server": server_full})
 
         except Exception as e:
             if self.m_verbose:
                 debug_print(e)
-            self.send_to_all_dashboards_fn("server_link_status", {"server": server_full, "msg": f"Failed to connect to <b>{server_full}</b>: <i>{e}</i>", "timeout": 2.5})
+            self.send_to_al_local_dashboards_fn("server_link_status", {"server": server_full, "msg": f"Failed to connect to <b>{server_full}</b>: <i>{e}</i>", "timeout": 2.5})
         return rtn
 
 
     def server_refresh(self):
+        # Send the contents of our server to the remote
+        # request the remote sends their data to us. 
         self.send_node_data()
 
         try:
-            self.m_sio.emit("request_server_data", {"room": self.m_node_source})
+            self.m_remote_sio.emit("request_server_data", {"room": self.m_node_source})
         except socketio.exceptions.BadNamespaceError:
             pass 
 
-    # def dashboard_room(self):
-    #     return "dashboard-" + self.m_username
-
     def _on_connect(self):
+        # when we connect to a remote server,
+        # 
         debug_print("node connected")
         source = self.m_config["source"]
 
         msg = {"source": source, "address": self.m_server, "connected": True}
-        self.send_to_all_dashboards_fn("remote_connection", msg)
-        self.m_sio.emit("server_refresh")
+        self.send_to_al_local_dashboards_fn("remote_connection", msg)
+        self.m_remote_sio.emit("server_refresh")
 
     def _on_disconnect(self):
         debug_print("node disconnected")
         source = self.m_config["source"]
         msg = {"source": source, "connected": False}
-        self.send_to_all_dashboards_fn("remote_connection", msg)
+        self.send_to_al_local_dashboards_fn("remote_connection", msg)
         # self.m_local_sio.emit("remote_connection", {"source": source, "connected": False}, to=self.dashboard_room())
         
 
@@ -158,9 +266,6 @@ class RemoteConnection:
         debug_print(f"connected to [{host}]")
 
     def _on_dashboard_file(self, data):
-
-        # debug_print(data)
-
         source = data.get("source")
         # we only want to do updates from external sources.  
         if source == self.m_node_source:
@@ -171,11 +276,32 @@ class RemoteConnection:
         if( local_id):
             data["upload_id"] = local_id
             # self.m_local_sio.emit("dashboard_update", data, to=self.dashboard_room())
-            self.send_to_all_dashboards_fn("dashboard_update", data)
+            self.send_to_al_local_dashboards_fn("dashboard_update", data)
         else:
             debug_print(f"Didn't get mapping for {upload_id}")
         # self.m_local_sio.emit("dashboard_file_server", data)
         pass 
+
+
+    def on_node_data_block_rtn(self, data):
+        entries = data["entries"]
+        for entry in entries.values():
+            upload_id = entry.get("remote_id")
+            on_remote = entry.get("on_local")
+            on_local = entry.get("on_remote")
+            remote_id = entry.get("upload_id")
+
+            self.m_upload_id_map[remote_id] = upload_id
+            self.m_rev_upload_id_map[upload_id] = remote_id
+
+            msg = {
+                "on_local": on_local,
+                "on_remote": on_remote,
+                "upload_id": upload_id,
+                "remote_id": remote_id,
+                "fullpath": entry.get("fullpath")
+            }
+            self.send_to_al_local_dashboards_fn("dashboard_file_server", msg)
 
 
     def _on_node_data_ymd_rtn(self, data):
@@ -203,7 +329,7 @@ class RemoteConnection:
                 "on_local": on_remote,
                 "upload_id": upload_id
             }
-            self.send_to_all_dashboards_fn("dashboard_file_server", msg)
+            self.send_to_al_local_dashboards_fn("dashboard_file_server", msg)
             # self.m_local_sio.emit("dashboard_file_server", msg, to=self.dashboard_room())
 
         
@@ -258,17 +384,19 @@ class RemoteConnection:
 
 
     def server_transfer_files(self, data):
+        # tell remote server to request these files from us. 
         debug_print(data)
 
         for uid in data["upload_ids"]:
             debug_print((uid, self.m_rev_upload_id_map.get(uid, "Not found")))
 
         ids = [ self.m_rev_upload_id_map[uid] for uid in data["upload_ids"] if uid in self.m_rev_upload_id_map ]
+
         msg = {
             "source": self.m_node_source,
             "upload_ids": ids
         }
-        self.m_sio.emit("transfer_node_files", msg)
+        self.m_remote_sio.emit("transfer_node_files", msg)
 
     def _handle_control_msg(self, data):
         source = data.get("source")
@@ -287,9 +415,40 @@ class RemoteConnection:
         msg = {"tab": tab, "room": self.m_node_source}
 
         debug_print(msg)
-        self.m_sio.emit("request_server_ymd_data", msg)
+        self.m_remote_sio.emit("request_server_ymd_data", msg)
 
-    def send_node_data(self):
+
+    def send_node_data(self):        
+        blocks = self.m_database.get_node_data_blocks()
+        stats = self.m_database.get_run_stats()
+        blocks_count = len(blocks)
+
+        server_data = {
+            "source": self.m_config["source"],
+            "room": self.m_config["source"],
+            "total": blocks_count,
+            "stats": stats
+        }
+
+        self.m_remote_sio.emit("remote_node_data", server_data)
+        self.m_remote_sio.start_background_task(self.background_send_remote_node_data, blocks)
+
+
+    def background_send_remote_node_data(self, blocks):
+        blocks_count = len(blocks)
+        for i, block in enumerate(blocks):
+            msg = {
+                "source": self.m_config["source"],
+                "room": self.m_config["source"],
+                "total": blocks_count,
+                "block": block,
+                "id": i
+            }
+            self.m_remote_sio.emit("remote_node_data_block", msg)
+            time.sleep(0.05)
+
+
+    def send_node_data_old(self):
         if not self.connected():
             return 
         
@@ -309,7 +468,7 @@ class RemoteConnection:
                        "source": source
                         }
 
-        url = f"http://{self.m_server}/nodedata"
+        url = f"http://{self.m_server}/node_data"
 
         api_key_token = self.m_config["API_KEY_TOKEN"]
         headers = {
@@ -322,6 +481,7 @@ class RemoteConnection:
 
 
     def _on_node_send(self, data):
+        debug_print(data)
         # source = data.get("source").replace("NODE", "SRC")
         source = data.get("source")
         if source != self.m_config["source"]:
@@ -338,7 +498,146 @@ class RemoteConnection:
             pass 
 
 
+    def _background_send_files(self, server:str, filelist:list):
+        local_status_event = "server_status_tqdm"
+        remote_status_event = "node_status_tqdm"
+
+
+        debug_print("enter")
+        if self.m_send_threads:
+            debug_print(f"Already getting file for {server} {self.m_send_threads}")
+            return 
+
+        self.m_send_threads = True
+
+        self.m_signal = None
+
+        url = f"http://{server}/file"
+
+        source = self.m_config["source"]
+        api_key_token = self.m_config["API_KEY_TOKEN"]
+        split_size_gb = int(self.m_config.get("split_size_gb", 1))
+        chunk_size_mb = int(self.m_config.get("chunk_size_mb", 1))
+        read_size_b = chunk_size_mb * 1024 * 1024
+
+
+        socket_events = [(self.m_local_sio, local_status_event, None),
+                         (self.m_remote_sio, remote_status_event, None)]
+        total_size = 0
+
+        for  _, _, _, offset_b, file_size in filelist:
+            total_size += file_size - offset_b
+
+        source = self.m_config["source"]
+        max_threads = self.m_config["threads"]
+        message_queue = queue.Queue()
+        desc = "File Transfer"
+
+
+        def send_worker(args):
+            debug_print("Enter")
+            message_queue, project, relative_path, upload_id, offset_b, file_size, idx = args 
+
+            dirroot = self.m_config["volume_map"].get(project, "/").strip("/")
+            fullpath = os.path.join( self.m_config["volume_root"], dirroot, relative_path.strip("/"))
+
+            name = f"{upload_id}_{idx}_{os.path.basename(relative_path)}" 
+            # fullpath = os.path.join(dirroot, relative_path)
+
+            if self.m_signal and self.m_signal == "cancel":
+                return fullpath, False
+            
+            if not os.path.exists(fullpath):
+                return fullpath, False  
+            
+            with open(fullpath, 'rb') as file:
+                params = {}
+                if offset_b > 0:
+                    file.seek(offset_b)
+                    params["offset"] = offset_b
+                    file_size -= offset_b
+
+                split_size_b = 1024*1024*1024*split_size_gb
+                splits = file_size // split_size_b
+
+                params["splits"] = splits
+
+                headers = {
+                    'Content-Type': 'application/octet-stream',
+                    "X-Api-Key": api_key_token
+                    }
+
+                def read_and_update(offset_b:int, parent:RemoteConnection):
+                    read_count = 0
+                    while parent.connected():
+                        if self.m_signal and self.m_signal == "cancel":
+                            break
+
+                        chunk = file.read(read_size_b)
+                        if not chunk:
+                            break
+                        yield chunk
+
+                        # Update the progress bars
+                        chunck_size = len(chunk)
+                        message_queue.put({"main_pbar": chunck_size})
+                        message_queue.put({"child_pbar": name, "size": chunck_size, "action": "update", "total_size": file_size, "desc": desc})
+
+                        offset_b += chunck_size
+                        read_count += chunck_size
+
+                        if read_count >= split_size_b:
+                            break
+
+                desc = "Sending " + os.path.basename(relative_path)
+                message_queue.put({"child_pbar": name, "desc": desc, "size": file_size, "action": "start"})
+
+                # with requests.Session() as session:
+                for cid in range(1+splits):
+
+                    if self.m_signal and self.m_signal == "cancel":
+                        break
+
+                    params["offset"] = offset_b
+                    params["cid"] = cid
+                    response = requests.post(url + f"/{source}/{upload_id}", params=params, data=read_and_update(offset_b, self), headers=headers)
+                    if response.status_code != 200:
+                        debug_print(f"Error! {response.status_code} {response.content.decode()}")
+                        break 
+
+                message_queue.put({"child_pbar": name, "action": "close"})
+
+                return fullpath, True 
+
+        pool_queue = [ (message_queue, dirroot, relative_path, upload_id, offset_b, file_size, idx) for idx, (dirroot, relative_path, upload_id, offset_b, file_size) in enumerate(filelist) ]
+
+        thread = Thread(target=pbar_thread, args=(message_queue, total_size, source, socket_events, desc, max_threads))    
+        thread.start()
+
+        files = []
+
+        try:
+            with ThreadPoolExecutor(max_workers=max_threads) as executor:
+                for filename, status in executor.map(send_worker, pool_queue):
+                    debug_print((filename, status))
+                    files.append((filename, status))
+
+        finally:
+            message_queue.put({"close": True})
+
+
+        # done 
+        self.m_send_threads = None 
+
+        pass 
+
     def _sendFiles(self, server, filelist):
+        if self.m_send_threads:
+            return 
+        # self.m_send_threads = True
+        self.m_local_sio.start_background_task(target=self._background_send_files, server=server, filelist=filelist)
+
+    def _sendFilesOld(self, server, filelist):
         local_status_event = "server_status_tqdm"
         remote_status_event = "node_status_tqdm"
         self.m_signal = None 
@@ -368,7 +667,7 @@ class RemoteConnection:
     
         with SocketIOTQDM(total=total_size, unit="B", unit_scale=True, desc="File Transfer", position=0, 
                           leave=False, source=self.m_node_source, socket=self.m_local_sio, event=local_status_event) as local_main_pbar,  SocketIOTQDM(total=total_size, unit="B", unit_scale=True, desc="File Transfer", position=0, 
-                          leave=False, source=self.m_config["source"], socket=self.m_sio, event=remote_status_event) as remote_main_pbar:
+                          leave=False, source=self.m_config["source"], socket=self.m_remote_sio, event=remote_status_event) as remote_main_pbar:
 
             def worker(index:int):
                 with requests.Session() as session:
@@ -410,7 +709,7 @@ class RemoteConnection:
                             
                             # debug_print(headers)
                             # Setup the progress bar
-                            with SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_node_source, socket=self.m_sio, event=remote_status_event) as remote_pbar, SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_config["source"], socket=self.m_local_sio, event=local_status_event) as local_pbar:
+                            with SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_node_source, socket=self.m_remote_sio, event=remote_status_event) as remote_pbar, SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_config["source"], socket=self.m_local_sio, event=local_status_event) as local_pbar:
                                 def read_and_update():
                                     while True:
                                         # Read the file in chunks of 4096 bytes (or any size you prefer)
@@ -437,23 +736,24 @@ class RemoteConnection:
 
                             # main_pbar.update()
     
-            greenlets = []
-            for i in range(num_threads):
-                greenlet = gevent.spawn(worker, i)  # Spawn a new green thread
-                greenlets.append(greenlet)
+            # todo replace with threads
+            # greenlets = []
+            # for i in range(num_threads):
+            #     greenlet = gevent.spawn(worker, i)  # Spawn a new green thread
+            #     greenlets.append(greenlet)
 
-            # Wait for all green threads to complete
-            gevent.joinall(greenlets)
+            # # Wait for all green threads to complete
+            # gevent.joinall(greenlets)
 
         self.m_signal = None 
 
 
 
     def disconnect(self):
-        if self.m_sio.connected:
-            self.m_sio.disconnect()
+        if self.m_remote_sio.connected:
+            self.m_remote_sio.disconnect()
 
     def pull_files(self, data):
         debug_print("enter")
-        if self.m_sio.connected:
-            self.m_sio.emit("remote_transfer_files", data)
+        if self.m_remote_sio.connected:
+            self.m_remote_sio.emit("remote_transfer_files", data)

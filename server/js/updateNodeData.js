@@ -152,7 +152,7 @@ function processNodeYMD(data) {
         run_entry = Object.entries(run_entry);
         run_entry.sort((a, b) => a[0].localeCompare(b[0]));
 
-        const header_names = ["Site", "Robot", "Date", "Basename", "Size", "Status"]
+        const header_names = ["Select", "Site", "Robot", "Date", "Basename", "Size", "Status"]
         const item_names = ["site", "robot_name" , "datetime", "basename", "hsize"]
 
         const table = document.createElement("table");
@@ -195,6 +195,28 @@ function processNodeYMD(data) {
             $.each(items, function (_, detail) {
                 const tr = document.createElement("tr");
                 tbody.appendChild(tr);
+
+
+                const tdCheckbox = document.createElement("td");
+                const checkbox = document.createElement("input");
+
+                checkbox.dataset.source = source_name;
+                checkbox.dataset.datetime = detail.datetime;
+                checkbox.dataset.size = detail.size;
+                checkbox.dataset.group = "table";
+                checkbox.dataset.on_local = detail.on_local;
+                checkbox.dataset.on_remote = detail.on_remote;
+                checkbox.dataset.upload_id = detail.upload_id;
+                checkbox.dataset.project = project_name;
+                checkbox.dataset.offset = detail.offset;
+                checkbox.dataset.fullpath = detail.fullpath;
+                checkbox.dataset.remote_id = detail.remote_upload_id;
+
+                checkbox.type = "checkbox";
+                checkbox.id = "server_select_" + detail.upload_id
+                tdCheckbox.appendChild(checkbox);
+                tr.appendChild(tdCheckbox);
+
 
                 item_names.forEach((key) => {
                     const td = document.createElement("td");
@@ -277,6 +299,7 @@ function processNodeYMD(data) {
 
 
 function updateNodeData(data) {
+    console.log(data)
     const containerFsInfo = document.getElementById("node-fs-info-container");
     containerFsInfo.innerHTML = ""; // clear previous data
 
@@ -298,11 +321,62 @@ function updateNodeData(data) {
 
     const source_tabs = create_tabs(source_names, containerData, "node");
     $.each(source_tabs, function (source_name, source_tab) {
+
         const source_data = data.entries[source_name];
         console.log(source_name, source_data);
         const project_names = Object.keys(source_data);
         const project_tabs = create_tabs(project_names, source_tab, "node:" + source_name);
         $.each(project_tabs, function (project_name, project_tab) {
+
+            const div = document.createElement("div");
+            project_tab.append(div)
+    
+            div.className = 'btn-group';
+    
+            const selectAllButton = document.createElement('button');
+            selectAllButton.type = 'button';
+            selectAllButton.className = 'btn btn-primary';
+            selectAllButton.classList.add("server_button");
+            selectAllButton.id = `select-new-${source_name}-${project_name}`;
+            selectAllButton.dataset.source = source_name;
+            selectAllButton.dataset.project = project_name;
+            selectAllButton.onclick = processNodeSelectAllNew;
+            selectAllButton.textContent = 'Select All New';
+            div.appendChild(selectAllButton);
+    
+            const clearSelectionsButton = document.createElement('button');
+            clearSelectionsButton.type = 'button';
+            clearSelectionsButton.className = 'btn btn-secondary';
+            clearSelectionsButton.classList.add("server_button");
+            clearSelectionsButton.id = `clear-all-${source_name}-${project_name}`;
+            clearSelectionsButton.dataset.source = source_name;
+            clearSelectionsButton.dataset.project = project_name;
+            clearSelectionsButton.onclick = processNodeClearSelections;
+            clearSelectionsButton.textContent = 'Clear Selections';
+            div.appendChild(clearSelectionsButton);
+    
+            const transferSelectedButton = document.createElement('button');
+            transferSelectedButton.type = 'button';
+            transferSelectedButton.className = 'btn btn-success';
+            transferSelectedButton.classList.add("server_button");
+            transferSelectedButton.id = `transfer-selected-${source_name}-${project_name}`;
+            transferSelectedButton.dataset.source = source_name;
+            transferSelectedButton.dataset.project = project_name;
+            transferSelectedButton.onclick = processNodeTransferSelections;
+            transferSelectedButton.textContent = 'Pull Selected';
+            div.appendChild(transferSelectedButton);
+    
+            const cancelTransferButton = document.createElement('button');
+            cancelTransferButton.type = 'button';
+            cancelTransferButton.className = 'btn btn-danger';
+            cancelTransferButton.classList.add("server_button");
+            cancelTransferButton.id = `cancel-${source_name}-${project_name}`;
+            cancelTransferButton.dataset.source = source_name;
+            cancelTransferButton.dataset.project = project_name;
+            cancelTransferButton.onclick = processNodeCancelTransfer;
+            cancelTransferButton.textContent = 'Stop Pull';
+            div.appendChild(cancelTransferButton);
+    
 
             const project_data = source_data[project_name];
 
@@ -317,3 +391,22 @@ function updateNodeData(data) {
 
 }
 
+function processNodeSelectAllNew()
+{
+
+}
+
+function processNodeClearSelections()
+{
+
+}
+
+function processNodeTransferSelections()
+{
+
+}
+
+function processNodeCancelTransfer()
+{
+
+}

@@ -171,21 +171,150 @@ class Database:
     def add_site(self, name: str, description: str):
         self._add_name("sites", name, description)
 
-    def _get_names(self, table: str):
+    def _get_names(self, table: str) -> list:
+        """
+        Retrieves the names and descriptions from the specified database table, if the table exists.
+
+        This function checks if the given `table` exists in the `self.database`. If the table is present, it locks access to
+        the database using a mutex to ensure thread safety, iterates over the entries in the table, and returns a list of 
+        tuples where each tuple contains the index, name, and description of a record.
+
+        Args:
+            table (str): The name of the database table to query. This table is expected to contain tuples of (name, description)
+                        for each record.
+
+        Returns:
+            list: A list of tuples structured as:
+            - (index, name, description)
+            where:
+            - `index` is the position of the record in the table.
+            - `name` is the name of the record.
+            - `description` is the description of the record.
+            If the `table` does not exist in the database, an empty list is returned.
+
+        Steps:
+        1. Initializes an empty list `rtn` to store the results.
+        2. Checks if the provided `table` exists in `self.database`.
+        3. If the table exists:
+        - Acquires a lock using `self.mutex` to ensure thread-safe access to `self.database`.
+        - Iterates over the entries in the specified table, where each entry is a tuple `(name, desc)`.
+        - Appends each entry to `rtn` as a tuple consisting of:
+            - `i`: The index (iteration count).
+            - `name`: The name of the record.
+            - `desc`: The description of the record.
+        4. Returns the list `rtn` containing the index, name, and description of each record. If the table does not exist, 
+        returns an empty list.
+
+        Thread Safety:
+        - The access to `self.database` is protected by a mutex (`self.mutex`) to prevent race conditions in a multi-threaded
+        environment. This ensures that only one thread can read or modify the database at a time.
+
+        Notes:
+        - The function first checks if the table exists in the `self.database`. If the table is not found, no further processing 
+        occurs, and an empty list is returned.
+        - This function assumes that tables, if present, contain entries in the format `(name, desc)`.
+
+        Example:
+            If `self.database` contains:
+            {
+                "projects": [("Project1", "Description1"), ("Project2", "Description2")]
+            }
+
+            Calling `_get_names("projects")` will return:
+            [
+                (0, "Project1", "Description1"),
+                (1, "Project2", "Description2")
+            ]
+
+        Raises:
+            None. The function safely returns an empty list if the table is not found in the database.
+        """
         rtn = []
-        with self.mutex:
-            for i, (name, desc) in enumerate(self.database[table]):
-                rtn.append((i, name, desc))
+        if table in self.database:
+            with self.mutex:
+                for i, (name, desc) in enumerate(self.database[table]):
+                    rtn.append((i, name, desc))
         return rtn
 
-    def _has_name(self, table:str, name:str):
-        with self.mutex:
-            for name_, _ in self.database[table]:
-                if name_ == name:
-                    return True 
+    def _has_name(self, table: str, name: str) -> bool:
+        """
+        Checks if a specific name exists in the specified database table.
+
+        This function looks for a given `name` in the specified `table` within the `self.database`. It locks the database
+        using a mutex to ensure thread-safe access. If the name is found in the table, the function returns `True`, otherwise 
+        it returns `False`.
+
+        Args:
+            table (str): The name of the database table to search for the `name`.
+            name (str): The specific name to look for in the table.
+
+        Returns:
+            bool:
+            - `True` if the name exists in the specified table.
+            - `False` if the name is not found or if the table does not exist.
+
+        Steps:
+        1. Checks if the specified `table` exists in `self.database`.
+        2. If the table exists, acquires a lock using `self.mutex` to ensure thread safety while accessing `self.database`.
+        3. Iterates over the entries in the table, where each entry is expected to be a tuple with the name in the first position.
+        4. If a match is found for `name`, returns `True`.
+        5. If no match is found or the table does not exist, returns `False`.
+
+        Thread Safety:
+        - The access to `self.database` is protected by a mutex (`self.mutex`) to prevent race conditions in a multi-threaded
+        environment. This ensures that only one thread can read or modify the database at a time.
+
+        Example:
+            If `self.database` contains:
+            {
+                "robots": [("Robot1", "Description1"), ("Robot2", "Description2")]
+            }
+
+            Calling `_has_name("robots", "Robot1")` will return `True`, while `_has_name("robots", "Robot3")` will return `False`.
+
+        Notes:
+        - The function assumes that the table entries are tuples, where the first element corresponds to the name being checked.
+        - If the table does not exist in the database, the function returns `False` without performing any further checks.
+
+        Raises:
+            None. The function simply returns `False` if the table is not found or the name is not present.
+        """
+
+        if table in self.database:
+            with self.mutex:
+                for name_, _ in self.database[table]:
+                    if name_ == name:
+                        return True 
         return False 
 
-    def has_robot_name(self, name:str)-> bool:
+    def has_robot_name(self, name: str)-> bool:
+        """
+        Checks if a given robot name exists in the "robots" table of the database.
+
+        This function calls the internal `_has_name` method to determine whether the specified `name` exists in the 
+        "robots" table of the database. It returns `True` if the name is found, and `False` otherwise.
+
+        Args:
+            name (str): The name of the robot to check for in the "robots" table.
+
+        Returns:
+            bool: 
+            - `True` if the robot name exists in the "robots" table.
+            - `False` if the robot name does not exist in the "robots" table.
+
+        Example:
+            If the "robots" table in the database contains the following entries:
+            [
+                (0, "Robot1", "Description1"),
+                (1, "Robot2", "Description2")
+            ]
+
+            Calling `has_robot_name("Robot1")` will return `True`, while `has_robot_name("Robot3")` will return `False`.
+
+        Raises:
+            None. The function returns `False` if the table or the name does not exist.
+        """
+
         return self._has_name("robots", name)
 
     def get_projects(self):
@@ -328,6 +457,20 @@ class Database:
                 }
             )
         return rtn
+
+    def get_node_data_blocks(self):
+        blocks = []
+
+        block_size = 100
+        block = []
+        for entry in self.database["data"]:
+            block.append(entry)
+            if len(block) >= block_size:
+                blocks.append(block)
+                block = []
+        if len(block) > 0:
+            blocks.append(block)
+        return blocks
 
     def get_node_data(self):
         rtn = {}

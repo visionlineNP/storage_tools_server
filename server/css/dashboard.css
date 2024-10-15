@@ -206,10 +206,12 @@ dd {
     flex: 1; /* Take up the remaining space */
     padding: 15px; /* Add some padding */
     overflow-x: auto; /* Enable horizontal scrolling if needed */
+    overflow-y: auto;
 }
 
 .tab-content {
     white-space: nowrap; /* Prevent line breaks to ensure horizontal scrolling */
+    overflow-y: auto;
 }
 
 

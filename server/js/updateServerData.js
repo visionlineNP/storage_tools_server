@@ -1,6 +1,7 @@
 window.serverData = {
     local: {},
-    remote: {}
+    remote: {},
+    dashboard_file_server: {}
 }
 
 
@@ -15,8 +16,28 @@ function on_dashboard_update(data) {
 }
 
 
+function refresh_dashboard_file_server()
+{
+    $.each( window.serverData.dashboard_file_server, function(_, data) {
+        on_dashboard_file_server(data);
+    });
+}
+
 function on_dashboard_file_server(data) {
+    console.log(data);
     let upload_id = data.upload_id;
+
+    // handle case where file does not exist on remote 
+    if( data.on_remote == null)  {
+        data.on_remote = false;
+    }
+
+    if(data.on_local == null) 
+    {
+        data.on_local = true;
+    }
+
+    window.serverData.dashboard_file_server[upload_id] = data;
 
     let onRemote = document.getElementById("on_remote_" + upload_id);
     if (onRemote) {
@@ -31,7 +52,7 @@ function on_dashboard_file_server(data) {
             onRemote.classList.add("grayed-out");
             onRemote.title = "Not On Remote Server";
         }
-    } else { console.log("didnt find ", "on_remote_" + upload_id) }
+    } else { console.log("didnt find ", "on_remote_" + upload_id, data) }
 
     let onLocal = document.getElementById("on_local_" + upload_id);
     if (onLocal) {
@@ -64,6 +85,8 @@ function on_remote_connection(msg) {
             link_button.dataset.connected = true;
             link_button.textContent = "Disconnect";
 
+            refresh_dashboard_file_server();
+            
         } else {
             sync_status.className = "bi bi-cloud grayed-out";
             sync_status.title = "Disconnected";
@@ -88,11 +111,11 @@ function on_remote_connection(msg) {
         refresh_button.disabled = !msg.connected;
     }
 
-    const server_remote_name = document.getElementById("server_remote_name")
-    if (server_remote_name) {
-        server_remote_name.value = msg.address
+    const server_remote_address = document.getElementById("server_remote_address")
+    if (server_remote_address) {
+        server_remote_address.value = msg.address
     } else {
-        console.log("did not find 'server_remote_name'")
+        console.log("did not find 'server_remote_address'")
     }
 }
 
@@ -123,6 +146,7 @@ function processServerStatus(data) {
 }
 
 function processServerTransferSelections() {
+    // push data from local server to remote server.  
     const source = $(this)[0].dataset.source;
 
     let selectedUpdateIds = [];
@@ -140,6 +164,7 @@ function processServerTransferSelections() {
 
 
 function processRemoteTransferSelections() {
+    // pull data from remote server to local server 
     const source = $(this)[0].dataset.source;
 
     let selectedUpdateIds = [];
@@ -366,13 +391,13 @@ function processServerYMD(data) {
 
 
         let header_names = ["Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
+        // let header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
         if (window.has_remotes) {
             header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
+            //header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "ID", "Status"]
         }
 
         const item_names = ["robot_name", "site", "datetime", "basename", "localpath", "hsize",]
-
-        // const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
         // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]
 
 
@@ -648,6 +673,7 @@ function updateServerData(data) {
                 socket.emit("server_disconnect", msg)
             } else {
                 const selectOption = selectElement.value;
+                window.serverData.dashboard_file_server = {};
                 console.log("Try to connect to ", selectOption)
                 socket.emit("server_connect", { "address": selectOption })
                 document.getElementById("server_link_status").innerHTML = ""
