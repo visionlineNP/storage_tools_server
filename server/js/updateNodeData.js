@@ -204,8 +204,9 @@ function processNodeYMD(data) {
                 checkbox.dataset.datetime = detail.datetime;
                 checkbox.dataset.size = detail.size;
                 checkbox.dataset.group = "table";
-                checkbox.dataset.on_local = detail.on_local;
-                checkbox.dataset.on_remote = detail.on_remote;
+                // switching local and remote!
+                checkbox.dataset.on_local = detail.on_remote;
+                checkbox.dataset.on_remote = detail.on_local;
                 checkbox.dataset.upload_id = detail.upload_id;
                 checkbox.dataset.project = project_name;
                 checkbox.dataset.offset = detail.offset;
@@ -268,7 +269,7 @@ function processNodeYMD(data) {
                 onLocal.title = "On Local";
                 onLocal.id = `node_on_local_${detail.upload_id}`;
                 onLocal.setAttribute("data-bs-toggle", "tooltip");
-                if (!detail.on_remote) {
+                if (!detail.on_local) {
                     onLocal.title = "Not On Local Server";
                     onLocal.classList.add("grayed-out");
                 }
@@ -279,7 +280,7 @@ function processNodeYMD(data) {
                 onRemote.title = "On Remote";
                 onRemote.id = `node_on_remote_${detail.upload_id}`;
                 onRemote.setAttribute("data-bs-toggle", "tooltip");
-                if (!detail.on_local) {
+                if (!detail.on_remote) {
                     onRemote.title = "Not On Remote Server";
                     onRemote.classList.add("grayed-out");
                     onRemote.className = "bi bi-cloud";
@@ -351,7 +352,7 @@ function updateNodeData(data) {
             clearSelectionsButton.id = `clear-all-${source_name}-${project_name}`;
             clearSelectionsButton.dataset.source = source_name;
             clearSelectionsButton.dataset.project = project_name;
-            clearSelectionsButton.onclick = processNodeClearSelections;
+            clearSelectionsButton.onclick = processClearSelections;
             clearSelectionsButton.textContent = 'Clear Selections';
             div.appendChild(clearSelectionsButton);
     
@@ -393,20 +394,32 @@ function updateNodeData(data) {
 
 function processNodeSelectAllNew()
 {
-
+    const source = $(this)[0].dataset.source;
+    $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-on_local="true"][data-on_remote="false"]').prop('checked', true);
 }
 
-function processNodeClearSelections()
-{
-
-}
 
 function processNodeTransferSelections()
 {
+    // pull data from remote server to local server.  
+    const source = $(this)[0].dataset.source;
+
+    let selectedUpdateIds = [];
+    $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').each(function () {
+        selectedUpdateIds.push($(this).attr('data-upload_id'));
+    });
+    console.log(selectedUpdateIds, source);
+
+    msg = {
+        "source": source,
+        "upload_ids": selectedUpdateIds, "session_token": window.session_token
+    }
+    socket.emit("transfer_node_files", msg)
 
 }
 
 function processNodeCancelTransfer()
 {
-
+    const source = $(this)[0].dataset.source;
+    socket.emit("control_msg", { "source": source, "action": "cancel", "session_token": window.session_token });
 }

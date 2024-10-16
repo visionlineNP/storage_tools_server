@@ -45,6 +45,7 @@ def create_server():
 
     socketio.on("remote_node_data")(server.on_remote_node_data)
     socketio.on("remote_node_data_block")(server.on_remote_node_data_block)
+    socketio.on("node_send")(server.on_node_send)
 
     socketio.on("request_projects")(server.on_request_projects)
     socketio.on("add_project")(server.on_add_project)

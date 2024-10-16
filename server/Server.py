@@ -1437,7 +1437,74 @@ class Server:
             self._send_all_data(data)
 
     ## node data
- 
+    def on_remote_node_data(self, data):
+        source= data.get("source")
+        stats = data.get("stats")
+
+        # self.m_remote_node_expect[source] = total
+        self.m_remote_entries[source] = {}
+        self.m_node_entries[source] = {
+            "stats": stats,
+            "entries": {}
+        }
+    
+    def on_remote_node_data_block(self, data):
+        """ Recevie node data from remote source.  """
+        source = data.get("source")
+        entries = data.get("block")
+        id = data.get("id")
+        total = data.get("total")
+
+        rtn = {}
+
+        for entry in entries:
+            relpath = entry["relpath"]
+            orig_id = entry["upload_id"] 
+            entry["remote_id"] = orig_id
+            project = entry["project"]
+            run_name = entry["run_name"]
+            ymd = entry["datetime"].split(" ")[0]
+
+            entry["hsize"] = hf.format_size(entry["size"])
+            
+            file = os.path.join(relpath, entry["basename"])
+            upload_id = get_upload_id(self.m_config["source"], project, file)
+            entry["upload_id"] = upload_id
+            self.m_remote_entries[source][upload_id] = entry
+
+            filepath = self._get_file_path_from_entry(entry)
+
+            entry["on_local"] = False 
+            entry["on_remote"] = True
+
+            if os.path.exists(filepath):
+                self.m_remote_entries[source][upload_id]["on_server"] = True
+                entry["on_local"] = True
+
+            if os.path.exists(filepath + ".tmp"):
+                self.m_remote_entries[source][upload_id]["temp_size"] = (
+                    os.path.getsize(filepath + ".tmp")
+                )
+            else:
+                self.m_remote_entries[source][upload_id]["temp_size"] = 0
+
+            rtn[upload_id] = entry
+
+            self.m_node_entries[source]["entries"][project] = self.m_node_entries[source]["entries"].get(project, {})
+            self.m_node_entries[source]["entries"][project][ymd] = self.m_node_entries[source]["entries"][project].get(ymd, {})
+            self.m_node_entries[source]["entries"][project][ymd][run_name] = self.m_node_entries[source]["entries"][project][ymd].get(run_name, {})
+            self.m_node_entries[source]["entries"][project][ymd][run_name][relpath] = self.m_node_entries[source]["entries"][project][ymd][run_name].get(relpath, [])
+            self.m_node_entries[source]["entries"][project][ymd][run_name][relpath].append(entry)
+
+
+        msg = {"entries": rtn}
+
+        debug_print(f"emit rtn to {source}")
+        self.m_sio.emit("node_data_block_rtn", msg, to=source)
+
+        if id == (total-1):
+            self._send_node_data()
+
     def on_node_data_ymd(self, data):
         source = data.get("source")
         project = data.get("project")
@@ -1453,6 +1520,8 @@ class Server:
                 self.m_remote_entries[source][project][ymd][run][relpath] = self.m_remote_entries[source][project][ymd][run].get(relpath, [])
                 self.m_remote_entries[source][project][ymd][run][relpath].extend(runs[run][relpath])
 
+    def on_node_send(self, data):
+        debug_print(data)
 
     ## device data
     def on_device_status(self, data):
@@ -1848,74 +1917,6 @@ class Server:
 
         # # debug_print(data)
         return jsonify("Received")
-
-    def on_remote_node_data(self, data):
-        source= data.get("source")
-        stats = data.get("stats")
-
-        # self.m_remote_node_expect[source] = total
-        self.m_remote_entries[source] = {}
-        self.m_node_entries[source] = {
-            "stats": stats,
-            "entries": {}
-        }
-    
-
-    def on_remote_node_data_block(self, data):
-        source = data.get("source")
-        entries = data.get("block")
-        id = data.get("id")
-        total = data.get("total")
-
-        rtn = {}
-
-        for entry in entries:
-            relpath = entry["relpath"]
-            orig_id = entry["upload_id"] 
-            entry["remote_id"] = orig_id
-            project = entry["project"]
-            run_name = entry["run_name"]
-            ymd = entry["datetime"].split(" ")[0]
-            
-            file = os.path.join(relpath, entry["basename"])
-            upload_id = get_upload_id(self.m_config["source"], project, file)
-            entry["upload_id"] = upload_id
-            self.m_remote_entries[source][upload_id] = entry
-
-            filepath = self._get_file_path_from_entry(entry)
-
-            entry["on_local"] = False 
-            entry["on_remote"] = True
-
-            if os.path.exists(filepath):
-                self.m_remote_entries[source][upload_id]["on_server"] = True
-                entry["on_local"] = True
-
-            if os.path.exists(filepath + ".tmp"):
-                self.m_remote_entries[source][upload_id]["temp_size"] = (
-                    os.path.getsize(filepath + ".tmp")
-                )
-            else:
-                self.m_remote_entries[source][upload_id]["temp_size"] = 0
-
-            rtn[upload_id] = entry
-
-            self.m_node_entries[source]["entries"][project] = self.m_node_entries[source]["entries"].get(project, {})
-            self.m_node_entries[source]["entries"][project][ymd] = self.m_node_entries[source]["entries"][project].get(ymd, {})
-            self.m_node_entries[source]["entries"][project][ymd][run_name] = self.m_node_entries[source]["entries"][project][ymd].get(run_name, {})
-            self.m_node_entries[source]["entries"][project][ymd][run_name][relpath] = self.m_node_entries[source]["entries"][project][ymd][run_name].get(relpath, [])
-            self.m_node_entries[source]["entries"][project][ymd][run_name][relpath].append(entry)
-
-
-        msg = {"entries": rtn}
-
-        debug_print(f"emit rtn to {source}")
-        self.m_sio.emit("node_data_block_rtn", msg, to=source)
-
-        debug_print((id, total))
-
-        if id == (total-1):
-            self._send_node_data()
 
     def handle_node_data(self):
         rtn = {}
