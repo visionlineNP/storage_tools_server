@@ -819,6 +819,15 @@ class Database:
     def search(self, filter:dict, sort_key:str, reverse:bool):
         # debug_print(filter)
         keys = ["project", "site", "robot_name", "datetime", "basename", "topics", "size", "upload_id", "datatype"]
+
+        if sort_key == "filename":
+            sort_key = "basename"
+            
+        default_val = ""
+        if sort_key == "size":
+            default_val = 0
+
+
         rtn = []
         for entry in self.database["data"]:
             # apply filter.
@@ -831,7 +840,7 @@ class Database:
             item["hsize"] = humanfriendly.format_size(item["size"])
             rtn.append(item)
 
-        rtn.sort(key=lambda item: item[sort_key], reverse=reverse)
+        rtn.sort(key=lambda item: item[sort_key] if item.get(sort_key, None) is not None else default_val, reverse=reverse)
         return rtn 
     
     def get_search_filters(self):

@@ -1722,7 +1722,7 @@ class Server:
     def on_control_msg(self, data):
         source = data.get("source")
         action = data.get("action")
-        self.m_sio.emit.emit("control_msg", {"action": action}, to=source)
+        self.m_sio.emit("control_msg", {"action": action}, to=source)
         if self.m_remote_connection.connected():
             self.m_remote_connection._handle_control_msg(data)
 
