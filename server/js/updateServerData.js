@@ -518,7 +518,7 @@ function processServerYMD(data) {
 
                         // // just for testing. will use userpath instead
                         if (mount && (detail.localpath.endsWith(".mcap") || detail.localpath.endsWith(".bag"))) {
-                            console.log(project_name, mount)
+                            //console.log(project_name, mount)
 
                             const link = document.createElement("a")
                             td.appendChild(link)

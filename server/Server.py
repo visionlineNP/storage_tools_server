@@ -4,7 +4,7 @@ import json
 import math
 import secrets
 import shutil
-from threading import Lock
+from threading import Lock, Thread
 import time
 from flask import flash, g, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for 
 from flask_socketio import disconnect, join_room, SocketIO
@@ -16,7 +16,7 @@ import urllib
 import uuid
 import yaml
 import humanfriendly as hf 
-
+import redis
 
 
 from .debug_print import debug_print
@@ -29,6 +29,12 @@ from .nodeConnection import NodeConnection
 class Server:
     def __init__(self, socketio:SocketIO) -> None:
         self.m_sio = socketio
+        self.m_id = os.getpid()
+
+        self.redis = redis.StrictRedis(host='redis', port=6379, db=0)
+        self.pubsub = self.redis.pubsub()
+        self._start_pubsub_listener()
+
 
         self.m_secret_key = uuid.uuid4()
 
@@ -36,6 +42,7 @@ class Server:
 
         # keeps track of which devices are connected.
         self.m_sources = {"devices": [], "nodes": [], "report_host": [], "report_node": []}
+        self.sources_set_key = 'connected_sources'  
 
         # maps source to upload_id to file entry for files on device
         self.m_remote_entries = {}
@@ -168,6 +175,11 @@ class Server:
                 self.m_config["API_KEY_TOKEN"] = keys.get("API_KEY_TOKEN", None)
 
     def _setup_zeroconf(self):
+        this_claimed = self.redis.set("zero_conf", "claimed",  nx=True, ex=5)
+        if not this_claimed:
+            debug_print(f"{self.m_id}:  zero conf already claimed")
+            return 
+
         debug_print("enter")
 
         ip_addresses = get_ip_addresses()
@@ -189,64 +201,6 @@ class Server:
             self.m_zeroconf.register_service(info)
         except NonUniqueNameException as e:
             debug_print("Zeroconf already set up? Is there a dupilcate process?")
-
-    def _device_revise_stats(self):
-        stats = {}
-
-        for source in self.m_remote_entries:
-            if source in self.m_sources["devices"]:
-                stats[source] = {
-                    "total_size": 0,
-                    "count": 0,
-                    "start_datetime": None,
-                    "end_datetime": None,
-                    "datatype": {},
-                    "on_server_size": 0,
-                    "on_server_count": 0,
-                }
-                for uid in self.m_remote_entries[source]:
-                    self._update_stat(source, uid, stats[source])
-
-        self._send_to_all_dashboards("device_revise_stats", stats)
-
-    def _emit_server_ymd_data(self, datasets, stats, project, ymd, tab, room):
-        """Background task to emit data incrementally."""
-        total = len(datasets)
-
-        for i, data in enumerate(datasets):
-            server_data = {
-                "total": total,
-                "index": i,
-                "runs": data,
-                "stats": stats,
-                "source": self.m_config["source"],
-                "project": project,
-                "ymd": ymd,
-                "tab": tab
-            }
-
-            # Emit the data to the client
-            debug_print(f"Sending {project} {ymd} {room}")
-            self.m_sio.emit("server_ymd_data", server_data, to=room)
-        # debug_print("Done")
-
-    def _emit_device_ymd_data(self, datasets, stats, source, ymd, tab, room):
-        if datasets is None:
-            return 
-        
-        total = len(datasets)
-        for i, data in enumerate(datasets):
-            device_data = {
-                "total": total,
-                "index": i,
-                "reldir": data,
-                "stats": stats,
-                "source": self.m_config["source"],
-                "device_source": source,
-                "ymd": ymd,
-                "tab": tab
-            }
-            self.m_sio.emit("device_ymd_data", device_data, to=room)
 
     def _get_dirroot(self, project:str) -> str:
         root = self.m_config.get("volume_root", "/")
@@ -299,16 +253,19 @@ class Server:
         Returns:
         str: The full path of the file.
         """
-        entry = self.m_remote_entries[source][upload_id]
+        # entry = self.m_remote_entries[source][upload_id]
+        entry = self.fetch_remote_entry(source, upload_id)
         return self._get_file_path_from_entry(entry)
 
     def _get_rel_dir(self, source: str, upload_id: str) -> str:
-        project = self.m_remote_entries[source][upload_id].get("project", None)
-        project = project if project else "None"
-        date = self.m_remote_entries[source][upload_id]["datetime"].split()[0]
+        entry = self.fetch_remote_entry(source, upload_id)
 
-        relpath = self.m_remote_entries[source][upload_id]["relpath"]
-        filename = self.m_remote_entries[source][upload_id]["basename"]
+        project = entry.get("project", None)
+        project = project if project else "None"
+        date = entry["datetime"].split()[0]
+
+        relpath = entry["relpath"]
+        filename = entry["basename"]
         try:
             reldir = os.path.join(project, date, relpath)
         except TypeError as e:
@@ -319,465 +276,170 @@ class Server:
 
         return reldir
 
-    def handle_file(self, source: str, upload_id: str):
-        # debug_print(f"{source} {upload_id}")
+    def _start_pubsub_listener(self):
+        # Start a thread to listen for changes on the resync channel
+        def listen():
+            for message in self.pubsub.listen():
+                if message['type'] == 'message':
+                    channel = message["channel"]
+                    data = json.loads(message['data'])
+                    if channel == "resync_remote_entries":
+                        source = data['source']
+                        upload_id = data['upload_id']
+                        self.sync_remote_entry(source, upload_id)
+                    elif channel == "node_data":
+                        self._process_node_data(data)
+                    elif channel == "node_data_block":
+                        self._process_node_data_block(data)
 
-        if source in self.m_remote_entries and upload_id in self.m_remote_entries[source]:
-            entry = self.m_remote_entries[source][upload_id]
-        else:
-            json_data = request.form.get('json')
-            if json_data:
-                entry = json.loads(json_data)
-            else:
+        self.pubsub.subscribe('resync_remote_entries', 
+                              'node_data', 
+                              "node_data_block"
+                              ) 
+        listener_thread = Thread(target=listen)
+        listener_thread.daemon = True
+        listener_thread.start()
 
-                if source not in self.m_remote_entries:
-                    debug_print(f"Invalid Source {source}")
-                    return f"Invalid Source {source}",  503
+    def create_remote_entry(self, source, upload_id, entry):
+        # Serialize the entry as a JSON string and store it in Redis
+        entry_json = json.dumps(entry)
+        self.redis.set(f'remote_entries:{source}:{upload_id}', entry_json)
+        # debug_print(f"added remote_entries:{source}:{upload_id}")
 
-                if upload_id not in self.m_remote_entries[source]:
-                    debug_print(f"Invalid ID {upload_id} for {source}")
-                    return f"Invalid ID {upload_id} for {source}", 503
+        # # Publish a message to other workers that this entry has been created
+        # self.redis.publish('resync_remote_entries', json.dumps({'source': source, 'upload_id': upload_id}))
 
-        # debug_print(entry)
+    def fetch_remote_entry(self, source, upload_id):
+        # Fetch the entry from Redis
+        entry_json = self.redis.get(f'remote_entries:{source}:{upload_id}')
+        if entry_json:
+            return json.loads(entry_json)
+        return None
 
-        offset = request.args.get("offset", 0)
-        if offset == 0:
-            open_mode = "wb"
-        else:
-            open_mode = "ab"
+    def update_remote_entry(self, source, upload_id, updated_entry):
+        # Fetch and update the entry in Redis
+        entry_json = json.dumps(updated_entry)
+        self.redis.set(f'remote_entries:{source}:{upload_id}', entry_json)
 
-        cid = request.args.get("cid")
-        splits = request.args.get("splits")
-        is_last = cid == splits
+        # Publish a message to notify other workers about the update
+        self.redis.publish('resync_remote_entries', json.dumps({'source': source, 'upload_id': upload_id}))
 
-        filep = request.files.get('file', request.stream)
-        filename = entry["basename"]
+    def sync_remote_entry(self, source, upload_id):
+        pass 
+        # # Fetch the updated entry from Redis and sync the local cache if needed
+        # entry_json = self.redis.get(f'remote_entries:{source}:{upload_id}')
+        # if entry_json:
+        #     print(f"Synced entry from Redis: {source}, {upload_id}")
+        #     # Here you can add logic to sync the local cache if you maintain one
 
-        filepath = self._get_file_path_from_entry(entry)
-        tmp_path = filepath + ".tmp"
+    def delete_remote_entry(self, source, upload_id):
+        # Delete the entry from Redis
+        self.redis.delete(f'remote_entries:{source}:{upload_id}')
 
-        # debug_print(filepath)
+        # Publish a message to notify other workers about the deletion
+        self.redis.publish('resync_remote_entries', json.dumps({'source': source, 'upload_id': upload_id}))
 
-        if os.path.exists(filepath):
-            return jsonify({"message": f"File {filename} alredy uploaded"}), 409
-
-        if self.m_selected_action.get(source, "") == "cancel":
-            return jsonify({"message": f"File {filename} upload canceled"}), 400
-
-        # keep track of expected size. If remote canceled, we won't know.
-        expected = entry["size"]
-
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
-
-        # we use this in multiple location, better to define it.
-        cancel_msg = {
-            "div_id": f"status_{upload_id}",
-            "source": self.m_config["source"],
-            "status": "<B>Canceled</B>",
-            "on_device": True,
-            "on_server": False,
-            "upload_id": upload_id,
-        }
-
-        # debug_print(f"opening {tmp_path}")
-
-        # Start uploading the file in chunks
-        chunk_size = 10 * 1024 * 1024  # 1MB chunks
-        with open(tmp_path, open_mode) as fid:
-            while True:
-
-                if self.m_selected_action.get(source,"") == "cancel":
-                    self._send_dashboard_file(cancel_msg)
-
-                    return jsonify({"message": f"File {filename} upload canceled"})
-
-                try:
-                    chunk = filep.read(chunk_size)
-
-                except OSError:
-                    # we lost the connection on the client side.
-                    self._send_dashboard_file(cancel_msg)
-                    return jsonify({"message": f"File {filename} upload canceled"})
-
-                if not chunk:
-                    break
-                fid.write(chunk)
-
-        os.chmod(tmp_path, 0o777 )
-
-        if os.path.exists(tmp_path) and is_last:
-            current_size = os.path.getsize(tmp_path)
-            if current_size != expected:
-                # transfer canceled politely on the client side, or
-                # some other issue. Either way, data isn't what we expected.
-                cancel_msg["status"] = (
-                    "Size mismatch. " + str(current_size) + " != " + str(expected)
-                )
-                self._send_dashboard_file(cancel_msg)
-
-                return jsonify({"message": f"File {filename} upload canceled"})
-
-            os.rename(tmp_path, filepath)
-
-            data = {
-                "div_id": f"status_{upload_id}",
-                "status": "On Device and Server",
-                "source": self.m_config["source"],
-                "on_device": True,
-                "on_server": True,
-                "upload_id": upload_id,
-            }
-
-            self._send_dashboard_file(data)
-
-        entry["localpath"] = filepath
-        entry["on_server"] = True
-        entry["dirroot"] = self._get_dirroot(entry["project"])
-        entry["fullpath"] = filepath.replace(entry["dirroot"], "").strip("/")
-
-
-        metadata_filename = filepath + ".metadata"
-        with open(metadata_filename, "w") as fid:
-            json.dump(entry, fid, indent=True)
-
-        os.chmod(metadata_filename, 0o777)
-
-        self.m_database.add_data(entry)
-        self.m_database.estimate_runs()
-        self.m_database.commit()
-
-
-        # signal to the dashboards that this source has updates.  
-        for session_token in self.m_has_updates:
-            self.m_has_updates[session_token][self.m_config["source"]] = True
-
-            room = "dashboard-" + session_token
-            self.m_sio.emit("has_new_data", {"value": True}, to=room)
-
-        # # TODO: replace send_server_data with "update_server_data"
-        # # send_server_data()
-
-        # ymd = entry["date"]
-        # project = entry["project"]
-        # tab = f"server:{project}:{ymd}"
-
-        # on_request_server_ymd_data({"tab": tab})
-
-        self._device_revise_stats()
-
-        return jsonify({"message": f"File {filename} chunk uploaded successfully"})
-
-    def _send_all_data(self, data):
-        self._send_device_data(data)
-        self._send_node_data(data)
-        self._send_server_data(data)
-        self.on_request_projects(data)
-        self.on_request_robots(data)
-        self.on_request_sites(data)
-        self.on_request_keys(data)
-        self.on_request_search_filters(data)
-        debug_print("Sent all data")
-
-        # after this, there should be no new data!
-        room = dashboard_room(data)
-        self.m_sio.emit("has_new_data", {"value": False}, to=room)
-
-    def _get_device_data_ymd_stub(self):
-        # debug_print("enter")
-
-        device_data = {}
-        count = 0
-
-        for source in self.m_remote_entries:
-            if source in self.m_sources["devices"]:
-                # debug_print(len(g_remote_entries[source]))
-                project = self.m_projects.get(source)
-                device_data[source] = {"fs_info": {}, "entries": {}, "project": project}
-                if source in self.m_fs_info:
-                    device_data[source]["fs_info"] = self.m_fs_info[source]
-                for uid in self.m_remote_entries[source]:
-                    count += 1
-                    entry = {}
-                    # entry.update(g_remote_entries[source][uid])
-                    # debug_print(g_remote_entries[source][uid]["robot_name"])
-                    for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
-                        entry[key] = self.m_remote_entries[source][uid][key]
-
-                    entry["size"] = hf.format_size(entry["size"])
-                    date = self.m_remote_entries[source][uid]["datetime"].split(" ")[0]
-                    relpath = self.m_remote_entries[source][uid]["relpath"]
-                    device_data[source]["entries"][date] = device_data[source]["entries"].get(date, {})
-                    device_data[source]["entries"][date][relpath] = device_data[source]["entries"][date].get(relpath, [])
-        
-        return device_data
-
-    def _get_device_data_stats(self):
-        device_data = {}
-        
-        for source in self.m_remote_entries:
-            if source in self.m_sources["devices"]:
-                project = self.m_projects.get(source)
-                device_data[source] = {"fs_info": {}, "entries": {}, "project": project}
-                if source in self.m_fs_info:
-                    device_data[source]["fs_info"] = self.m_fs_info[source]
-                for uid in self.m_remote_entries[source]:
-                    entry = {}
-                    for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
-                        entry[key] = self.m_remote_entries[source][uid][key]
-
-                    entry["size"] = hf.format_size(entry["size"])
-                    date = self.m_remote_entries[source][uid]["datetime"].split(" ")[0]
-
-                    device_data[source]["stats"] = device_data[source].get(
-                        "stats",
-                        {
-                            "total": {
-                                "total_size": 0,
-                                "count": 0,
-                                "start_datetime": None,
-                                "end_datetime": None,
-                                "datatype": {},
-                                "on_server_size": 0,
-                                "on_server_count": 0,
-                            }
-                        },
-                    )
-                    device_data[source]["stats"][date] = device_data[source]["stats"].get(
-                        date,
-                        {
-                            "total_size": 0,
-                            "count": 0,
-                            "start_datetime": None,
-                            "end_datetime": None,
-                            "datatype": {},
-                            "on_server_size": 0,
-                            "on_server_count": 0,
-                        },
-                    )
-
-                    self._update_stat(source, uid, device_data[source]["stats"][date])
-                    self._update_stat(source, uid, device_data[source]["stats"]["total"])
-
-        return device_data
+    def get_all_entries_for_source(self, source):
+        # debug_print(f"enter {source}")
+        # Fetch all entries for a specific source
+        keys = self.redis.keys(f'remote_entries:{source}:*')
+        entries = {}
+        for key in keys:
+            upload_id = key.decode('utf-8').split(':')[-1]
+            entry_json = self.redis.get(key)
+            if entry_json:
+                entries[upload_id] = json.loads(entry_json)
+        return entries
     
-    def _get_device_data_stats_by_source_ymd(self, source, ymd):
-        device_data = {}
+    def delete_remote_entries_for_source(self, source):
+        cursor = '0'
+        while cursor != 0:
+            cursor, keys = self.redis.scan(cursor=cursor, match=f'remote_entries:{source}:*')
+            if keys:
+                # Delete the matching keys
+                self.redis.delete(*keys)    
+
+    def dashboard_add_room(self, room):
+        debug_print(f"added {room}")
+        self.redis.sadd("dashboard_rooms", room)
+
+    def dashboard_remove_room(self, room):
+        self.redis.srem("dashboard_rooms", room)
+
+    def dashboard_get_rooms(self):
+        rooms = self.redis.smembers("dashboard_rooms")
+        return [room.decode("utf-8") for room in rooms]
+
+    def add_source(self, source, source_type):
+        """Add a new source. 
         
-        if source in self.m_sources["devices"]:
-            project = self.m_projects.get(source)
-            device_data[source] = {"fs_info": {}, "entries": {}, "project": project}
-            if source in self.m_fs_info:
-                device_data[source]["fs_info"] = self.m_fs_info[source]
-            for uid in self.m_remote_entries[source]:
-                entry = {}
-                for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
-                    entry[key] = self.m_remote_entries[source][uid][key]
+        Args:
+          source: Name of source
+          source_type: which type of source. One of [device, node]
+        """
+        self.redis.sadd(f"{self.sources_set_key}:{source_type}", source)
 
-                entry["size"] = hf.format_size(entry["size"])
-                date = self.m_remote_entries[source][uid]["datetime"].split(" ")[0]
+    def delete_source(self, source, source_type):
+        """remove an existing source. 
 
-                if date != ymd:
-                    continue
+        Args:
+          source: Name of source
+          source_type: which type of source. One of [device, node]    
+        """
+        self.redis.srem(f"{self.sources_set_key}:{source_type}", source)
+    
+    def get_sources(self, source_type):
+        """Get the list of sources for a type
 
-                device_data[source]["stats"] = device_data[source].get(
-                    "stats",
-                    {
-                        "total": {
-                            "total_size": 0,
-                            "count": 0,
-                            "start_datetime": None,
-                            "end_datetime": None,
-                            "datatype": {},
-                            "on_server_size": 0,
-                            "on_server_count": 0,
-                        }
-                    },
-                )
-                device_data[source]["stats"][date] = device_data[source]["stats"].get(
-                    date,
-                    {
-                        "total_size": 0,
-                        "count": 0,
-                        "start_datetime": None,
-                        "end_datetime": None,
-                        "datatype": {},
-                        "on_server_size": 0,
-                        "on_server_count": 0,
-                    },
-                )
+        Args:
+          source_type: which type of source. One of [devices, nodes]
+        """
+        sources = self.redis.smembers(f"{self.sources_set_key}:{source_type}")
+        return [source.decode("utf-8") for source in sources]
 
-                self._update_stat(source, uid, device_data[source]["stats"][date])
-                self._update_stat(source, uid, device_data[source]["stats"]["total"])
+    def device_set_project(self, source, project):
+        self.redis.set(f'device_project:{source}', project)
 
-        return device_data
+    def device_get_project(self, source):
+        project = self.redis.get(f'device_project:{source}')
+        if project:
+            return project.decode("utf-8")
+        return None
 
-    def _get_send_device_data_ymd_data(self, source:str, ymd:str):
-        rtnarr = []
-        rtn = {}
-        # will send up to max count entries per packet
-        max_count = 50
-        count = 0 
+    def device_remove_project(self, source):
+        keys = self.redis.keys(f'device_project:{source}') 
+        if keys:
+            self.redis.delete(keys)
 
-        if not source in self.m_remote_entries:
-            debug_print(f"Source: {source} missing")
-            return 
+    def _device_revise_stats(self):
+        stats = {}
+        sources = self.get_sources("devices")
 
-        for uid in self.m_remote_entries[source]:
-            entry = {}
-            for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
-                entry[key] = self.m_remote_entries[source][uid][key]
+        for source in sources:
 
-            entry["size"] = hf.format_size(entry["size"])
-            date = self.m_remote_entries[source][uid]["datetime"].split(" ")[0]
-            if date != ymd:
-                continue
-            relpath = self.m_remote_entries[source][uid]["relpath"]
-
-            rtn[relpath] = rtn.get(relpath, [])
-            rtn[relpath].append(entry)
-
-            count += 1
-            if count >= max_count:
-                rtnarr.append(rtn)
-                rtn = {}
-                count = 0
-
-        rtnarr.append(rtn)
-
-        return rtnarr 
-
-    def _send_device_data(self, data=None):
-        # debug_print("enter")
-        device_data = self._get_device_data_ymd_stub()    
-
-        stats = self._get_device_data_stats()
-        for source in device_data:
-            if "stats" in stats[source]:
-                device_data[source]["stats"] = stats[source]["stats"]
-
-            # revise the has_updates  
-            for session_token in self.m_has_updates:
-                self.m_has_updates[session_token][source] = False
-
-        self._send_to_all_dashboards("device_data", device_data)    
-        # debug_print("exit")
-
-    def _create_node_data_stub(self):
-        rtn = {}
-
-        for source_name, source_items in self.m_node_entries.items():
-            rtn[source_name] = {}
-            for project_name, project_items in source_items.get("entries", {}).items():
-                rtn[source_name][project_name] = {}
-                for ymd in sorted(project_items):
-                    rtn[source_name][project_name][ymd] = {}
-        debug_print(rtn)
-        return rtn 
-
-    def _send_node_data(self, msg=None):
-        node_data = {
-            "entries": self._create_node_data_stub(),
-            "fs_info": {}
+            stats[source] = {
+                "total_size": 0,
+                "count": 0,
+                "start_datetime": None,
+                "end_datetime": None,
+                "datatype": {},
+                "on_server_size": 0,
+                "on_server_count": 0,
             }
 
-        if msg:
-            room = dashboard_room(msg)
+            entries = self.get_all_entries_for_source(source)
+            for entry in entries.values():
+                self._update_stat_for_entry(entry, stats[source])
 
-            if room in self.m_session_tokens:
-                session_token = self.m_session_tokens[room]
-                for source in node_data:
-                    self.m_has_updates[session_token][source] = False
-
-            self.m_sio.emit("node_data", node_data, to=room)
-        else:
-            for session_token in self.m_has_updates:
-                for source in node_data:
-                    self.m_has_updates[session_token][source] = False
-
-            self._send_to_all_dashboards("node_data", node_data, with_nodes=False)
-
-    def on_request_node_ymd_data(self, data):
-        tab = data.get("tab")
-        names = tab.split(":")
-        _, source, project, ymd = names
-
-        source_data = self.m_node_entries.get(source, {})
-        runs= source_data.get("entries", {}).get(project, {}).get(ymd, [])
-        stats_data = source_data.get("stats", {}).get(project).get(ymd, {})
-
-        msg = {
-            "tab": tab,
-            "runs": runs,
-            "stats": stats_data,
-            "source": source,  
-            "project": project,
-            "ymd": ymd
-        }
-        self.m_sio.emit("node_ymd_data", msg, to=dashboard_room(data))
-
-    def _send_server_data(self, msg=None):
-        data = self.m_database.get_send_data_ymd_stub()
-
-        stats = self.m_database.get_run_stats()
-        self._update_fs_info()
-
-        server_data = {
-            "entries": data,
-            "fs_info": self.m_fs_info[self.m_config["source"]],
-            "stats": stats,
-            "source": self.m_config["source"],
-            "remotes": self.m_config.get("remote", []),
-            "remote_connected": self.m_remote_connection.connected(),
-            "remote_address": self.m_remote_connection.server_name()
-        }
-
-        if msg:
-            room = dashboard_room(msg)
-
-            if room in self.m_session_tokens:
-                session_token = self.m_session_tokens[room]
-                self.m_has_updates[session_token][self.m_config["source"]] = False
-
-            debug_print(f"sending to {room}")        
-            self.m_sio.emit("server_data", server_data, to=room)
-        else:
-            debug_print("Sending to all dashboards")
-
-            for session_token in self.m_has_updates:
-                self.m_has_updates[session_token][self.m_config["source"]] = False
-
-            self._send_to_all_dashboards("server_data", server_data, with_nodes=False)
-
-    def _send_dashboard_file(self, msg):
-        self._send_to_all_dashboards("dashboard_file", msg, with_nodes=True)
-
-    def _send_to_all_dashboards(self, event, msg, with_nodes:bool=False):
-        rooms = []
-        rooms.extend(self.m_dashboard_rooms)
-        if with_nodes:
-            rooms.extend(self.m_sources["nodes"])
-
-        for room in rooms:
-            self.m_sio.emit(event, msg, to=room)
-
-    def _update_fs_info(self):
-        source = self.m_config["source"]
-
-        # todo: update this to use volume map
-
-        dev = os.stat(self.m_upload_dir).st_dev
-        total, used, free = shutil.disk_usage(self.m_upload_dir)
-        free_percentage = (free / total) * 100
-        self.m_fs_info[source] = {dev: (self.m_upload_dir, f"{free_percentage:0.2f}")}
-
-    def _update_stat(self, source, uid, stat):
-        filename = self._get_file_path(source, uid)
+    def _update_stat_for_entry(self, entry, stat):
+        filename = self._get_file_path_from_entry(entry)
         on_server = os.path.exists(filename)
 
-        size = self.m_remote_entries[source][uid]["size"]
-        start_time = self.m_remote_entries[source][uid]["start_datetime"]
-        end_time = self.m_remote_entries[source][uid]["end_datetime"]
-        datatype = self.m_remote_entries[source][uid]["datatype"]
+        size = entry["size"]
+        start_time = entry["start_datetime"]
+        end_time = entry["end_datetime"]
+        datatype = entry["datatype"]
+
 
         stat["total_size"] += size
         stat["htotal_size"] = hf.format_size(stat["total_size"])
@@ -823,6 +485,77 @@ class Server:
             stat["datatype"][datatype]["on_server_size"]
         )
 
+    def _update_stat(self, source, uid, stat):
+        entry = self.fetch_remote_entry(source, uid)
+        self._update_stat_for_entry(entry, stat)
+
+    def _emit_server_ymd_data(self, datasets, stats, project, ymd, tab, room):
+        """Background task to emit data incrementally."""
+        total = len(datasets)
+
+        for i, data in enumerate(datasets):
+            server_data = {
+                "total": total,
+                "index": i,
+                "runs": data,
+                "stats": stats,
+                "source": self.m_config["source"],
+                "project": project,
+                "ymd": ymd,
+                "tab": tab
+            }
+
+            # Emit the data to the client
+            debug_print(f"Sending {project} {ymd} {room}")
+            self.m_sio.emit("server_ymd_data", server_data, to=room)
+        # debug_print("Done")
+
+    def _emit_device_ymd_data(self, datasets, stats, source, ymd, tab, room):
+        if datasets is None:
+            return 
+        
+        total = len(datasets)
+        for i, data in enumerate(datasets):
+            device_data = {
+                "total": total,
+                "index": i,
+                "reldir": data,
+                "stats": stats,
+                "source": self.m_config["source"],
+                "device_source": source,
+                "ymd": ymd,
+                "tab": tab
+            }
+            self.m_sio.emit("device_ymd_data", device_data, to=room)
+
+
+
+    def _send_dashboard_file(self, msg):
+        self._send_to_all_dashboards("dashboard_file", msg, with_nodes=True)
+
+    def _send_to_all_dashboards(self, event, msg, with_nodes:bool=False):
+        rooms = []
+        # rooms.extend(self.m_dashboard_rooms)
+        rooms.extend(self.dashboard_get_rooms())
+        if with_nodes:
+            nodes = self.get_sources("nodes")
+            rooms.extend(nodes)
+
+        debug_print(f"rooms: {rooms}")
+
+        for room in rooms:
+            self.m_sio.emit(event, msg, to=room)
+
+    def _update_fs_info(self):
+        source = self.m_config["source"]
+
+        # todo: update this to use volume map
+
+        dev = os.stat(self.m_upload_dir).st_dev
+        total, used, free = shutil.disk_usage(self.m_upload_dir)
+        free_percentage = (free / total) * 100
+        self.m_fs_info[source] = {dev: (self.m_upload_dir, f"{free_percentage:0.2f}")}
+
     def _validate_api_key_token(self, api_key_token):
         # this should be more secure
         # for now we will just look up the key
@@ -832,21 +565,6 @@ class Server:
         # debug_print((username, password))
         # Placeholder function to validate credentials
         return username == "admin" and password == "NodeNodeDevices"
-
-
-    ## 
-    # user auth token 
-    ## 
-    def generate_token(self, user):
-        payload = {
-            'user': user,
-            'iss': 'sts',
-            'date': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        return jwt.encode(payload, self.m_secret_key, algorithm='HS256')
-
-    ########################################
-    # socket commands 
 
     def on_connect(self):
         """
@@ -973,13 +691,17 @@ class Server:
                 del self.m_node_entries[remove]
             if remove in self.m_sources["devices"]:
                 self.m_sources["devices"].pop(self.m_sources["devices"].index(remove))
+                self.delete_source(remove, "devices")
+                self.device_remove_project(remove)
                 self._send_device_data()
+
             if remove in self.m_sources["nodes"]:
                 self.m_sources["nodes"].pop(self.m_sources["nodes"].index(remove))
                 self._send_node_data()
 
             if remove in self.m_dashboard_rooms:
                 self.m_dashboard_rooms.pop(self.m_dashboard_rooms.index(remove))
+            self.dashboard_remove_room(remove)
 
             if remove in self.m_session_tokens:
                 session_token = self.m_session_tokens[remove]
@@ -992,6 +714,7 @@ class Server:
 
             if remove in self.m_node_connections:
                 del self.m_node_connections[remove]
+
 
             debug_print(f"Got disconnect: {remove}")
 
@@ -1046,7 +769,7 @@ class Server:
         - The function manages the data structure `m_remote_sockets` to ensure that rooms and their connections are tracked efficiently.
         """
 
-        debug_print(data)
+        debug_print((data, self.m_id))
 
         room = data["room"]    
         client = data.get("type", None)
@@ -1065,6 +788,7 @@ class Server:
         if client == "dashboard":
             if room not in self.m_dashboard_rooms:
                 self.m_dashboard_rooms.append(room)
+            self.dashboard_add_room(room)
 
             session_token = data.get("session_token")
 
@@ -1077,9 +801,396 @@ class Server:
         if client == "node":
             self.m_node_connections[room] = NodeConnection(self.m_config, self.m_sio)
 
+        if client == "device":
+            self.add_source(room, "devices")
+
     def on_leave(self, data:dict):
         debug_print(data)
         pass 
+
+
+
+    def on_remote_node_data(self, data):
+        self.redis.publish("node_data", data)
+
+    def on_remote_node_data_block(self, data):
+        self.redis.pubish("node_data_block", data)
+
+    def _process_node_data(self, data):
+        source= data.get("source")
+        stats = data.get("stats")
+
+        # self.m_remote_node_expect[source] = total
+        self.m_remote_entries[source] = {}
+        self.m_node_entries[source] = {
+            "stats": stats,
+            "entries": {}
+        }
+
+    def _process_node_data_block(self, data):
+        """ Recevie node data from remote source.  """
+        source = data.get("source")
+        entries = data.get("block")
+        id = data.get("id")
+        total = data.get("total")
+
+        rtn = {}
+
+        for entry in entries:
+            relpath = entry["relpath"]
+            orig_id = entry["upload_id"] 
+            entry["remote_id"] = orig_id
+            project = entry["project"]
+            run_name = entry["run_name"]
+            ymd = entry["datetime"].split(" ")[0]
+
+            entry["hsize"] = hf.format_size(entry["size"])
+            
+            file = os.path.join(relpath, entry["basename"])
+            upload_id = get_upload_id(self.m_config["source"], project, file)
+            entry["upload_id"] = upload_id
+            self.m_remote_entries[source][upload_id] = entry
+
+            filepath = self._get_file_path_from_entry(entry)
+
+            entry["on_local"] = False 
+            entry["on_remote"] = True
+
+            if os.path.exists(filepath):
+                self.m_remote_entries[source][upload_id]["on_server"] = True
+                entry["on_local"] = True
+
+            if os.path.exists(filepath + ".tmp"):
+                self.m_remote_entries[source][upload_id]["temp_size"] = (
+                    os.path.getsize(filepath + ".tmp")
+                )
+            else:
+                self.m_remote_entries[source][upload_id]["temp_size"] = 0
+
+            rtn[upload_id] = entry
+
+            self.m_node_entries[source]["entries"][project] = self.m_node_entries[source]["entries"].get(project, {})
+            self.m_node_entries[source]["entries"][project][ymd] = self.m_node_entries[source]["entries"][project].get(ymd, {})
+            self.m_node_entries[source]["entries"][project][ymd][run_name] = self.m_node_entries[source]["entries"][project][ymd].get(run_name, {})
+            self.m_node_entries[source]["entries"][project][ymd][run_name][relpath] = self.m_node_entries[source]["entries"][project][ymd][run_name].get(relpath, [])
+            self.m_node_entries[source]["entries"][project][ymd][run_name][relpath].append(entry)
+
+
+        msg = {"entries": rtn}
+
+        debug_print(f"emit rtn to {source}")
+        self.m_sio.emit("node_data_block_rtn", msg, to=source)
+
+        if id == (total-1):
+            self._send_node_data()
+
+    def _send_all_data(self, data):
+        self._send_device_data(data)
+        self._send_node_data(data)
+        self._send_server_data(data)
+        self.on_request_projects(data)
+        self.on_request_robots(data)
+        self.on_request_sites(data)
+        self.on_request_keys(data)
+        self.on_request_search_filters(data)
+        debug_print("Sent all data")
+
+        # after this, there should be no new data!
+        room = dashboard_room(data)
+        self.m_sio.emit("has_new_data", {"value": False}, to=room)
+
+    def on_request_new_data(self, data):
+        session_token = data.get("session_token","")
+        if session_token in self.m_has_updates:
+            # we can be more fine tuned later. now just push everything
+            self._send_all_data(data)
+
+    def _create_node_data_stub(self):
+        rtn = {}
+
+        for source_name, source_items in self.m_node_entries.items():
+            rtn[source_name] = {}
+            for project_name, project_items in source_items.get("entries", {}).items():
+                rtn[source_name][project_name] = {}
+                for ymd in sorted(project_items):
+                    rtn[source_name][project_name][ymd] = {}
+        debug_print(rtn)
+        return rtn 
+
+    def _send_node_data(self, msg=None):
+        node_data = {
+            "entries": self._create_node_data_stub(),
+            "fs_info": {}
+            }
+
+        if msg:
+            room = dashboard_room(msg)
+
+            if room in self.m_session_tokens:
+                session_token = self.m_session_tokens[room]
+                for source in node_data:
+                    self.m_has_updates[session_token][source] = False
+
+            self.m_sio.emit("node_data", node_data, to=room)
+        else:
+            for session_token in self.m_has_updates:
+                for source in node_data:
+                    self.m_has_updates[session_token][source] = False
+
+            self._send_to_all_dashboards("node_data", node_data, with_nodes=False)
+
+
+
+    def on_request_node_ymd_data(self, data):
+        tab = data.get("tab")
+        names = tab.split(":")
+        _, source, project, ymd = names
+
+        source_data = self.m_node_entries.get(source, {})
+        runs= source_data.get("entries", {}).get(project, {}).get(ymd, [])
+        stats_data = source_data.get("stats", {}).get(project).get(ymd, {})
+
+        msg = {
+            "tab": tab,
+            "runs": runs,
+            "stats": stats_data,
+            "source": source,  
+            "project": project,
+            "ymd": ymd
+        }
+        self.m_sio.emit("node_ymd_data", msg, to=dashboard_room(data))
+
+    def _get_device_data_stats(self):
+        device_data = {}
+        
+        sources = self.get_sources("devices")
+        for source in sources:                
+            # project = self.m_projects.get(source)
+            project = self.device_get_project(source)
+            device_data[source] = {"fs_info": {}, "entries": {}, "project": project}
+
+            if source in self.m_fs_info:
+                device_data[source]["fs_info"] = self.m_fs_info[source]
+            entries = self.get_all_entries_for_source(source)
+            for remote_entry in entries.values():
+                uid = remote_entry["upload_id"]
+                entry = {}
+                for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
+                    entry[key] = remote_entry[key]
+
+                entry["size"] = hf.format_size(entry["size"])
+                date = remote_entry["datetime"].split(" ")[0]
+
+                device_data[source]["stats"] = device_data[source].get(
+                    "stats",
+                    {
+                        "total": {
+                            "total_size": 0,
+                            "count": 0,
+                            "start_datetime": None,
+                            "end_datetime": None,
+                            "datatype": {},
+                            "on_server_size": 0,
+                            "on_server_count": 0,
+                        }
+                    },
+                )
+                device_data[source]["stats"][date] = device_data[source]["stats"].get(
+                    date,
+                    {
+                        "total_size": 0,
+                        "count": 0,
+                        "start_datetime": None,
+                        "end_datetime": None,
+                        "datatype": {},
+                        "on_server_size": 0,
+                        "on_server_count": 0,
+                    },
+                )
+
+                self._update_stat(source, uid, device_data[source]["stats"][date])
+                self._update_stat(source, uid, device_data[source]["stats"]["total"])
+
+        return device_data
+    
+    def _get_device_data_stats_by_source_ymd(self, source, ymd):
+        device_data = {}
+        
+        sources = self.get_sources("devices")
+        for source in sources:                
+            # project = self.m_projects.get(source)
+            project = self.device_get_project(source)
+            device_data[source] = {"fs_info": {}, "entries": {}, "project": project}
+
+            if source in self.m_fs_info:
+                device_data[source]["fs_info"] = self.m_fs_info[source]
+            entries = self.get_all_entries_for_source(source)
+            for remote_entry in entries.values():
+                uid = remote_entry["upload_id"]
+                date = remote_entry["datetime"].split(" ")[0]
+                if date != ymd:
+                    continue
+                entry = {}
+                for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
+                    entry[key] = remote_entry[key]
+
+                entry["size"] = hf.format_size(entry["size"])
+
+                device_data[source]["stats"] = device_data[source].get(
+                    "stats",
+                    {
+                        "total": {
+                            "total_size": 0,
+                            "count": 0,
+                            "start_datetime": None,
+                            "end_datetime": None,
+                            "datatype": {},
+                            "on_server_size": 0,
+                            "on_server_count": 0,
+                        }
+                    },
+                )
+                device_data[source]["stats"][date] = device_data[source]["stats"].get(
+                    date,
+                    {
+                        "total_size": 0,
+                        "count": 0,
+                        "start_datetime": None,
+                        "end_datetime": None,
+                        "datatype": {},
+                        "on_server_size": 0,
+                        "on_server_count": 0,
+                    },
+                )
+
+                self._update_stat(source, uid, device_data[source]["stats"][date])
+                self._update_stat(source, uid, device_data[source]["stats"]["total"])
+
+        return device_data
+
+
+
+    def _get_device_data_ymd_stub(self):
+        # debug_print("enter")
+        device_data = {}
+        count = 0
+
+        sources = self.get_sources("devices")
+        for source in sources:
+            # project = self.m_projects.get(source)
+            project = self.device_get_project(source)
+            # debug_print(f" project for {source} is {project}, {self.m_id}")
+            device_data[source] = {"fs_info": {}, "entries": {}, "project": project}
+            if source in self.m_fs_info:
+                device_data[source]["fs_info"] = self.m_fs_info[source]
+
+            entries = self.get_all_entries_for_source(source)
+            for entry in entries.values():
+                count += 1
+
+                data_entry = {}
+                for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
+                    data_entry[key] = entry[key]
+
+                    data_entry["size"] = hf.format_size(entry["size"])
+                    date = entry["datetime"].split(" ")[0]
+                    relpath = entry["relpath"]
+                    device_data[source]["entries"][date] = device_data[source]["entries"].get(date, {})
+                    device_data[source]["entries"][date][relpath] = device_data[source]["entries"][date].get(relpath, [])
+        
+        # debug_print(f"count {count}")
+        return device_data
+
+    def _get_send_device_data_ymd_data(self, source:str, ymd:str):
+        rtnarr = []
+        rtn = {}
+        # will send up to max count entries per packet
+        max_count = 50
+        count = 0 
+        
+        entries = self.get_all_entries_for_source(source)
+        if len(entries) == 0:
+            debug_print(f"Source: {source} missing")
+            return 
+
+        for remote_entry in entries.values():
+            date = remote_entry["datetime"].split(" ")[0]
+            if date != ymd:
+                continue
+
+            entry = {}
+            for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
+                entry[key] = remote_entry[key]
+
+            entry["size"] = hf.format_size(remote_entry["size"])
+            relpath = remote_entry["relpath"]
+
+            rtn[relpath] = rtn.get(relpath, [])
+            rtn[relpath].append(entry)
+
+            count += 1
+            if count >= max_count:
+                rtnarr.append(rtn)
+                rtn = {}
+                count = 0
+
+        rtnarr.append(rtn)
+
+        return rtnarr 
+
+
+    def _send_device_data(self, data=None):
+        # debug_print("enter")
+        device_data = self._get_device_data_ymd_stub()    
+
+        stats = self._get_device_data_stats()
+        for source in device_data:
+            if "stats" in stats[source]:
+                device_data[source]["stats"] = stats[source]["stats"]
+
+            # revise the has_updates  
+            for session_token in self.m_has_updates:
+                self.m_has_updates[session_token][source] = False
+
+        # debug_print(device_data)
+        self._send_to_all_dashboards("device_data", device_data)    
+        # debug_print("exit")
+
+
+
+    def _send_server_data(self, msg=None):
+        data = self.m_database.get_send_data_ymd_stub()
+
+        stats = self.m_database.get_run_stats()
+        self._update_fs_info()
+
+        server_data = {
+            "entries": data,
+            "fs_info": self.m_fs_info[self.m_config["source"]],
+            "stats": stats,
+            "source": self.m_config["source"],
+            "remotes": self.m_config.get("remote", []),
+            "remote_connected": self.m_remote_connection.connected(),
+            "remote_address": self.m_remote_connection.server_name()
+        }
+
+        if msg:
+            room = dashboard_room(msg)
+
+            if room in self.m_session_tokens:
+                session_token = self.m_session_tokens[room]
+                self.m_has_updates[session_token][self.m_config["source"]] = False
+
+            debug_print(f"sending to {room}")   
+            # debug_print(server_data)     
+            self.m_sio.emit("server_data", server_data, to=room)
+        else:
+            debug_print("Sending to all dashboards")
+
+            for session_token in self.m_has_updates:
+                self.m_has_updates[session_token][self.m_config["source"]] = False
+
+            self._send_to_all_dashboards("server_data", server_data, with_nodes=False)
 
     # process project
     def on_request_projects(self, data: dict):
@@ -1268,21 +1379,22 @@ class Server:
         source = data.get("source")
         upload_id = data.get("upload_id")
         robot = data.get("robot")
-        if source not in self.m_remote_entries:
-            return
-        if upload_id not in self.m_remote_entries[source]:
-            return
-        self.m_remote_entries[source][upload_id]["robot_name"] = robot
+
+        entry = self.fetch_remote_entry(source, upload_id)
+        if not entry:
+            return 
+        entry["robot_name"] = robot 
+
+        self.update_remote_entry(source, upload_id, entry)
 
         update = {
             "source": source,
-            "relpath": self.m_remote_entries[source][upload_id]["relpath"],
-            "basename": self.m_remote_entries[source][upload_id]["basename"],
+            "relpath": entry["relpath"],
+            "basename": entry["basename"],
             "update": {"robot_name": robot},
         }
 
         self.m_sio.emit("update_entry", update)
-
 
     # process site
     def on_request_sites(self, data: dict =None):
@@ -1298,16 +1410,19 @@ class Server:
         source = data.get("source")
         upload_id = data.get("upload_id")
         site = data.get("site")
-        if source not in self.m_remote_entries:
-            return
-        if upload_id not in self.m_remote_entries[source]:
-            return
-        self.m_remote_entries[source][upload_id]["site"] = site
+
+        entry = self.fetch_remote_entry(source, upload_id)
+        if not entry:
+            return 
+
+        entry["site"] = site
+        self.update_remote_entry(source, upload_id, entry)
+
 
         update = {
             "source": source,
-            "relpath": self.m_remote_entries[source][upload_id]["relpath"],
-            "basename": self.m_remote_entries[source][upload_id]["basename"],
+            "relpath": entry["relpath"],
+            "basename": entry["basename"],
             "update": {"site": site},
         }
         self.m_sio.emit("update_entry", update)
@@ -1429,100 +1544,6 @@ class Server:
         }
         self.m_sio.emit("search_results", msg, to=room)
 
-
-    def on_request_new_data(self, data):
-        session_token = data.get("session_token","")
-        if session_token in self.m_has_updates:
-            # we can be more fine tuned later. now just push everything
-            self._send_all_data(data)
-
-    ## node data
-    def on_remote_node_data(self, data):
-        source= data.get("source")
-        stats = data.get("stats")
-
-        # self.m_remote_node_expect[source] = total
-        self.m_remote_entries[source] = {}
-        self.m_node_entries[source] = {
-            "stats": stats,
-            "entries": {}
-        }
-    
-    def on_remote_node_data_block(self, data):
-        """ Recevie node data from remote source.  """
-        source = data.get("source")
-        entries = data.get("block")
-        id = data.get("id")
-        total = data.get("total")
-
-        rtn = {}
-
-        for entry in entries:
-            relpath = entry["relpath"]
-            orig_id = entry["upload_id"] 
-            entry["remote_id"] = orig_id
-            project = entry["project"]
-            run_name = entry["run_name"]
-            ymd = entry["datetime"].split(" ")[0]
-
-            entry["hsize"] = hf.format_size(entry["size"])
-            
-            file = os.path.join(relpath, entry["basename"])
-            upload_id = get_upload_id(self.m_config["source"], project, file)
-            entry["upload_id"] = upload_id
-            self.m_remote_entries[source][upload_id] = entry
-
-            filepath = self._get_file_path_from_entry(entry)
-
-            entry["on_local"] = False 
-            entry["on_remote"] = True
-
-            if os.path.exists(filepath):
-                self.m_remote_entries[source][upload_id]["on_server"] = True
-                entry["on_local"] = True
-
-            if os.path.exists(filepath + ".tmp"):
-                self.m_remote_entries[source][upload_id]["temp_size"] = (
-                    os.path.getsize(filepath + ".tmp")
-                )
-            else:
-                self.m_remote_entries[source][upload_id]["temp_size"] = 0
-
-            rtn[upload_id] = entry
-
-            self.m_node_entries[source]["entries"][project] = self.m_node_entries[source]["entries"].get(project, {})
-            self.m_node_entries[source]["entries"][project][ymd] = self.m_node_entries[source]["entries"][project].get(ymd, {})
-            self.m_node_entries[source]["entries"][project][ymd][run_name] = self.m_node_entries[source]["entries"][project][ymd].get(run_name, {})
-            self.m_node_entries[source]["entries"][project][ymd][run_name][relpath] = self.m_node_entries[source]["entries"][project][ymd][run_name].get(relpath, [])
-            self.m_node_entries[source]["entries"][project][ymd][run_name][relpath].append(entry)
-
-
-        msg = {"entries": rtn}
-
-        debug_print(f"emit rtn to {source}")
-        self.m_sio.emit("node_data_block_rtn", msg, to=source)
-
-        if id == (total-1):
-            self._send_node_data()
-
-    def on_node_data_ymd(self, data):
-        source = data.get("source")
-        project = data.get("project")
-        ymd = data.get("ymd")
-        runs = data.get("runs")
-
-        if self.m_remote_entries[source][project][ymd] == None:
-            self.m_remote_entries[source][project][ymd] = {}
-        
-        for run in runs:
-            self.m_remote_entries[source][project][ymd][run] = self.m_remote_entries[source][project][ymd].get(run, {})
-            for relpath in runs[run]:
-                self.m_remote_entries[source][project][ymd][run][relpath] = self.m_remote_entries[source][project][ymd][run].get(relpath, [])
-                self.m_remote_entries[source][project][ymd][run][relpath].extend(runs[run][relpath])
-
-    def on_node_send(self, data):
-        debug_print(data)
-
     ## device data
     def on_device_status(self, data):
         source = data.get("source")
@@ -1548,9 +1569,10 @@ class Server:
     def on_device_files(self, data):
         source = data.get("source")
         project = data.get("project", None)
+        # debug_print(f"project is [{project}]")
         if project is None:
             debug_print(f"clearing {source}")
-            self.m_remote_entries[source] = {}
+            self.delete_remote_entries_for_source(source)
             
 
         if project and project not in self.m_config["volume_map"]:
@@ -1564,82 +1586,84 @@ class Server:
 
         self.m_selected_files_ready[source] = False
         self.m_selected_action[source] = None
-        self.m_projects[source] = project
+        # self.m_projects[source] = project
+        self.device_set_project(source, project)
 
         if source not in self.m_sources["devices"]:
             self.m_sources["devices"].append(source)
+        self.add_source( source, "devices")
 
         # note, this could be emitted
         self.m_fs_info[source] = data.get("fs_info")
 
         # debug_print(f"Clearing {source} with {len(files)}")
-        self.m_remote_entries[source] = {}
-        self.m_remote_entries_lock[source] = Lock()
+        self.delete_remote_entries_for_source(source)
 
-        with self.m_remote_entries_lock[source]:
-            for entry in files:
-                dirroot = entry.get("dirroot")
-                file = entry.get("filename")
-                size = entry.get("size")
-                start_datetime = entry.get("start_time")
-                end_datetime = entry.get("end_time")
-                md5 = entry.get("md5")
-                robot_name = entry.get("robot_name")
-                if robot_name and len(robot_name) > 0:
-                    has_robot = self.m_database.has_robot_name(robot_name)
-                    if not has_robot:
-                        self.m_database.add_robot_name(robot_name, "")
-                        self.m_database.commit()
+        for entry in files:
+            dirroot = entry.get("dirroot")
+            file = entry.get("filename")
+            size = entry.get("size")
+            start_datetime = entry.get("start_time")
+            end_datetime = entry.get("end_time")
+            md5 = entry.get("md5")
+            robot_name = entry.get("robot_name")
+            if robot_name and len(robot_name) > 0:
+                has_robot = self.m_database.has_robot_name(robot_name)
+                if not has_robot:
+                    self.m_database.add_robot_name(robot_name, "")
+                    self.m_database.commit()
 
-                        # send users new robot names
-                        self.on_request_robots()
-                        
-                site = entry.get("site")
-                topics = entry.get("topics", {})
+                    # send users new robot names
+                    self.on_request_robots()
+                    
+            site = entry.get("site")
+            topics = entry.get("topics", {})
 
-                # for dirroot, file, size, start_datetime, end_datetime, md5 in files:
-                upload_id = get_upload_id(source, project, file)
+            # for dirroot, file, size, start_datetime, end_datetime, md5 in files:
+            upload_id = get_upload_id(source, project, file)
 
-                project = project if project else "None"
-        
-                entry = {
-                    "project": project,
-                    "robot_name": robot_name,
-                    "run_name": None,
-                    "datatype": get_datatype(file),
-                    "relpath": os.path.dirname(file),
-                    "basename": os.path.basename(file),
-                    "fullpath": file,
-                    "size": size,
-                    "site": site,
-                    "date": start_datetime.split(" ")[0],
-                    "datetime": start_datetime,
-                    "start_datetime": start_datetime,
-                    "end_datetime": end_datetime,
-                    "upload_id": upload_id,
-                    "dirroot": dirroot,
-                    "remote_dirroot": dirroot,
-                    "status": None,
-                    "temp_size": 0,
-                    "on_device": True,
-                    "on_server": False,
-                    "md5": md5,
-                    "topics": topics,
-                }
+            project = project if project else "None"
+    
+            entry = {
+                "project": project,
+                "robot_name": robot_name,
+                "run_name": None,
+                "datatype": get_datatype(file),
+                "relpath": os.path.dirname(file),
+                "basename": os.path.basename(file),
+                "fullpath": file,
+                "size": size,
+                "site": site,
+                "date": start_datetime.split(" ")[0],
+                "datetime": start_datetime,
+                "start_datetime": start_datetime,
+                "end_datetime": end_datetime,
+                "upload_id": upload_id,
+                "dirroot": dirroot,
+                "remote_dirroot": dirroot,
+                "status": None,
+                "temp_size": 0,
+                "on_device": True,
+                "on_server": False,
+                "md5": md5,
+                "topics": topics,
+            }
 
-                self.m_remote_entries[source][upload_id] = entry
 
-                filepath = self._get_file_path(source, upload_id)
-                status = "On Device"
-                if os.path.exists(filepath):
-                    status = "On Device and Server"
-                    self.m_remote_entries[source][upload_id]["on_server"] = True
-                if os.path.exists(filepath + ".tmp"):
-                    status = "Interrupted transfer"
-                    self.m_remote_entries[source][upload_id]["temp_size"] = os.path.getsize(
-                        filepath + ".tmp"
-                    )
-                self.m_remote_entries[source][upload_id]["status"] = status
+            filepath = self._get_file_path_from_entry(entry)
+            status = "On Device"
+            if os.path.exists(filepath):
+                status = "On Device and Server"
+                entry["on_server"] = True
+            if os.path.exists(filepath + ".tmp"):
+                status = "Interrupted transfer"
+                entry["temp_size"] = os.path.getsize(
+                    filepath + ".tmp"
+                )
+            entry["status"] = status
+
+            self.create_remote_entry(source, upload_id, entry)
+            self.sync_remote_entry(source, upload_id)
 
         # debug_print("data complete")
         self._send_device_data()
@@ -1665,19 +1689,20 @@ class Server:
 
         filenames = []
         for upload_id in ids:
-            if not upload_id in self.m_remote_entries[source]:
-                debug_print(
-                    f"Error! did not find upload id [{upload_id}] in {sorted(self.m_remote_entries[source])}"
-                )
+
+            entry = self.fetch_remote_entry(source, upload_id)
+            if not entry:
+                debug_print(f"did not find [{upload_id}] in {source}")
                 continue
 
-            dirroot = self.m_remote_entries[source][upload_id]["remote_dirroot"]
-            relpath = self.m_remote_entries[source][upload_id]["fullpath"].strip("/")
+            dirroot = entry["remote_dirroot"]
+            relpath = entry["fullpath"].strip("/")
             filenames.append((dirroot, relpath, upload_id))
 
         msg = {"source": source, "files": filenames}
         debug_print(msg)
         self.m_sio.emit("device_remove", msg, to=source)
+
 
     ### server data 
     def on_request_server_ymd_data(self, data):
@@ -1693,7 +1718,7 @@ class Server:
         # Start the long-running task in the background
         self.m_sio.start_background_task(target=self._emit_server_ymd_data, datasets=datasets, stats=stats, project=project, ymd=ymd, tab=tab, room=room)
 
-    ## remote connections 
+    ## remote connections     
     def on_control_msg(self, data):
         source = data.get("source")
         action = data.get("action")
@@ -1809,8 +1834,6 @@ class Server:
 
     ### http commands 
     def authenticate(self):    
-        # debug_print(request.endpoint)
-
         # Check if the current request is for the login page
         if request.endpoint == "show_login_form" or request.endpoint == "login":
             debug_print(request.endpoint)
@@ -1842,8 +1865,7 @@ class Server:
                     return jsonify({'error': 'Unauthorized-v1'}), 401
 
                 # Generate a token for the authenticated user
-                token = self.generate_token(user)
-
+                # token = self.generate_token(user)
 
                 response = make_response()
                 response.set_cookie(
@@ -1888,6 +1910,154 @@ class Server:
     def show_login_form(self):
         return render_template("login.html")
 
+    def handle_file(self, source: str, upload_id: str):
+        # debug_print(f"{source} {upload_id}")
+
+        entry = self.fetch_remote_entry(source, upload_id)
+        if entry is None:
+            json_data = request.form.get('json')
+            if json_data:
+                entry = json.loads(json_data)
+            else:
+
+                sources = self.get_sources()
+                if not source in sources:
+                    debug_print(f"Invalid Source {source}")
+                    return f"Invalid Source {source}",  503
+
+                else:
+                    debug_print(f"Invalid ID {upload_id} for {source}")
+                    return f"Invalid ID {upload_id} for {source}", 503
+
+        # debug_print(entry)
+
+        offset = request.args.get("offset", 0)
+        if offset == 0:
+            open_mode = "wb"
+        else:
+            open_mode = "ab"
+
+        cid = request.args.get("cid")
+        splits = request.args.get("splits")
+        is_last = cid == splits
+
+        filep = request.files.get('file', request.stream)
+        filename = entry["basename"]
+
+        filepath = self._get_file_path_from_entry(entry)
+        tmp_path = filepath + ".tmp"
+
+        # debug_print(filepath)
+
+        if os.path.exists(filepath):
+            return jsonify({"message": f"File {filename} alredy uploaded"}), 409
+
+        if self.m_selected_action.get(source, "") == "cancel":
+            return jsonify({"message": f"File {filename} upload canceled"}), 400
+
+        # keep track of expected size. If remote canceled, we won't know.
+        expected = entry["size"]
+
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+
+        # we use this in multiple location, better to define it.
+        cancel_msg = {
+            "div_id": f"status_{upload_id}",
+            "source": self.m_config["source"],
+            "status": "<B>Canceled</B>",
+            "on_device": True,
+            "on_server": False,
+            "upload_id": upload_id,
+        }
+
+        # debug_print(f"opening {tmp_path}")
+
+        # Start uploading the file in chunks
+        chunk_size = 10 * 1024 * 1024  # 1MB chunks
+        with open(tmp_path, open_mode) as fid:
+            while True:
+
+                if self.m_selected_action.get(source,"") == "cancel":
+                    self._send_dashboard_file(cancel_msg)
+
+                    return jsonify({"message": f"File {filename} upload canceled"})
+
+                try:
+                    chunk = filep.read(chunk_size)
+
+                except OSError:
+                    # we lost the connection on the client side.
+                    self._send_dashboard_file(cancel_msg)
+                    return jsonify({"message": f"File {filename} upload canceled"})
+
+                if not chunk:
+                    break
+                fid.write(chunk)
+
+        os.chmod(tmp_path, 0o777 )
+
+        if os.path.exists(tmp_path) and is_last:
+            current_size = os.path.getsize(tmp_path)
+            if current_size != expected:
+                # transfer canceled politely on the client side, or
+                # some other issue. Either way, data isn't what we expected.
+                cancel_msg["status"] = (
+                    "Size mismatch. " + str(current_size) + " != " + str(expected)
+                )
+                self._send_dashboard_file(cancel_msg)
+
+                return jsonify({"message": f"File {filename} upload canceled"})
+
+            os.rename(tmp_path, filepath)
+
+            data = {
+                "div_id": f"status_{upload_id}",
+                "status": "On Device and Server",
+                "source": self.m_config["source"],
+                "on_device": True,
+                "on_server": True,
+                "upload_id": upload_id,
+            }
+
+            self._send_dashboard_file(data)
+
+        entry["localpath"] = filepath
+        entry["on_server"] = True
+        entry["dirroot"] = self._get_dirroot(entry["project"])
+        entry["fullpath"] = filepath.replace(entry["dirroot"], "").strip("/")
+
+
+        metadata_filename = filepath + ".metadata"
+        with open(metadata_filename, "w") as fid:
+            json.dump(entry, fid, indent=True)
+
+        os.chmod(metadata_filename, 0o777)
+
+        self.m_database.add_data(entry)
+        self.m_database.estimate_runs()
+        self.m_database.commit()
+
+
+        # signal to the dashboards that this source has updates.  
+        for session_token in self.m_has_updates:
+            self.m_has_updates[session_token][self.m_config["source"]] = True
+
+            room = "dashboard-" + session_token
+            self.m_sio.emit("has_new_data", {"value": True}, to=room)
+
+        # # TODO: replace send_server_data with "update_server_data"
+        # # send_server_data()
+
+        # ymd = entry["date"]
+        # project = entry["project"]
+        # tab = f"server:{project}:{ymd}"
+
+        # on_request_server_ymd_data({"tab": tab})
+
+        self._device_revise_stats()
+
+        return jsonify({"message": f"File {filename} chunk uploaded successfully"})
+
     def transfer_selected(self):
         data = request.get_json()
         selected_files = data.get("files")
@@ -1895,20 +2065,21 @@ class Server:
 
         filenames = []
         for upload_id in selected_files:
-            if not upload_id in self.m_remote_entries[source]:
+            entry = self.fetch_remote_entry(source, upload_id)
+            if not entry:
                 debug_print(
                     f"Error! did not find upload id [{upload_id}] in {sorted(self.m_remote_entries[source])}"
                 )
                 continue
 
-            filepath = self._get_file_path(source, upload_id)
+            filepath = self._get_file_path_from_entry(entry)
             if os.path.exists(filepath):
                 continue
 
-            dirroot = self.m_remote_entries[source][upload_id]["dirroot"]
-            relpath = self.m_remote_entries[source][upload_id]["fullpath"].strip("/")
-            offset = self.m_remote_entries[source][upload_id]["temp_size"]
-            size = self.m_remote_entries[source][upload_id]["size"]
+            dirroot = entry["dirroot"]
+            relpath = entry["fullpath"].strip("/")
+            offset = entry["temp_size"]
+            size = entry["size"]
             filenames.append((dirroot, relpath, upload_id, offset, size))
 
         msg = {"source": data.get("source"), "files": filenames}
@@ -1918,60 +2089,9 @@ class Server:
         # # debug_print(data)
         return jsonify("Received")
 
-    def handle_node_data(self):
-        rtn = {}
-        data = request.get_json()
-        source = data.get("source")
-        # project = data["project"]
-        runs = data["runs"]    
-
-        debug_print(f"Got data from node {source}")
-        self.m_selected_action[source] = None
-        if source not in self.m_sources["nodes"]:
-            self.m_sources["nodes"].append(source)
-
-        for run_name, relpaths in runs.items():
-            for relpath, entries in relpaths.items():
-                for entry in entries:
-                    orig_id = entry["upload_id"]
-                    project = entry["project"]
-
-                    file = os.path.join(relpath, entry["basename"])
-                    upload_id = get_upload_id(self.m_config["source"], project, file)
-                    debug_print((orig_id, upload_id))
-                    entry["upload_id"] = upload_id
-                    entry["project"] = project
-                    self.m_remote_entries[source][upload_id] = entry
-
-                    filepath = self._get_file_path(source, upload_id)
-
-                    if os.path.exists(filepath):
-                        self.m_remote_entries[source][upload_id]["on_server"] = True
-                        entry["on_local"] = True
-
-                    if os.path.exists(filepath + ".tmp"):
-                        self.m_remote_entries[source][upload_id]["temp_size"] = (
-                            os.path.getsize(filepath + ".tmp")
-                        )
-                    else:
-                        self.m_remote_entries[source][upload_id]["temp_size"] = 0
-
-                    rtn[upload_id] = entry
-
-        msg = {"entries": rtn,
-            "project": project}
-
-        debug_print(f"emit rtn to {source}")
-        self.m_sio.emit("node_data_ymd_rtn", msg, to=source)
-
-        self.m_node_entries[source] = data
-        self._send_node_data()
-
-        return jsonify("Received")
-
-
     # Only used for local server. Not used when running LDAP
     def login(self):
+        debug_print("enter")
         username = request.form["username"]
         password = request.form["password"]
 
@@ -2001,6 +2121,60 @@ class Server:
             flash("Invalid username or password")
             return redirect(url_for("show_login_form"))
 
+    def download_file(self,upload_id):
+        debug_print(upload_id)
+        localpath = self.m_database.get_localpath(upload_id)
+        if localpath:
+            directory = os.path.dirname(localpath)
+            filename = os.path.basename(localpath)
+            debug_print(f"Download {localpath}")
+            return send_from_directory(directory=directory, path=filename, as_attachment=True)
+        
+        return "File Not Found", 404
+
+    
+    def download_keys(self):
+        fullpath = self.m_keys_filename
+        if not fullpath.startswith("/"):
+            if "PWD" in os.environ:
+                fullpath = os.path.join(os.environ["PWD"], fullpath)
+            else:
+                fullpath = os.path.join("/app", fullpath)
+
+        debug_print(f"Download {fullpath}")
+        directory = os.path.dirname(fullpath)
+        filename = os.path.basename(fullpath)
+        return send_from_directory(directory=directory, path=filename, as_attachment=True)
+
+
+    def upload_keys(self):
+        if 'file' not in request.files:
+            return jsonify({'message': 'No file part'}), 400
+        
+        file = request.files['file']
+
+        if file.filename == '':
+            return jsonify({'message': 'No selected file'}), 400
+
+        if file:
+            try: 
+                yaml_content = yaml.safe_load(file.read())
+                keys = yaml_content.get("keys", None)
+                if not keys:
+                    return jsonify({'message': f"Error. {file.filename} did not contain any keys"}), 400
+                self.m_config["keys"] = keys
+                self._save_keys()
+                self.on_request_keys(None)
+
+                return jsonify({'message': 'Keys updated.'}), 200
+            
+            except yaml.YAMLError as e:
+                return jsonify({'message': f'Error parsing YAML file: {str(e)}'}), 400
+            except Exception as e:
+                return jsonify({'message': f'Error saving file: {str(e)}'}), 500            
+
+
+
 
     # debug. disable for production
 
@@ -2009,9 +2183,11 @@ class Server:
         self._send_server_data(data)
 
     def on_debug_scan_server(self, data=None):
+        debug_print("enter")
         self.m_sio.start_background_task(self._scan_server_background, data)
 
-    def _scan_server_backgroud(self, data=None):
+    def _scan_server_background(self, data=None):
+        debug_print("Scanning server")
         self.m_database.regenerate(self.m_sio, event="server_regen_msg")
 
         for project_name in self.m_config.get("projects", []):

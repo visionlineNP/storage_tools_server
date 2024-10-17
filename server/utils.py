@@ -32,8 +32,11 @@ def get_source_by_mac_address():
 
 def is_interface_up(interface):
     path = f"/sys/class/net/{interface}/operstate"
-    with open(path, "r") as fid:
-        state = fid.read()
+    try:
+        with open(path, "r") as fid:
+            state = fid.read()
+    except NotADirectoryError:
+        state = "down"
 
     state = state.strip()
     return state == "up"

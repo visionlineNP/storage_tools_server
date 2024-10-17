@@ -14,3 +14,4 @@ websocket-client
 xmltodict
 zeroconf
 # flask-server-timing
+redis 

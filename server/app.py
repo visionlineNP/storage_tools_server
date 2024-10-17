@@ -12,10 +12,24 @@ app = flask.Flask(__name__)
 app.config["SECRET_KEY"] = "AirLabKeyKey"
 
 
-# socketio = flask_socketio.SocketIO(app, async_mode="threading")
+# prepare the app
+app = flask.Flask(__name__)
+app.config["SECRET_KEY"] = "AirLabKeyKey"
+
 
 origins = "*"
-socketio = flask_socketio.SocketIO(app, cors_allowed_origins=origins, ping_interval=25, ping_timeout=60, max_http_buffer_size=200000000, logger=False, engineio_logger=False, async_mode="threading")
+socketio = flask_socketio.SocketIO(
+    app, 
+    cors_allowed_origins=origins,
+    ping_interval=25, 
+    ping_timeout=60, 
+    max_http_buffer_size=200000000, 
+    logger=False, 
+    engineio_logger=False, 
+    message_queue="redis://redis:6379/0",  # Redis message queue
+    async_mode="threading"
+)
+
 
 
 server = None 
@@ -28,10 +42,13 @@ def create_server():
     app.route("/")(server.index)
     app.route("/show_login_form")(server.show_login_form)
     app.route("/login", methods=["POST"])(server.login)
-    app.route("/js/<path:path>")(server.serve_js)
-    app.route("/css/<path:path>")(server.serve_css)
     app.route("/file/<string:source>/<string:upload_id>", methods=["POST"])(server.handle_file)
     app.route("/transfer-selected", methods=["POST"])(server.transfer_selected)
+    app.route("/download/<string:upload_id>")(server.download_file)
+    app.route("/uploadKeys", methods=["POST"])(server.upload_keys)
+    app.route('/downloadKeys')(server.download_keys)
+
+
     # app.route("/node_data", methods=["POST"])(server.handle_node_data)
 
     socketio.on("join")(server.on_join)
@@ -45,7 +62,7 @@ def create_server():
 
     socketio.on("remote_node_data")(server.on_remote_node_data)
     socketio.on("remote_node_data_block")(server.on_remote_node_data_block)
-    socketio.on("node_send")(server.on_node_send)
+    # socketio.on("node_send")(server.on_node_send)
 
     socketio.on("request_projects")(server.on_request_projects)
     socketio.on("add_project")(server.on_add_project)
@@ -98,8 +115,8 @@ def create_server():
     socketio.on("device_remove")(server.on_device_remove)
 
     # debug 
-    socketio.on("debug_clear_data")(server.on_debug_clear_data)
-    socketio.on("debug_scan_server")(server.on_debug_scan_server)
+    socketio.on("clear_data")(server.on_debug_clear_data)
+    socketio.on("scan_server")(server.on_debug_scan_server)
 
 
 create_server()

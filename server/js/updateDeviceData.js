@@ -608,6 +608,9 @@ function updateDeviceData(data) {
   // save the source tabs to allow for easy updating. 
   window.source_tabs = source_tabs;
 
+  //console.log("length is ", source_names.length);
+  updateDeviceCount(source_names.length);
+
   $.each(source_tabs, function (source_name, source_tab) {    
     const source_item = data[source_name];
 
@@ -1345,3 +1348,18 @@ function accumulateDeviceYMD(data)
 
 }
 
+function updateDeviceCount(count)
+{
+
+  const container = document.getElementById("device_menu_status")
+  if(container) 
+  {
+    if( count > 0) {
+      container.innerHTML = count;
+    } else {
+      container.innerHTML = "";
+    }
+  } else {
+    console.log("did not find 'device_menu_status'")
+  }
+}

@@ -42,7 +42,7 @@ function create_tabs(names, parent, prefix, event=null, auto_trigger=false)
         if(event && !auto_trigger) {
             // execute this function once the tab is visible for the first time
             link.addEventListener("show.bs.tab", function(e) {
-                console.log(e, event, tab_name, session_token);
+                //console.log(e, event, tab_name, session_token);
                 socket.emit(event, {tab:tab_name, session_token: session_token})
             },{once: true})
         }
