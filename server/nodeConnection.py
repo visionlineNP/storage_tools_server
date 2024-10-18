@@ -1,8 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os 
-import queue 
+import queue
+from threading import Thread 
 import requests
-import gevent 
+
+from server.remoteConnection import pbar_thread
+from .database import Database 
 
 
 from .SocketIOTQDM import SocketIOTQDM
@@ -54,20 +58,155 @@ def build_multipart_data(entry, generator, total_size):
 
 
 class NodeConnection:
-    def __init__(self, config, sio) -> None:
+    def __init__(self, config, sio, database:Database) -> None:
         self.m_signal = None 
 
         self.m_config = config 
         self.m_sio = sio    
         self.m_node_source = config["source"]     
-
+        self.m_send_threads = None
+        self.m_database = database
 
         pass
 
     def cancel(self):
         self.m_signal = "cancel"
 
+    def _background_send_files(self, filelist, base_url):
+        local_status_event = "server_status_tqdm"
+        self.m_signal = None 
+
+        debug_print("enter")
+        if self.m_send_threads:
+            debug_print(f"Already getting file for {base_url} {self.m_send_threads}")
+            return 
+
+        self.m_send_threads = True
+
+        self.m_signal = None
+        url = f"{base_url}/file"
+
+        source = self.m_config["source"]
+        api_key_token = self.m_config["API_KEY_TOKEN"]
+        split_size_gb = int(self.m_config.get("split_size_gb", 1))
+        chunk_size_mb = int(self.m_config.get("chunk_size_mb", 1))
+        read_size_b = chunk_size_mb * 1024 * 1024
+
+
+        socket_events = [(self.m_sio, local_status_event, None)]
+
+        total_size = 0
+
+        for _, _, _, offset_b, file_size, _ in filelist:
+            offset_b = int(offset_b)
+            file_size = int(file_size)
+            total_size += file_size - offset_b
+
+        source = self.m_config["source"]
+        max_threads = self.m_config["threads"]
+        message_queue = queue.Queue()
+        desc = "File Transfer"
+
+
+
+
+        def send_worker(args):
+            debug_print("Enter")
+            message_queue, project, file, upload_id, offset_b, file_size, _, idx = args 
+            file_size = int(file_size)
+            offset_b = int(offset_b)
+
+            entry = self.m_database.get_entry(upload_id)
+
+
+            dirroot = self.m_config["volume_map"].get(project, "/").strip("/")
+            fullpath = os.path.join( self.m_config["volume_root"], dirroot, file.strip("/"))
+            if not os.path.exists(fullpath):
+                return fullpath, False
+
+            name = f"{upload_id}_{idx}_{os.path.basename(file)}" 
+
+            total_size = os.path.getsize(fullpath)
+
+            with open(fullpath, 'rb') as fp:
+                params = {}
+                if offset_b > 0:
+                    fp.seek(offset_b)
+                    params["offset"] = offset_b 
+                    total_size -= offset_b 
+                
+                def read_and_update():
+                    while True:
+                        # Read the file in chunks of 4096 bytes (or any size you prefer)
+                        chunk = fp.read(1024*1024)
+                        if not chunk:
+                            break
+                        yield chunk
+                        # Update the progress bars
+                        chunck_size = len(chunk)
+                        message_queue.put({"main_pbar": chunck_size})
+                        message_queue.put({"child_pbar": name, "size": chunck_size, "action": "update", "total_size": file_size, "desc": desc})
+                        
+                        if self.m_signal:
+                            if self.m_signal == "cancel":
+                                break
+                    
+                multipart_stream, boundary, content_length = build_multipart_data(entry, read_and_update(), total_size)
+
+                # Set headers
+                headers = {
+                        "Authorization": f"Bearer {api_key_token}",
+                        "Content-Type": f"multipart/form-data; boundary={boundary}",
+                    }
+
+                desc = "Sending " + os.path.basename(file)
+                message_queue.put({"child_pbar": name, "desc": desc, "size": file_size, "action": "start"})
+
+                response = requests.post(url + f"/{source}/{upload_id}", data=multipart_stream, headers=headers)
+                
+                # debug_print(f"{url} {source} {upload_id} {params} {headers}")
+                # Make the POST request with the streaming data
+                # response = session.post(url + f"/{source}/{upload_id}", params=params, data=read_and_update(), headers=headers)                                
+
+                rtn = True
+                if response.status_code != 200:
+                    debug_print(("Error uploading file:", response.text, response.status_code))
+                    rtn = False
+
+                message_queue.put({"child_pbar": name, "action": "close"})
+
+                return fullpath, rtn
+            
+
+        pool_queue = [ (message_queue, project, file, upload_id, offset_b, total_size, entry, idx ) for idx, (project, file, upload_id, offset_b, total_size, entry ) in enumerate(filelist) ]
+
+        thread = Thread(target=pbar_thread, args=(message_queue, total_size, source, socket_events, desc, max_threads))    
+        thread.start()
+
+        files = []
+
+        try:
+            with ThreadPoolExecutor(max_workers=max_threads) as executor:
+                for filename, status in executor.map(send_worker, pool_queue):
+                    debug_print((filename, status))
+                    files.append((filename, status))
+
+        finally:
+            message_queue.put({"close": True})
+
+
+        # done 
+        self.m_send_threads = None 
+
+
+        pass 
+
     def sendFiles(self, filelist, base_url):
+        if self.m_send_threads:
+            return 
+        self.m_sio.start_background_task(target=self._background_send_files, filelist=filelist, base_url=base_url)
+
+    def oldSendFiles(self, filelist, base_url):
         # debug_print((base_url, filelist))
         local_status_event = "server_status_tqdm"
         self.m_signal = None 
@@ -168,15 +307,15 @@ class NodeConnection:
                                 if response.status_code != 200:
                                     debug_print(("Error uploading file:", response.text, response.status_code))
     
-            greenlets = []
-            for i in range(num_threads):
-                greenlet = gevent.spawn(worker, i)  # Spawn a new green thread
-                greenlets.append(greenlet)
+            # greenlets = []
+            # for i in range(num_threads):
+            #     greenlet = gevent.spawn(worker, i)  # Spawn a new green thread
+            #     greenlets.append(greenlet)
 
-            # Wait for all green threads to complete
-            gevent.joinall(greenlets)
+            # # Wait for all green threads to complete
+            # gevent.joinall(greenlets)
 
-            debug_print("pull complete")
+            # debug_print("pull complete")
 
         self.m_signal = None 
 

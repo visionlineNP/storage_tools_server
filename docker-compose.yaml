@@ -9,12 +9,23 @@ services:
       - ./nginx/ldap_ssl_conf.d:/etc/nginx/conf.d  # Custom Nginx configuration
       - ./nginx/logs:/var/log/nginx
       - ./nginx/certs:/etc/nginx/certs:ro  # Mount the SSL certificates
+      - ./server/js:/etc/nginx/html/static/js  # server the static files directly from here, not flask. 
+      - ./server/css:/etc/nginx/html/static/css 
+      - ./server/static/favicon.ico:/etc/nginx/html/static/favicon.ico
+
 
     depends_on:
       - storage_tools_server  # Ensure Nginx starts after the Flask app service
 
     networks:
       - custom_network  # Attach to the custom network
+
+  redis:
+    image: "redis:alpine"
+    expose:
+      - "6379"
+    networks:
+      - custom_network  
 
 
   storage_tools_server:
@@ -26,6 +37,10 @@ services:
     # for extra security, set the Cross Site Origins hostname
     # environment:
     # - HOSTNAME=${HOSTNAME}
+    environment:
+      - CONFIG=/app/config/config.yaml
+      - REDIS_URL=redis://redis:6379/0
+      - SERVERNAME=HomeServer
 
     expose:
      - "8091"  # Expose port 8091 to the internal Docker network
@@ -45,10 +60,12 @@ services:
     restart: always
     networks:
       - custom_network  
+    depends_on:
+      - redis
 
 networks:
   custom_network:
     driver: bridge
     ipam:
       config:
-        - subnet: 10.11.12.0/24  # This subnet shouldn't conflict with the CMU network. 
+        - subnet: 10.11.15.0/24  # This subnet shouldn't conflict with the CMU network. 

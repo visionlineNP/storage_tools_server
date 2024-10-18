@@ -32,6 +32,8 @@ class Server:
         self.m_id = os.getpid()
 
         self.redis = redis.StrictRedis(host='redis', port=6379, db=0)
+        # always start with a clean slate
+        self.redis.flushall()
         self.pubsub = self.redis.pubsub()
         self._start_pubsub_listener()
 
@@ -117,7 +119,7 @@ class Server:
         self._load_config()
         self._load_keys()
 
-        self.m_remote_connection = RemoteConnection(self.m_config, socketio, self.m_database)
+        self.m_remote_connection = RemoteConnection(self.m_config, socketio, self.m_database, self)
 
         self.m_zeroconf = Zeroconf()
         self._setup_zeroconf()
@@ -281,7 +283,9 @@ class Server:
         def listen():
             for message in self.pubsub.listen():
                 if message['type'] == 'message':
-                    channel = message["channel"]
+                    channel = message["channel"].decode("utf-8")
+                    debug_print(channel)
+
                     data = json.loads(message['data'])
                     if channel == "resync_remote_entries":
                         source = data['source']
@@ -301,6 +305,8 @@ class Server:
         listener_thread.start()
 
     def create_remote_entry(self, source, upload_id, entry):
+        # debug_print((source, upload_id))
+            
         # Serialize the entry as a JSON string and store it in Redis
         entry_json = json.dumps(entry)
         self.redis.set(f'remote_entries:{source}:{upload_id}', entry_json)
@@ -318,6 +324,10 @@ class Server:
 
     def update_remote_entry(self, source, upload_id, updated_entry):
         # Fetch and update the entry in Redis
+
+        if not "start_datetime" in updated_entry:
+            debug_print(f"Skipping {updated_entry}")
+
         entry_json = json.dumps(updated_entry)
         self.redis.set(f'remote_entries:{source}:{upload_id}', entry_json)
 
@@ -409,7 +419,7 @@ class Server:
     def device_remove_project(self, source):
         keys = self.redis.keys(f'device_project:{source}') 
         if keys:
-            self.redis.delete(keys)
+            self.redis.delete(*keys)
 
     def _device_revise_stats(self):
         stats = {}
@@ -487,7 +497,10 @@ class Server:
 
     def _update_stat(self, source, uid, stat):
         entry = self.fetch_remote_entry(source, uid)
-        self._update_stat_for_entry(entry, stat)
+        if entry:
+            self._update_stat_for_entry(entry, stat)
+        else: 
+            debug_print(f"Did not find {source} {uid}")
 
     def _emit_server_ymd_data(self, datasets, stats, project, ymd, tab, room):
         """Background task to emit data incrementally."""
@@ -715,6 +728,8 @@ class Server:
             if remove in self.m_node_connections:
                 del self.m_node_connections[remove]
 
+            self.delete_remote_entries_for_source(remove)
+
 
             debug_print(f"Got disconnect: {remove}")
 
@@ -799,7 +814,7 @@ class Server:
             self._send_all_data({"session_token": session_token})
 
         if client == "node":
-            self.m_node_connections[room] = NodeConnection(self.m_config, self.m_sio)
+            self.m_node_connections[room] = NodeConnection(self.m_config, self.m_sio, self.m_database)
 
         if client == "device":
             self.add_source(room, "devices")
@@ -811,10 +826,12 @@ class Server:
 
 
     def on_remote_node_data(self, data):
-        self.redis.publish("node_data", data)
+        debug_print("enter --- ")
+        self.redis.publish("node_data", json.dumps(data))
 
     def on_remote_node_data_block(self, data):
-        self.redis.pubish("node_data_block", data)
+        debug_print("enter ------")
+        self.redis.publish("node_data_block", json.dumps(data))
 
     def _process_node_data(self, data):
         source= data.get("source")
@@ -875,10 +892,11 @@ class Server:
             self.m_node_entries[source]["entries"][project][ymd][run_name][relpath] = self.m_node_entries[source]["entries"][project][ymd][run_name].get(relpath, [])
             self.m_node_entries[source]["entries"][project][ymd][run_name][relpath].append(entry)
 
+            self.create_remote_entry(source, upload_id, entry)
 
         msg = {"entries": rtn}
 
-        debug_print(f"emit rtn to {source}")
+        # debug_print(f"emit rtn to {source}")
         self.m_sio.emit("node_data_block_rtn", msg, to=source)
 
         if id == (total-1):
@@ -914,7 +932,7 @@ class Server:
                 rtn[source_name][project_name] = {}
                 for ymd in sorted(project_items):
                     rtn[source_name][project_name][ymd] = {}
-        debug_print(rtn)
+        # debug_print(rtn)
         return rtn 
 
     def _send_node_data(self, msg=None):
@@ -1792,17 +1810,17 @@ class Server:
 
         filenames = []
         for upload_id in selected_files:
-            if not upload_id in self.m_remote_entries[source]:
+            entry = self.fetch_remote_entry(source, upload_id)
+            if not entry:
                 debug_print(
-                    f"Error! did not find upload id [{upload_id}] in {sorted(self.m_remote_entries[source])}"
+                    f"Error! did not find upload id [{upload_id}] for {source}"
                 )
                 continue
 
-            filepath = self._get_file_path(source, upload_id)
+            filepath = self._get_file_path_from_entry(entry)
             if os.path.exists(filepath):
                 continue
 
-            entry = self.m_remote_entries[source][upload_id]
             project = entry["project"]
             offset = entry["temp_size"]
             size = entry["size"]
@@ -1834,6 +1852,10 @@ class Server:
 
     ### http commands 
     def authenticate(self):    
+        # note, the we are not geting the "Authoerizion" header for download link!
+        if request.endpoint == "download_file":
+            return
+
         # Check if the current request is for the login page
         if request.endpoint == "show_login_form" or request.endpoint == "login":
             debug_print(request.endpoint)
@@ -1911,7 +1933,7 @@ class Server:
         return render_template("login.html")
 
     def handle_file(self, source: str, upload_id: str):
-        # debug_print(f"{source} {upload_id}")
+        debug_print(f"{source} {upload_id}")
 
         entry = self.fetch_remote_entry(source, upload_id)
         if entry is None:
@@ -1919,8 +1941,10 @@ class Server:
             if json_data:
                 entry = json.loads(json_data)
             else:
+                return f"Invalid ID {upload_id} for {source}", 503
 
-                sources = self.get_sources()
+
+                sources = self.get_sources("devices")
                 if not source in sources:
                     debug_print(f"Invalid Source {source}")
                     return f"Invalid Source {source}",  503
@@ -2122,12 +2146,14 @@ class Server:
             return redirect(url_for("show_login_form"))
 
     def download_file(self,upload_id):
-        debug_print(upload_id)
         localpath = self.m_database.get_localpath(upload_id)
+        debug_print((upload_id, localpath))        
         if localpath:
+
             directory = os.path.dirname(localpath)
             filename = os.path.basename(localpath)
-            debug_print(f"Download {localpath}")
+            
+            debug_print(f"Download {localpath} {os.path.exists(localpath)}")
             return send_from_directory(directory=directory, path=filename, as_attachment=True)
         
         return "File Not Found", 404

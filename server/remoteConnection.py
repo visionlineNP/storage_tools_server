@@ -136,8 +136,9 @@ class RemoteConnection:
         config: loaded config
         local_sio: The parent processes socket to local server
     """
-    def __init__(self, config, local_sio, database:Database) -> None:
+    def __init__(self, config, local_sio, database:Database, parent) -> None:
         self.m_config = config
+        self.m_parent = parent 
 
         self.m_local_sio = local_sio
         self.m_remote_sio = socketio.Client()
@@ -157,6 +158,7 @@ class RemoteConnection:
         self.m_rev_upload_id_map =  {}
 
         self.m_node_source = None 
+        self.m_remote_source = None 
 
         self.send_to_al_local_dashboards_fn = None 
         self.get_file_path_from_entry_fn = None
@@ -179,6 +181,7 @@ class RemoteConnection:
 
         try:
             self.m_server = None
+            self.m_remote_source = None 
             server, port = server_full.split(":")
             port = int(port)
 
@@ -198,7 +201,6 @@ class RemoteConnection:
             self.m_remote_sio.connect(f"http://{server}:{port}/socket.io", headers=headers, transports=['websocket'])
             self.m_remote_sio.on('control_msg')(self._handle_control_msg)    
             self.m_remote_sio.on("dashboard_file")(self._on_dashboard_file)
-            # self.m_sio.on("node_data")(self._on_node_data)
             self.m_remote_sio.on("node_data_ymd_rtn")(self._on_node_data_ymd_rtn)
             self.m_remote_sio.on("node_data_block_rtn")(self.on_node_data_block_rtn)
             self.m_remote_sio.on("node_send")(self._on_node_send)
@@ -264,6 +266,7 @@ class RemoteConnection:
     def _on_dashboard_info(self, data):
         host = data.get("source")
         debug_print(f"connected to [{host}]")
+        self.m_remote_source = host
 
     def _on_dashboard_file(self, data):
         source = data.get("source")
@@ -302,6 +305,7 @@ class RemoteConnection:
                 "fullpath": entry.get("fullpath")
             }
             self.send_to_al_local_dashboards_fn("dashboard_file_server", msg)
+
 
 
     def _on_node_data_ymd_rtn(self, data):
@@ -359,9 +363,11 @@ class RemoteConnection:
                     item["project"] = data.get("project", "")
 
                     file = os.path.join(item["relpath"], item["basename"])
-
-
                     local_id =  get_upload_id(self.m_config["source"], data.get("project"), file) 
+
+                    self.m_parent.create_remote_entry(self.m_remote_source, local_id, item )
+
+
                     self.m_upload_id_map[upload_id] = local_id 
                     self.m_rev_upload_id_map[local_id] = upload_id
                     # self.m_upload_id_map.get(upload_id, None)
@@ -430,8 +436,13 @@ class RemoteConnection:
             "stats": stats
         }
 
-        self.m_remote_sio.emit("remote_node_data", server_data)
-        self.m_remote_sio.start_background_task(self.background_send_remote_node_data, blocks)
+        if self.m_remote_sio.connected:
+            try:
+                self.m_remote_sio.emit("remote_node_data", server_data)
+                self.m_remote_sio.start_background_task(self.background_send_remote_node_data, blocks)
+            except socketio.exceptions.BadNamespaceError as e:
+                debug_print("Bad namespace error")
+
 
 
     def background_send_remote_node_data(self, blocks):
@@ -444,6 +455,7 @@ class RemoteConnection:
                 "block": block,
                 "id": i
             }
+            debug_print(f"Sending block {i}")
             self.m_remote_sio.emit("remote_node_data_block", msg)
             time.sleep(0.05)
 
@@ -750,8 +762,11 @@ class RemoteConnection:
 
 
     def disconnect(self):
+        debug_print("Disconnect remote...")
         if self.m_remote_sio.connected:
             self.m_remote_sio.disconnect()
+        if self.m_remote_source:
+            self.m_parent.delete_remote_entries_for_source(self.m_remote_source)
 
     def pull_files(self, data):
         debug_print("enter")

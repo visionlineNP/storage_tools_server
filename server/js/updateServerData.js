@@ -487,6 +487,14 @@ function processServerYMD(data) {
                         td.appendChild(icon)
 
 
+
+                        const link = document.createElement("a")   
+                        const upload_id = detail.upload_id;
+                        const basename = detail.basename;
+
+                        link.href = `/download/${upload_id}`
+                        link.download = basename 
+
                         const download = document.createElement("i")
                         download.className = "bi bi-download"
                         download.title = "Download "
@@ -494,24 +502,35 @@ function processServerYMD(data) {
                         download.dataset.upload_id = detail.upload_id;
                         download.dataset.basename = detail.basename;
                         download.setAttribute("data-bs-toggle", "tooltip");
-                        download.addEventListener("click", function () {
-                            const upload_id = $(this)[0].dataset.upload_id;
-                            const basename = $(this)[0].dataset.basename;
+                        link.appendChild(download)
 
-                            const link = document.createElement("a")
-                            link.href = `/download/${upload_id}`
-                            link.download = basename;
-                            link.style.display = 'none';
 
-                            document.body.appendChild(link);
-                            link.click()
-                            document.body.removeChild(link);
+                        // const download = document.createElement("i")
+                        // download.className = "bi bi-download"
+                        // download.title = "Download "
+                        // download.id = `download_${detail.upload_id}`;
+                        // download.dataset.upload_id = detail.upload_id;
+                        // download.dataset.basename = detail.basename;
+                        // download.setAttribute("data-bs-toggle", "tooltip");
+                        // download.addEventListener("click", function () {
+                        //     const upload_id = $(this)[0].dataset.upload_id;
+                        //     const basename = $(this)[0].dataset.basename;
 
-                        })
+                        //     const link = document.createElement("a")
+                        //     link.href = `/download/${upload_id}`
+                        //     link.download = basename;
+                        //     link.style.display = 'none';
+
+                        //     document.body.appendChild(link);
+                        //     link.click()
+                        //     document.body.removeChild(link);
+
+                        // })
                         const spacer = document.createElement("span");
                         spacer.innerHTML = "&nbsp;&nbsp;"
                         td.appendChild(spacer)
-                        td.appendChild(download);
+                        //td.appendChild(download);
+                        td.appendChild(link)
 
 
                         const mount = getCookie("mount_" + project_name);
@@ -1014,12 +1033,9 @@ function updateServerRemoteYMD(data) {
         run_dl.appendChild(run_dd);
 
 
-        let header_names = ["Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
-        if (window.has_remotes) {
-            header_names = ["Select", "Robot", "Site", "Date", "Basename", "Path", "Size", "Status"]
-        }
+        let header_names = ["Select", "Robot", "Site", "Date", "Basename", "Size", "Status"]
 
-        const item_names = ["robot_name", "site", "datetime", "basename", "localpath", "hsize"]
+        const item_names = ["robot_name", "site", "datetime", "basename", "hsize"]
 
         // const header_names = ["Select", "Site", "Date", "Run", "Basename", "Size", "ID", "Status"]
         // const item_names = ["site", "datetime", "run_name", "basename", "hsize", "upload_id"]
@@ -1067,7 +1083,6 @@ function updateServerRemoteYMD(data) {
                 const tr = document.createElement("tr");
                 tbody.appendChild(tr);
 
-                if (window.has_remotes) {
                     const tdCheckbox = document.createElement("td");
                     const checkbox = document.createElement("input");
 
@@ -1089,7 +1104,6 @@ function updateServerRemoteYMD(data) {
                     checkbox.id = "server_select_" + detail.upload_id
                     tdCheckbox.appendChild(checkbox);
                     tr.appendChild(tdCheckbox);
-                }
 
                 item_names.forEach((key) => {
                     const td = document.createElement("td");

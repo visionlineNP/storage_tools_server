@@ -532,8 +532,6 @@ class Database:
 
             robot = entry["robot_name"]
             run = entry["run_name"]
-
-            dirroot = self.root
             
             basename = entry["basename"]
             relpath = entry["relpath"]
@@ -548,21 +546,23 @@ class Database:
             rtn[run][relpath] = rtn[run].get(relpath, [])
             rtn[run][relpath].append(
                 {
-                    "datetime": date,
-                    "relpath": relpath,
                     "basename": basename,
-                    "size": size,
-                    "site": site,
-                    "run_name": run,
-                    "robot_name": robot,
                     "datatype": datatype,
+                    "datetime": date,
+                    "end_datetime": entry["end_datetime"],
+                    "fullpath": fullpath,
+                    "hsize": humanfriendly.format_size(size),
+                    "localpath": localpath,
                     "on_local": True,
                     "on_remote": False,
-                    "hsize": humanfriendly.format_size(size),
+                    "relpath": relpath,
+                    "robot_name": robot,
+                    "run_name": run,
+                    "site": site,
+                    "size": size,
+                    "start_datetime": entry["start_datetime"],
                     "topics": topics,
                     "upload_id": upload_id,
-                    "localpath": localpath,
-                    "fullpath": fullpath
                 }
             )
             count += 1
@@ -697,9 +697,19 @@ class Database:
             else:
                 stat["end_datetime"] = end_time
 
+
+            if stat["start_datetime"] is None:
+                debug_print(f"Error: start_time is: {start_time}")
+                debug_print(entry)
+
+            if stat["end_datetime"] is None:
+                debug_print(f"Error: end_time is:{end_time}")
+                debug_print(entry)
+
             duration = datetime.strptime(
                 stat["end_datetime"], "%Y-%m-%d %H:%M:%S"
             ) - datetime.strptime(stat["start_datetime"], "%Y-%m-%d %H:%M:%S")
+
             assert isinstance(duration, timedelta)
             stat["duration"] = duration.seconds
             stat["hduration"] = humanfriendly.format_timespan(duration.seconds)
@@ -811,6 +821,7 @@ class Database:
                 else:
                     filter_min = int(filter.get("min", "0"))
                     filter_max = int(filter.get("max", "0"))
+                    entry_value = int(entry_value)
                     if entry_value < filter_min or entry_value > filter_max:
                         return False
                     
@@ -822,7 +833,7 @@ class Database:
 
         if sort_key == "filename":
             sort_key = "basename"
-            
+
         default_val = ""
         if sort_key == "size":
             default_val = 0
