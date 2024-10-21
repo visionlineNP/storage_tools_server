@@ -150,7 +150,9 @@ class RemoteConnection:
         self.m_source = config.get("source")
         self.m_username = ""
         self.m_session_token = None 
+        self.m_send_lock = {}
 
+        self.m_send_offsets = {}
         # maps remote to local id
         self.m_upload_id_map = {}
 
@@ -216,7 +218,7 @@ class RemoteConnection:
             self.m_server = server_full
             self.m_upload_id_map = {}
             self.m_rev_upload_id_map = {}
-
+            self.m_send_lock = {}
 
             self.send_node_data()
 
@@ -342,7 +344,7 @@ class RemoteConnection:
         self.m_local_sio.emit("remote_data", data)
 
     def _on_server_ymd_data(self, data):
-        debug_print("Got Data")
+        # debug_print("Got Data")
 
         msg = {
             "ymd": data.get("ymd", ""),
@@ -420,7 +422,7 @@ class RemoteConnection:
             return 
         msg = {"tab": tab, "room": self.m_node_source}
 
-        debug_print(msg)
+        # debug_print(msg)
         self.m_remote_sio.emit("request_server_ymd_data", msg)
 
 
@@ -458,38 +460,6 @@ class RemoteConnection:
             debug_print(f"Sending block {i}")
             self.m_remote_sio.emit("remote_node_data_block", msg)
             time.sleep(0.05)
-
-
-    def send_node_data_old(self):
-        if not self.connected():
-            return 
-        
-        debug_print("Sending node data")
-
-        try:
-            data = self.m_database.get_send_data()
-        except VolumeMapNotFound as e:
-            self.m_local_sio.emit("server_error", {"msg": str(e)})
-            
-            
-        source = self.m_node_source
-        stats = self.m_database.get_run_stats()
-
-        node_data = {"entries": data, 
-                     "stats": stats,
-                       "source": source
-                        }
-
-        url = f"http://{self.m_server}/node_data"
-
-        api_key_token = self.m_config["API_KEY_TOKEN"]
-        headers = {
-            "Authorization": f"Bearer {api_key_token}"
-            }
-
-        debug_print("sending node data")
-        response = requests.post(url, json=node_data, headers=headers)
-        debug_print(response.status_code)
 
 
     def _on_node_send(self, data):
@@ -569,6 +539,8 @@ class RemoteConnection:
                     params["offset"] = offset_b
                     file_size -= offset_b
 
+                self.m_send_offsets[upload_id] = offset_b
+
                 split_size_b = 1024*1024*1024*split_size_gb
                 splits = file_size // split_size_b
 
@@ -579,7 +551,7 @@ class RemoteConnection:
                     "X-Api-Key": api_key_token
                     }
 
-                def read_and_update(offset_b:int, parent:RemoteConnection):
+                def read_and_update(upload_id, parent:RemoteConnection):
                     read_count = 0
                     while parent.connected():
                         if self.m_signal and self.m_signal == "cancel":
@@ -595,7 +567,7 @@ class RemoteConnection:
                         message_queue.put({"main_pbar": chunck_size})
                         message_queue.put({"child_pbar": name, "size": chunck_size, "action": "update", "total_size": file_size, "desc": desc})
 
-                        offset_b += chunck_size
+                        parent.m_send_offsets[upload_id] += chunck_size
                         read_count += chunck_size
 
                         if read_count >= split_size_b:
@@ -610,16 +582,16 @@ class RemoteConnection:
                     if self.m_signal and self.m_signal == "cancel":
                         break
 
-                    params["offset"] = offset_b
+                    params["offset"] = self.m_send_offsets[upload_id]
                     params["cid"] = cid
-                    response = requests.post(url + f"/{source}/{upload_id}", params=params, data=read_and_update(offset_b, self), headers=headers)
+                    response = requests.post(url + f"/{source}/{upload_id}", params=params, data=read_and_update(upload_id, self), headers=headers)
                     if response.status_code != 200:
                         debug_print(f"Error! {response.status_code} {response.content.decode()}")
                         break 
 
                 message_queue.put({"child_pbar": name, "action": "close"})
 
-                return fullpath, True 
+                return fullpath, upload_id, True 
 
         pool_queue = [ (message_queue, dirroot, relative_path, upload_id, offset_b, file_size, idx) for idx, (dirroot, relative_path, upload_id, offset_b, file_size) in enumerate(filelist) ]
 
@@ -630,7 +602,19 @@ class RemoteConnection:
 
         try:
             with ThreadPoolExecutor(max_workers=max_threads) as executor:
-                for filename, status in executor.map(send_worker, pool_queue):
+                for filename, upload_id, status in executor.map(send_worker, pool_queue):
+                    ## 
+                    # update file entry 
+                    msg = {
+                        "div_id": f"status_{upload_id}",
+                        "status": "On Device and Server",
+                        "source": self.m_config["source"],
+                        "on_device": True,
+                        "on_server": True,
+                        "upload_id": upload_id,
+                    }
+                    self.m_parent._send_dashboard_file(msg)
+
                     debug_print((filename, status))
                     files.append((filename, status))
 
@@ -649,115 +633,6 @@ class RemoteConnection:
         # self.m_send_threads = True
         self.m_local_sio.start_background_task(target=self._background_send_files, server=server, filelist=filelist)
 
-    def _sendFilesOld(self, server, filelist):
-        local_status_event = "server_status_tqdm"
-        remote_status_event = "node_status_tqdm"
-        self.m_signal = None 
-
-        num_threads = min(self.m_config["threads"], len(filelist))
-        url = f"http://{server}/file"
-
-        #  source = self.m_config["source"]
-        # debug_print(f"Source: {self.m_node_source}")
-        source = self.m_node_source
-        api_key_token = self.m_config["API_KEY_TOKEN"]
-
-
-        total_size = 0
-        file_queue = queue.Queue()
-        for file_pair in filelist:
-            debug_print(f"add to queue {file_pair}")
-            offset = file_pair[3]
-            size = file_pair[4]
-            try:
-                total_size += int(size) - int(offset)
-            except ValueError as e:
-                debug_print(file_pair)
-                raise e 
-            file_queue.put(file_pair)
-
-    
-        with SocketIOTQDM(total=total_size, unit="B", unit_scale=True, desc="File Transfer", position=0, 
-                          leave=False, source=self.m_node_source, socket=self.m_local_sio, event=local_status_event) as local_main_pbar,  SocketIOTQDM(total=total_size, unit="B", unit_scale=True, desc="File Transfer", position=0, 
-                          leave=False, source=self.m_config["source"], socket=self.m_remote_sio, event=remote_status_event) as remote_main_pbar:
-
-            def worker(index:int):
-                with requests.Session() as session:
-                    while True:
-                        try:                            
-                            project, file, upload_id, offset, total_size = file_queue.get(block=False)
-                            offset = int(offset)
-                            total_size = int(total_size)
-
-                            # debug_print((dirroot, file, upload_id, offset, total_size))
-                        except queue.Empty:
-                            break 
-                        
-                        if self.m_signal == "cancel":
-                            break
-
-                        dirroot = self.m_config["volume_map"].get(project, "/").strip("/")
-                        fullpath = os.path.join( self.m_config["volume_root"], dirroot, file.strip("/"))
-                        if not os.path.exists(fullpath):
-                            local_main_pbar.update()
-                            remote_main_pbar.update()
-                            debug_print(f"{fullpath} not found" )
-                            continue 
-
-                        # total_size = os.path.getsize(fullpath)
-
-                        with open(fullpath, 'rb') as file:
-                            params = {}
-                            if offset > 0:
-                                file.seek(offset)
-                                params["offset"] = offset 
-                                total_size -= offset 
-
-                            headers = {
-                                'Content-Type': 'application/octet-stream',
-                                "Authorization": f"Bearer {api_key_token}"
-
-                                }
-                            
-                            # debug_print(headers)
-                            # Setup the progress bar
-                            with SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_node_source, socket=self.m_remote_sio, event=remote_status_event) as remote_pbar, SocketIOTQDM(total=total_size, unit="B", unit_scale=True, leave=False, position=1+index, source=self.m_config["source"], socket=self.m_local_sio, event=local_status_event) as local_pbar:
-                                def read_and_update():
-                                    while True:
-                                        # Read the file in chunks of 4096 bytes (or any size you prefer)
-                                        chunk = file.read(1024*1024)
-                                        if not chunk:
-                                            break
-                                        yield chunk
-                                        # Update the progress bar
-                                        local_pbar.update(len(chunk))
-                                        local_main_pbar.update(len(chunk))
-
-                                        remote_pbar.update(len(chunk))
-                                        remote_main_pbar.update(len(chunk))
-
-                                        if self.m_signal:
-                                            if self.m_signal == "cancel":
-                                                break
-                                
-                                # Make the POST request with the streaming data
-                                response = session.post(url + f"/{source}/{upload_id}", params=params, data=read_and_update(), headers=headers)
-
-                            if response.status_code != 200:
-                                debug_print(("Error uploading file:", response.text, response.status_code))
-
-                            # main_pbar.update()
-    
-            # todo replace with threads
-            # greenlets = []
-            # for i in range(num_threads):
-            #     greenlet = gevent.spawn(worker, i)  # Spawn a new green thread
-            #     greenlets.append(greenlet)
-
-            # # Wait for all green threads to complete
-            # gevent.joinall(greenlets)
-
-        self.m_signal = None 
 
 
 
@@ -767,6 +642,7 @@ class RemoteConnection:
             self.m_remote_sio.disconnect()
         if self.m_remote_source:
             self.m_parent.delete_remote_entries_for_source(self.m_remote_source)
+            self.m_parent._send_server_data()
 
     def pull_files(self, data):
         debug_print("enter")

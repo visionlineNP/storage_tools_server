@@ -15,6 +15,9 @@ def get_source_by_mac_address():
     for interface in sorted(addresses):
         if interface == "lo":
             continue
+        if not is_interface_up(interface):
+            continue
+
         for addr in sorted(addresses[interface]):
             if addr.family == psutil.AF_LINK:  # Check if it's a MAC address
                 # if psutil.net_if_stats()[interface].isup:

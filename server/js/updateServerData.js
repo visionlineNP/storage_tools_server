@@ -5,7 +5,7 @@ window.serverData = {
 }
 
 
-
+// from remote connection
 function on_dashboard_update(data) {
     msg = {
         "upload_id": data.upload_id,
@@ -15,7 +15,7 @@ function on_dashboard_update(data) {
     on_dashboard_file_server(msg)
 }
 
-
+// from remote connection
 function refresh_dashboard_file_server()
 {
     $.each( window.serverData.dashboard_file_server, function(_, data) {
@@ -24,7 +24,7 @@ function refresh_dashboard_file_server()
 }
 
 function on_dashboard_file_server(data) {
-    console.log(data);
+    //console.log(data);
     let upload_id = data.upload_id;
 
     // handle case where file does not exist on remote 
@@ -744,7 +744,7 @@ function updateServerData(data) {
     const remote_tab = host_names.Remote
 
     const project_names = Object.keys(data.entries).sort();
-    const project_tabs = create_tabs(project_names, local_tab, "server");
+    const project_tabs = create_tabs(project_names, local_tab, "host:server");
 
     $.each(project_tabs, function (project_name, project_tab) {
 
@@ -809,7 +809,7 @@ function updateServerData(data) {
         const projects = data.entries[project_name];
         ymd_names = Object.keys(projects).sort()
 
-        const ymd_tabs = create_tabs(ymd_names, project_tab, "server:" + project_name, "request_server_ymd_data");
+        const ymd_tabs = create_tabs(ymd_names, project_tab, "host:server:" + project_name, "request_server_ymd_data");
 
         $.each(ymd_tabs, function (_, ymd_div) {
 
@@ -838,7 +838,7 @@ function updateServerRemote(data) {
 
     containerData.innerHTML = ""; // clear previous data
 
-    console.log(data);
+    //console.log(data);
 
     source = data.source
 
@@ -920,7 +920,7 @@ function updateServerRemoteYMD(data) {
     const tab_name = data.tab;
     const ymd_div = document.getElementById(tab_name);
 
-    if (!ymd_div) {
+    if (!ymd_div) {        
         ymd_div = add_single_tab(tab_name, "request_server_ymd_data")
     }
 

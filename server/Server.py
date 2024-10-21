@@ -519,7 +519,7 @@ class Server:
             }
 
             # Emit the data to the client
-            debug_print(f"Sending {project} {ymd} {room}")
+            # debug_print(f"Sending {project} {ymd} {room}")
             self.m_sio.emit("server_ymd_data", server_data, to=room)
         # debug_print("Done")
 
@@ -554,7 +554,7 @@ class Server:
             nodes = self.get_sources("nodes")
             rooms.extend(nodes)
 
-        debug_print(f"rooms: {rooms}")
+        # debug_print(f"rooms: {rooms}")
 
         for room in rooms:
             self.m_sio.emit(event, msg, to=room)
@@ -853,6 +853,8 @@ class Server:
 
         rtn = {}
 
+        self.m_remote_entries[source] = self.m_remote_entries.get(source, {})
+
         for entry in entries:
             relpath = entry["relpath"]
             orig_id = entry["upload_id"] 
@@ -1095,6 +1097,10 @@ class Server:
 
         sources = self.get_sources("devices")
         for source in sources:
+            entries = self.get_all_entries_for_source(source)
+            if entries is None or len(entries) == 0:
+                continue
+
             # project = self.m_projects.get(source)
             project = self.device_get_project(source)
             # debug_print(f" project for {source} is {project}, {self.m_id}")
@@ -1665,6 +1671,7 @@ class Server:
                 "on_server": False,
                 "md5": md5,
                 "topics": topics,
+                "temp_size": 0
             }
 
 
@@ -1723,6 +1730,19 @@ class Server:
 
 
     ### server data 
+    def force_new_server_data(self, data):
+        room = dashboard_room(data)
+
+        debug_print("Force new server data")
+        stub = self.m_database.get_send_data_ymd_stub()
+        for project in stub:
+            for ymd in stub[project]:
+                tab = f"host:server:{project}:{ymd}"
+                stats = self.m_database.get_run_stats(project, ymd)        
+                datasets = self.m_database.get_send_data_ymd(project, ymd)        
+                self.m_sio.start_background_task(target=self._emit_server_ymd_data, datasets=datasets, stats=stats, project=project, ymd=ymd, tab=tab, room=room)
+
+
     def on_request_server_ymd_data(self, data):
         # debug_print(data)
         tab = data.get("tab")
@@ -1767,6 +1787,7 @@ class Server:
     def on_request_server_data(self,data):
         debug_print(data)
         self._send_server_data(data)
+        self.force_new_server_data(data)
 
     def on_server_connect(self, data):
         global g_remote_connection
@@ -1798,6 +1819,7 @@ class Server:
     def on_server_refresh(self, msg=None):
         # send the updated data to the server.  
         self.m_remote_connection.server_refresh()
+        
 
     def on_server_transfer_files(self, data):
         if self.m_remote_connection.connected():
@@ -1932,8 +1954,23 @@ class Server:
     def show_login_form(self):
         return render_template("login.html")
 
+
+    def set_lock(self, source, id):
+        """Set a lock for the given source and id if it doesn't already exist."""
+        lock_key = f"lock:{source}:{id}"
+        # Set the lock if it doesn't exist (SETNX)
+        # This returns 1 if the lock is set, 0 if it already exists
+        lock_set = self.redis.setnx(lock_key, "locked")
+        return bool(lock_set)  # True if lock was set, False if it already existed
+
+    def remove_lock(self, source, id):
+        """Remove the lock for the given source and id."""
+        lock_key = f"lock:{source}:{id}"
+        # Remove the lock key
+        self.redis.delete(lock_key)
+
     def handle_file(self, source: str, upload_id: str):
-        debug_print(f"{source} {upload_id}")
+        # debug_print(f"{source} {upload_id} {self.m_id}")
 
         entry = self.fetch_remote_entry(source, upload_id)
         if entry is None:
@@ -1955,11 +1992,13 @@ class Server:
 
         # debug_print(entry)
 
-        offset = request.args.get("offset", 0)
+        offset = int(request.args.get("offset", 0))
         if offset == 0:
             open_mode = "wb"
         else:
             open_mode = "ab"
+
+        # debug_print(f"{source} {upload_id} {self.m_id}, offset: {offset} ")
 
         cid = request.args.get("cid")
         splits = request.args.get("splits")
@@ -1996,6 +2035,10 @@ class Server:
 
         # debug_print(f"opening {tmp_path}")
 
+        if not self.set_lock(source, upload_id):
+            debug_print("Duplicated send!")
+            return jsonify({"message": f"File {filename} duplicated send!"}), 400
+
         # Start uploading the file in chunks
         chunk_size = 10 * 1024 * 1024  # 1MB chunks
         with open(tmp_path, open_mode) as fid:
@@ -2003,16 +2046,19 @@ class Server:
 
                 if self.m_selected_action.get(source,"") == "cancel":
                     self._send_dashboard_file(cancel_msg)
-
-                    return jsonify({"message": f"File {filename} upload canceled"})
+                    debug_print(f"cancel {filename}")
+                    self.remove_lock(source, upload_id)
+                    return jsonify({"message": f"File {filename} upload canceled"}), 520
 
                 try:
                     chunk = filep.read(chunk_size)
 
                 except OSError:
                     # we lost the connection on the client side.
+                    debug_print(f"lost connection {filename}")
                     self._send_dashboard_file(cancel_msg)
-                    return jsonify({"message": f"File {filename} upload canceled"})
+                    self.remove_lock(source, upload_id)
+                    return jsonify({"message": f"File {filename} upload canceled"}), 520
 
                 if not chunk:
                     break
@@ -2029,6 +2075,8 @@ class Server:
                     "Size mismatch. " + str(current_size) + " != " + str(expected)
                 )
                 self._send_dashboard_file(cancel_msg)
+                debug_print(f"file size missmatch {filename}")
+                self.remove_lock(source, upload_id)
 
                 return jsonify({"message": f"File {filename} upload canceled"})
 
@@ -2044,12 +2092,15 @@ class Server:
             }
 
             self._send_dashboard_file(data)
+        self.remove_lock(source, upload_id)
+
 
         entry["localpath"] = filepath
         entry["on_server"] = True
         entry["dirroot"] = self._get_dirroot(entry["project"])
         entry["fullpath"] = filepath.replace(entry["dirroot"], "").strip("/")
 
+        # debug_print(f"received {filename}")
 
         metadata_filename = filepath + ".metadata"
         with open(metadata_filename, "w") as fid:
@@ -2062,12 +2113,7 @@ class Server:
         self.m_database.commit()
 
 
-        # signal to the dashboards that this source has updates.  
-        for session_token in self.m_has_updates:
-            self.m_has_updates[session_token][self.m_config["source"]] = True
-
-            room = "dashboard-" + session_token
-            self.m_sio.emit("has_new_data", {"value": True}, to=room)
+        self._send_to_all_dashboards("has_new_data", {"value": True})
 
         # # TODO: replace send_server_data with "update_server_data"
         # # send_server_data()
@@ -2083,6 +2129,7 @@ class Server:
         return jsonify({"message": f"File {filename} chunk uploaded successfully"})
 
     def transfer_selected(self):
+        debug_print(f"enter {self.m_id}")
         data = request.get_json()
         selected_files = data.get("files")
         source = data.get("source")
@@ -2102,8 +2149,13 @@ class Server:
 
             dirroot = entry["dirroot"]
             relpath = entry["fullpath"].strip("/")
-            offset = entry["temp_size"]
+            tmp = filepath + ".tmp"
+            offset = 0
+            if os.path.exists(tmp):
+                offset = os.path.getsize(tmp)
             size = entry["size"]
+
+            debug_print((filepath, dirroot, relpath, upload_id, offset, size))
             filenames.append((dirroot, relpath, upload_id, offset, size))
 
         msg = {"source": data.get("source"), "files": filenames}
