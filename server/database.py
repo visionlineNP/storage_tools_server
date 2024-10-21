@@ -9,6 +9,7 @@ import humanfriendly
 from datetime import datetime, timedelta
 import hashlib
 from tqdm import tqdm 
+import re 
 
 from .debug_print import debug_print
 from .throttledEmit import ThrottledEmit 
@@ -53,17 +54,6 @@ class Database:
         self.blackout = blackout
         self._init_db(self.filename)
 
-    # def filter_db(self):
-    #     data = []
-    #     debug_print(f"starting with {len(self.database['data'])}")
-    #     for entry in self.database["data"]:
-    #         basename = entry.get("basename")
-    #         if basename.startswith("frame_") and basename.endswith("png"):
-    #             continue
-    #         data.append(entry)
-    #     debug_print(f"end with {len(data)}")
-    #     self.database["data"] = data
-
     def _init_db(self, filename=None):
         if filename and filename.exists():
             self.database = json.load(filename.open("r"))
@@ -91,7 +81,7 @@ class Database:
         for project in sorted(self.volume_map):
             volume_root = self.volume_map[project]
 
-            debug_print((project, volume_root))
+            # debug_print((project, volume_root))
             for root, _, files in os.walk(volume_root):
                 skip = False
                 for b in self.blackout:
@@ -821,6 +811,11 @@ class Database:
                 else:
                     filter_min = int(filter.get("min", "0"))
                     filter_max = int(filter.get("max", "0"))
+                    if entry_value is None:
+                        entry_value = 0
+                    if entry_value == "None":
+                        debug_print(name)
+                        
                     entry_value = int(entry_value)
                     if entry_value < filter_min or entry_value > filter_max:
                         return False
@@ -849,6 +844,7 @@ class Database:
             for key in keys:
                 item[key] = entry.get(key, None)
             item["hsize"] = humanfriendly.format_size(item["size"])
+            item["localpath"] = entry.get("localpath", "")
             rtn.append(item)
 
         rtn.sort(key=lambda item: item[sort_key] if item.get(sort_key, None) is not None else default_val, reverse=reverse)

@@ -192,7 +192,6 @@ class RemoteConnection:
             socket.create_connection((server, port))
             debug_print(f"Connected to {server}:{port}")
 
-            self.send_to_al_local_dashboards_fn("server_link_status", {"server": server_full, "msg":""})
 
             if self.m_remote_sio.connected:
                 self.m_remote_sio.disconnect()
@@ -201,6 +200,9 @@ class RemoteConnection:
             headers = {"X-Api-Key": api_key_token}
 
             self.m_remote_sio.connect(f"http://{server}:{port}/socket.io", headers=headers, transports=['websocket'])
+            self.send_to_al_local_dashboards_fn("server_link_status", {"server": server_full, "msg":""})
+
+
             self.m_remote_sio.on('control_msg')(self._handle_control_msg)    
             self.m_remote_sio.on("dashboard_file")(self._on_dashboard_file)
             self.m_remote_sio.on("node_data_ymd_rtn")(self._on_node_data_ymd_rtn)
@@ -226,8 +228,12 @@ class RemoteConnection:
 
             rtn = True
 
+        except socket.error as e:
+            debug_print(f"Got socket error: {e}")
+            
+
         except socketio.exceptions.ConnectionError as e:
-            debug_print("Ah-Ah-Ahh, invalid key")
+            debug_print(f"Ah-Ah-Ahh, invalid key. {e}")
             self.send_to_al_local_dashboards_fn("server_invalid_key", {"key": api_key_token, "server": server_full})
 
         except Exception as e:

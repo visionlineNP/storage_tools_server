@@ -1,4 +1,5 @@
 
+import os
 import flask 
 import flask_socketio
 
@@ -12,10 +13,7 @@ app = flask.Flask(__name__)
 app.config["SECRET_KEY"] = "AirLabKeyKey"
 
 
-# prepare the app
-app = flask.Flask(__name__)
-app.config["SECRET_KEY"] = "AirLabKeyKey"
-
+redis_host = os.environ.get("REDIS_HOST", "redis")
 
 origins = "*"
 socketio = flask_socketio.SocketIO(
@@ -26,7 +24,7 @@ socketio = flask_socketio.SocketIO(
     max_http_buffer_size=200000000, 
     logger=False, 
     engineio_logger=False, 
-    message_queue="redis://redis:6379/0",  # Redis message queue
+    message_queue=f"redis://{redis_host}:6379/0",  # Redis message queue
     async_mode="threading"
 )
 
@@ -47,7 +45,8 @@ def create_server():
     app.route("/download/<string:upload_id>")(server.download_file)
     app.route("/uploadKeys", methods=["POST"])(server.upload_keys)
     app.route('/downloadKeys')(server.download_keys)
-
+    app.route("/static/js/<path:path>")(server.serve_js)
+    app.route("/static/css/<path:path>")(server.serve_css)
 
     # app.route("/node_data", methods=["POST"])(server.handle_node_data)
 

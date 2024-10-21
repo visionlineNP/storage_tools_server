@@ -178,7 +178,7 @@ function createDatetimeRangeSelector(start_time_, end_time_, cord_body, name) {
 
 function updateSearchResults(msg) {
     console.log(msg);
-    const keys = ["select", "project", "site", "robot_name", "datetime", "basename", "hsize"];
+    const keys = ["select", "project", "site", "robot_name", "datetime", "basename", "path", "hsize"];
 
     search_total_pages = msg.total_pages;
     search_current_page = msg.current_page;
@@ -207,6 +207,48 @@ function updateSearchResults(msg) {
             tr.appendChild(td);
             if (key == "select") {
                 // pass for now
+            } else if( key == "path") {
+                td.innerHTML = "";
+                const icon = document.createElement("i")
+                icon.className = "bi bi-copy"
+                icon.title = "Copy to clipboard: " + searchRow.localpath;
+                icon.dataset.localpath = searchRow.localpath;
+                icon.setAttribute("data-bs-toggle", "tooltip");
+
+                icon.addEventListener('click', function () {
+                    const localpath = $(this)[0].dataset.localpath;
+                    navigator.clipboard.writeText(localpath);
+                })
+
+                td.appendChild(icon)
+
+
+                const download = document.createElement("i")
+                download.className = "bi bi-download"
+                download.title = "Download "
+                download.dataset.upload_id = searchRow.upload_id;
+                download.dataset.basename = searchRow.basename;
+                download.setAttribute("data-bs-toggle", "tooltip");
+                download.addEventListener("click", function () {
+                    const upload_id = $(this)[0].dataset.upload_id;
+                    const basename = $(this)[0].dataset.basename;
+
+                    const link = document.createElement("a")
+                    link.href = `/download/${upload_id}`
+                    link.download = basename;
+                    link.style.display = 'none';
+
+                    document.body.appendChild(link);
+                    link.click()
+                    document.body.removeChild(link);
+
+                })
+                const spacer = document.createElement("span");
+                spacer.innerHTML = "&nbsp;&nbsp;"
+                td.appendChild(spacer)
+                td.appendChild(download);
+
+
             } else {
 
                 td.innerHTML = searchRow[key]

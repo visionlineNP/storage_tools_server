@@ -31,7 +31,8 @@ class Server:
         self.m_sio = socketio
         self.m_id = os.getpid()
 
-        self.redis = redis.StrictRedis(host='redis', port=6379, db=0)
+        redis_host = os.environ.get("REDIS_HOST", "redis")
+        self.redis = redis.StrictRedis(host=redis_host, port=6379, db=0)
         # always start with a clean slate
         self.redis.flushall()
         self.pubsub = self.redis.pubsub()
@@ -279,12 +280,13 @@ class Server:
         return reldir
 
     def _start_pubsub_listener(self):
+        debug_print(f"{os.environ['REDIS_URL']}")
         # Start a thread to listen for changes on the resync channel
         def listen():
             for message in self.pubsub.listen():
                 if message['type'] == 'message':
                     channel = message["channel"].decode("utf-8")
-                    debug_print(channel)
+                        # debug_print(channel)
 
                     data = json.loads(message['data'])
                     if channel == "resync_remote_entries":
@@ -579,7 +581,7 @@ class Server:
         # Placeholder function to validate credentials
         return username == "admin" and password == "NodeNodeDevices"
 
-    def on_connect(self):
+    def on_connect(self, con=None):
         """
         Handles a new client connection to the server.
 
@@ -609,6 +611,8 @@ class Server:
 
         """
         debug_print(f"session id: {request.sid}")
+        if con is not None:
+            debug_print(f"passed {con}")
 
         g.session_token = request.args.get("session_token")
 
@@ -888,6 +892,7 @@ class Server:
 
             rtn[upload_id] = entry
 
+            self.m_node_entries[source] = self.m_node_entries.get(source, {"entries": {}, "stats": {}})
             self.m_node_entries[source]["entries"][project] = self.m_node_entries[source]["entries"].get(project, {})
             self.m_node_entries[source]["entries"][project][ymd] = self.m_node_entries[source]["entries"][project].get(ymd, {})
             self.m_node_entries[source]["entries"][project][ymd][run_name] = self.m_node_entries[source]["entries"][project][ymd].get(run_name, {})
@@ -968,7 +973,13 @@ class Server:
 
         source_data = self.m_node_entries.get(source, {})
         runs= source_data.get("entries", {}).get(project, {}).get(ymd, [])
-        stats_data = source_data.get("stats", {}).get(project).get(ymd, {})
+
+        try:
+            stats_data = source_data.get("stats", {}).get(project).get(ymd, {})
+        except AttributeError as e:
+            debug_print(f"Error {e} from {data}")
+            stats_data = {}
+
 
         msg = {
             "tab": tab,
@@ -1875,6 +1886,8 @@ class Server:
 
     ### http commands 
     def authenticate(self):    
+        debug_print(request.endpoint)
+
         # note, the we are not geting the "Authoerizion" header for download link!
         if request.endpoint == "download_file":
             return
