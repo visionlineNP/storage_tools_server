@@ -1691,7 +1691,8 @@ class Server:
             self.sync_remote_entry(source, upload_id)
 
         # debug_print("data complete")
-        self._send_device_data()
+        # Do we really need to resend the device data?
+        # self._send_device_data()
 
     def on_request_device_ymd_data(self, data):
         tab = data.get("tab")
