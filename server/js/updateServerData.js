@@ -267,8 +267,7 @@ function accumulateServerYMD(data) {
   }
 */
 function processServerYMD(data) {
-
-    //console.log(data);
+    console.log(data);
     const ymd_name = data.ymd;
     const runs = Object.entries(data.runs);
     const project_name = data.project;
@@ -278,6 +277,7 @@ function processServerYMD(data) {
     const ymd_div = document.getElementById(tab_name);
 
     if (!ymd_div) {
+        console.log("-- creating new tab: " + tab_name)
         ymd_div = add_single_tab(tab_name, "request_server_ymd_data")
     }
 
@@ -830,6 +830,14 @@ function updateServerRegen(data) {
 }
 
 function updateServerRemote(data) {
+    /* expects 
+       { 
+          "source": source name,
+          "entries": {
+             project_name : [ymd_names]
+             }
+          }
+    */
     const containerData = document.getElementById("host:Remote");
     if (!containerData) {
         console.log("Missing 'host:Remote'")
@@ -911,7 +919,7 @@ function updateServerRemote(data) {
 
 
 function updateServerRemoteYMD(data) {
-    //console.log(data);
+    console.log(data);
     const ymd_name = data.ymd;
     const runs = Object.entries(data.runs);
     const project_name = data.project;
@@ -920,11 +928,18 @@ function updateServerRemoteYMD(data) {
     const tab_name = data.tab;
     const ymd_div = document.getElementById(tab_name);
 
-    if (!ymd_div) {        
+    if (!ymd_div) {      
+        console.log("---- creating new tab : " + tab_name)
         ymd_div = add_single_tab(tab_name, "request_server_ymd_data")
     }
 
+    console.log(ymd_div)
     ymd_div.innerHTML = "";
+    {
+        const foo = document.createElement("span")
+        foo.innerHTML = "FOO"
+        ymd_div.appendChild(foo)
+    }
 
     const run_dl = document.createElement("dl");
     ymd_div.appendChild(run_dl);

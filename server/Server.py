@@ -1743,10 +1743,19 @@ class Server:
 
     ### server data 
     def force_new_server_data(self, data):
+        debug_print("Force new server data")
         room = dashboard_room(data)
 
         debug_print("Force new server data")
         stub = self.m_database.get_send_data_ymd_stub()
+
+        msg = {
+            "source": self.m_config["source"],
+            "entries": stub
+        }
+        self.m_sio.emit("server_data", msg, to=room)
+        time.sleep(0.1)
+
         for project in stub:
             for ymd in stub[project]:
                 tab = f"host:server:{project}:{ymd}"

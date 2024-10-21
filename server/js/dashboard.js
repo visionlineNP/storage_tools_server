@@ -86,7 +86,7 @@ $(document).ready(function () {
   })
 
   socket.on("remote_ymd_data", function (msg) {
-    console.log(msg)
+    //console.log(msg)
     updateServerRemoteYMD(msg)
   })
 
