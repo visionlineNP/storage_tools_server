@@ -13,13 +13,19 @@ function searchPrevPage() {
 
     const start_idx = parseInt(search_current_index) - parseInt(results_per_page);
 
+    filter = readFilter();
+    console.log(filter);
+
     room = "dashboard-" + window.session_token;
     msg = {
         "room": room,
-        "start_index": start_idx,
-        "count": results_per_page
+        "filter": filter,
+        "sort-key": search_sort_name,
+        "sort-direction": search_sort_direction,
+        "results-per-page": results_per_page,
+        "start_index": start_idx
     }
-    socket.emit("search_fetch", msg)
+    socket.emit("search", msg)
 
 }
 
@@ -29,13 +35,19 @@ function searchNextPage() {
 
     const start_idx = parseInt(search_current_index) + parseInt(results_per_page);
 
+    filter = readFilter();
+    console.log(filter);
+
     room = "dashboard-" + window.session_token;
     msg = {
         "room": room,
-        "start_index": start_idx,
-        "count": results_per_page
+        "filter": filter,
+        "sort-key": search_sort_name,
+        "sort-direction": search_sort_direction,
+        "results-per-page": results_per_page,
+        "start_index": start_idx
     }
-    socket.emit("search_fetch", msg)
+    socket.emit("search", msg)
 
 }
 

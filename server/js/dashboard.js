@@ -58,7 +58,7 @@ $(document).ready(function () {
   });
 
   socket.on('device_ymd_data', function (data) {
-    // console.log(data)
+    console.log(data)
     accumulateDeviceYMD(data);
   })
 
@@ -86,7 +86,7 @@ $(document).ready(function () {
   })
 
   socket.on("remote_ymd_data", function (msg) {
-    //console.log(msg)
+    console.log(msg)
     updateServerRemoteYMD(msg)
   })
 
@@ -99,7 +99,7 @@ $(document).ready(function () {
   })
 
   socket.on('server_data', function (data) {
-    //console.log('Received server_data:', data);
+    console.log('Received server_data:', data);
     updateServerData(data);
   });
 
@@ -172,7 +172,7 @@ $(document).ready(function () {
       if (on_server_status) {
         on_server_status.classList.remove("grayed-out");
         on_server_status.title = "On Server";
-      }
+      } 
 
       let on_remote_status = document.getElementById("node_on_local_" + msg.upload_id);
       if (on_remote_status) {
@@ -199,11 +199,23 @@ $(document).ready(function () {
       if (on_device_status) {
         on_device_status.classList.remove("grayed-out");
       }
+      let on_remote_status = document.getElementById("on_remote_" + msg.upload_id);
+      if (on_remote_status) {
+        on_remote_status.classList.remove("grayed-out");
+        on_remote_status.className = "bi bi-cloud-fill";
+      }
+
     } else {
       let on_device_status = document.getElementById("on_device_" + msg.upload_id);
       if (on_device_status) {
         on_device_status.classList.add("grayed-out");
       }
+      let on_remote_status = document.getElementById("on_remote_" + msg.upload_id);
+      if (on_remote_status) {
+        on_remote_status.classList.add("grayed-out");
+        on_remote_status.className = "bi bi-cloud-fill";
+      }
+
     }
 
     refreshTooltips();
@@ -523,18 +535,20 @@ function processAddNewSite() {
 /// transfer of files 
 function transferFiles(selectedUpdateIds, source) {
   if (selectedUpdateIds.length > 0) {
-    $.ajax({
-      type: 'POST',
-      url: '/transfer-selected',
-      data: JSON.stringify({ "source": source, "files": selectedUpdateIds }),
-      contentType: 'application/json',
-      success: function (data) {
-        console.log('Files transferred successfully');
-      },
-      error: function (xhr, status, error) {
-        console.error('Error transferring files:', error);
-      }
-    });
+    data = { "source": source, "files": selectedUpdateIds }
+    socket.emit('device_request_files', data)
+    // $.ajax({
+    //   type: 'POST',
+    //   url: '/transfer-selected',
+    //   data: JSON.stringify({ "source": source, "files": selectedUpdateIds }),
+    //   contentType: 'application/json',
+    //   success: function (data) {
+    //     console.log('Files transferred successfully');
+    //   },
+    //   error: function (xhr, status, error) {
+    //     console.error('Error transferring files:', error);
+    //   }
+    // });
   } else {
     alert('No files selected');
   }
@@ -546,10 +560,12 @@ function transferFiles(selectedUpdateIds, source) {
 
 function removeFiles(selectedUpdateIds, source) {
 
+
   if (selectedUpdateIds.length > 0) {
+    if( confirm(`Remove ${selectedUpdateIds.length} files from ${source}?`))
     msg = { "source": source, "files": selectedUpdateIds, "session_token": window.session_token };
     console.log(msg);
-    socket.emit("device_remove", msg);
+    //socket.emit("device_remove", msg);
   } else {
     alert('No files selected');
   }
@@ -558,7 +574,8 @@ function removeFiles(selectedUpdateIds, source) {
 
 /// cancel transfers
 function cancelTransfers(source) {
-  socket.emit("control_msg", { "source": source, "action": "cancel", "session_token": window.session_token });
+  socket.emit("device_cancel_transfer", { "source": source, "session_token": window.session_token })
+  // socket.emit("control_msg", { "source": source, "action": "cancel", "session_token": window.session_token });
 };
 
 /// --------

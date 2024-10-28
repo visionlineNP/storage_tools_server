@@ -27,10 +27,24 @@ services:
     networks:
       - custom_network  
 
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: sts
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: stsdb
+    volumes:
+      - pgdata1:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+
 
   storage_tools_server:
     build:
       context: .
+      dockerfile: Dockerfile.frontend
+      network: host 
     image: storage_tools_server
     container_name: storage_tools_server
 
@@ -41,9 +55,11 @@ services:
       - CONFIG=/app/config/config.yaml
       - REDIS_URL=redis://redis:6379/0
       - SERVERNAME=HomeServer
+      - PORT=8091
+      - REDIS_HOST=redis
 
     expose:
-     - "8091"  # Expose port 8091 to the internal Docker network
+      - "8091"  # Expose port 8091 to the internal Docker network
     volumes:
       - ./config/:/app/config
       - ./config/keys.yaml:/app/config/keys.yaml
@@ -62,6 +78,44 @@ services:
       - custom_network  
     depends_on:
       - redis
+      - storage_tools_server_backend
+      - postgres
+
+  storage_tools_server_backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      network: host 
+    image: storage_tools_server_backend
+    container_name: storage_tools_server_backend
+
+    environment:
+      - CONFIG=/app/config/config.yaml
+      - REDIS_URL=redis://redis:6379/0
+      - SERVERNAME=HomeServer
+      - PORT=8091
+      - REDIS_HOST=redis
+
+    volumes:
+      - ./config/:/app/config
+      - ./config/keys.yaml:/app/config/keys.yaml
+      - ./uploads:/mnt/uploads  # Volume mount for uploads directory
+      - /volume1:/volume1
+      - /volume2:/volume2
+      - /volume3:/volume3
+      - /volume4:/volume4
+      - /volume5:/volume5
+      - /volume6:/volume6
+
+    tty: true
+    stdin_open: true
+    restart: always
+    networks:
+      - custom_network  
+    depends_on:
+      - redis
+      - postgres
+
 
 networks:
   custom_network:
@@ -69,3 +123,8 @@ networks:
     ipam:
       config:
         - subnet: 10.11.15.0/24  # This subnet shouldn't conflict with the CMU network. 
+
+# local volume for the postgres database. 
+volumes:
+  pgdata1:
+    driver: local 

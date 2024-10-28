@@ -20,6 +20,10 @@ upload_dir: "/mnt/uploads/"
 # The volume_root does not have to be the same as the upload_dir.  
 volume_root: "/mnt/uploads/"
 
+
+blackout: 
+ - /volume4/dsta/datasets/match_anything/kubric4d/
+ 
 # ----------------------------------------------
 # Optional updates
 # ----------------------------------------------
@@ -43,6 +47,7 @@ sites:
  - data_workshop
  - sqi
  - shelter
+ - default
 
 
 # what kinds of files to search for
@@ -79,12 +84,17 @@ use_ldap: true
 # The server key to use when acting as remote
 # uncomment the next line and set it to the 
 # correct API key.  
-
-API_KEY_TOKEN: "server_1_key_asfaa9"
-
-
-
-
+# API_KEY_TOKEN: "server_1_key_asfaa9"
 
 # # how long to wait before checking again
 # wait_s: 2
+
+# Remote connection send settings.
+# Spilt large logs into smaller blocks during sending
+# Whole numbers. Range between 1 and 20.  
+# split_size_gb: 2 
+
+# Read loop buffer size.  
+# Whole numbers, range between 1 and 32
+# chunk_size_mb: 16
+

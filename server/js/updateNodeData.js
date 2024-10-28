@@ -211,7 +211,7 @@ function processNodeYMD(data) {
                 checkbox.dataset.project = project_name;
                 checkbox.dataset.offset = detail.offset;
                 checkbox.dataset.fullpath = detail.fullpath;
-                checkbox.dataset.remote_id = detail.remote_upload_id;
+                checkbox.dataset.remote_id = detail.remote_id;
 
                 checkbox.type = "checkbox";
                 checkbox.id = "server_select_" + detail.upload_id
@@ -337,8 +337,8 @@ function updateNodeData(data) {
             const selectAllButton = document.createElement('button');
             selectAllButton.type = 'button';
             selectAllButton.className = 'btn btn-primary';
-            selectAllButton.classList.add("server_button");
-            selectAllButton.id = `select-new-${source_name}-${project_name}`;
+            // selectAllButton.classList.add("server_button");
+            // selectAllButton.id = `select-new-${source_name}-${project_name}`;
             selectAllButton.dataset.source = source_name;
             selectAllButton.dataset.project = project_name;
             selectAllButton.onclick = processNodeSelectAllNew;
@@ -348,8 +348,8 @@ function updateNodeData(data) {
             const clearSelectionsButton = document.createElement('button');
             clearSelectionsButton.type = 'button';
             clearSelectionsButton.className = 'btn btn-secondary';
-            clearSelectionsButton.classList.add("server_button");
-            clearSelectionsButton.id = `clear-all-${source_name}-${project_name}`;
+            // clearSelectionsButton.classList.add("server_button");
+            // clearSelectionsButton.id = `clear-all-${source_name}-${project_name}`;
             clearSelectionsButton.dataset.source = source_name;
             clearSelectionsButton.dataset.project = project_name;
             clearSelectionsButton.onclick = processClearSelections;
@@ -359,8 +359,8 @@ function updateNodeData(data) {
             const transferSelectedButton = document.createElement('button');
             transferSelectedButton.type = 'button';
             transferSelectedButton.className = 'btn btn-success';
-            transferSelectedButton.classList.add("server_button");
-            transferSelectedButton.id = `transfer-selected-${source_name}-${project_name}`;
+            // transferSelectedButton.classList.add("server_button");
+            //transferSelectedButton.id = `transfer-selected-${source_name}-${project_name}`;
             transferSelectedButton.dataset.source = source_name;
             transferSelectedButton.dataset.project = project_name;
             transferSelectedButton.onclick = processNodeTransferSelections;
@@ -370,8 +370,8 @@ function updateNodeData(data) {
             const cancelTransferButton = document.createElement('button');
             cancelTransferButton.type = 'button';
             cancelTransferButton.className = 'btn btn-danger';
-            cancelTransferButton.classList.add("server_button");
-            cancelTransferButton.id = `cancel-${source_name}-${project_name}`;
+            // cancelTransferButton.classList.add("server_button");
+            //cancelTransferButton.id = `cancel-${source_name}-${project_name}`;
             cancelTransferButton.dataset.source = source_name;
             cancelTransferButton.dataset.project = project_name;
             cancelTransferButton.onclick = processNodeCancelTransfer;
@@ -406,7 +406,9 @@ function processNodeTransferSelections()
 
     let selectedUpdateIds = [];
     $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').each(function () {
-        selectedUpdateIds.push($(this).attr('data-upload_id'));
+        const upload_id = $(this).attr('data-upload_id');
+        const remote_id = $(this).attr('data-remote_id');
+        selectedUpdateIds.push([upload_id, remote_id]);
     });
     console.log(selectedUpdateIds, source);
 

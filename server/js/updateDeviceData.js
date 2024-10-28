@@ -94,17 +94,18 @@ function processTransferSelections() {
 function updateDeviceData(data) {
   // save device data for later.  
   // console.log(data);
-  
+
   window.device_data = {};
 
-  let valid = true 
-  $.each(data, function(source_name, source_item) {
+  let valid = true
+  $.each(data, function (source_name, source_item) {
     console.log(source_name, source_item)
-    if( source_item.project && source_item.stats == null) {
+    if (source_item.project && source_item.stats == null) {
+      console.log(source_name + " is invalid")
       valid = false;
     }
-      });
-  if(!valid) {
+  });
+  if (!valid) {
     return;
   }
 
@@ -126,11 +127,11 @@ function updateDeviceData(data) {
   //console.log("length is ", source_names.length);
   updateDeviceCount(source_names.length);
 
-  $.each(source_tabs, function (source_name, source_tab) {    
+  $.each(source_tabs, function (source_name, source_tab) {
     const source_item = data[source_name];
 
     console.log(source_item)
-    
+
     window.device_data[source_name] = {};
     const project = source_item.project;
 
@@ -279,9 +280,9 @@ function updateDeviceData(data) {
     ymd_tabs = create_tabs(ymd_names, source_tab, "device:" + source_name, "request_device_ymd_data", true);
 
     $.each(ymd_tabs, function (date, ymd_tab) {
-      
+
       add_placeholder(ymd_tab);
-      
+
 
       //populateDeviceYMDTab(source_item, date, ymd_tab, source_name);
 
@@ -294,9 +295,9 @@ function updateDeviceData(data) {
 function populateDeviceYMDTab(source_item) {
   console.log(source_item)
 
-  const date = source_item.ymd 
-  const ymd_tab = document.getElementById(source_item.tab)   
-  const source_name = source_item.device_source 
+  const date = source_item.ymd
+  const ymd_tab = document.getElementById(source_item.tab)
+  const source_name = source_item.device_source
   const date_items = source_item.reldir;
 
   ymd_tab.innerHTML = ""
@@ -602,8 +603,8 @@ function populateDeviceYMDTab(source_item) {
 
 
 function updateDeviceDataEntry(relpath_entries, source_name, date, tbody) {
-  console.log(relpath_entries)
-  relpath_entries.sort( (a, b) => a.datetime.localeCompare(b.datetime) )
+  // console.log(relpath_entries)
+  relpath_entries.sort((a, b) => a.datetime.localeCompare(b.datetime))
 
   for (const entry of relpath_entries) {
 
@@ -664,7 +665,7 @@ function updateDeviceDataEntry(relpath_entries, source_name, date, tbody) {
     tdBasename.innerHTML = entry.basename;
 
     let topics = null;
-    if( entry.topics) {      
+    if (entry.topics) {
       topics = Object.entries(entry.topics)
     }
 
@@ -690,7 +691,7 @@ function updateDeviceDataEntry(relpath_entries, source_name, date, tbody) {
       dropdown.appendChild(dul);
 
       topics.sort((a, b) => a[0].localeCompare(b[0]));
-      for (const [topic, topic_count ] of topics) {
+      for (const [topic, topic_count] of topics) {
         let dil = document.createElement("li");
         dul.appendChild(dil);
         dil.innerHTML = topic + " : (" + topic_count + ")";
@@ -830,8 +831,7 @@ function updateDeviceStats(source_name, stats) {
 
 window.device_accumulate = {};
 
-function accumulateDeviceYMD(data)
-{
+function accumulateDeviceYMD(data) {
   console.log(data)
 
   const ymd_name = data.ymd;
@@ -846,14 +846,14 @@ function accumulateDeviceYMD(data)
   acc_data = window.device_accumulate[key]
 
   if (acc_data == null) {
-      acc_data = data;
-      acc_data.found = 1;
+    acc_data = data;
+    acc_data.found = 1;
   } else {
-      acc_data.found += 1;
+    acc_data.found += 1;
 
-      for ([rel_dir, entry] of reldirs) {
-          acc_data.reldir[rel_dir] = entry;
-      };
+    for ([rel_dir, entry] of reldirs) {
+      acc_data.reldir[rel_dir] = entry;
+    };
   }
   window.device_accumulate[key] = acc_data;
 
@@ -861,19 +861,17 @@ function accumulateDeviceYMD(data)
 
   // console.log(acc_data.found)
   if (total == acc_data.found) {
-      populateDeviceYMDTab(acc_data);
-      window.device_accumulate[key] = null;
+    populateDeviceYMDTab(acc_data);
+    window.device_accumulate[key] = null;
   }
 
 }
 
-function updateDeviceCount(count)
-{
+function updateDeviceCount(count) {
 
   const container = document.getElementById("device_menu_status")
-  if(container) 
-  {
-    if( count > 0) {
+  if (container) {
+    if (count > 0) {
       container.innerHTML = count;
     } else {
       container.innerHTML = "";

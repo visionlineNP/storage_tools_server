@@ -76,6 +76,7 @@ function on_dashboard_file_server(data) {
 }
 
 function on_remote_connection(msg) {
+    console.log(msg)
     const sync_status = document.getElementById("sync_status");
     const link_button = document.getElementById("link_button");
     if (sync_status && link_button) {
@@ -191,9 +192,18 @@ function processRemoteTransferSelections() {
 
 }
 
-function processServerCancelTransfer() {
+function processServerPushCancelTransfer() {
     const source = $(this)[0].dataset.source;
-    socket.emit("control_msg", { "source": source, "action": "cancel", "session_token": window.session_token });
+    console.log(`Tic ${source}`)
+    socket.emit("request_cancel_push_transfer", { "source": source, "session_token": window.session_token });
+
+}
+
+
+function processServerPullCancelTransfer() {
+    const source = $(this)[0].dataset.source;
+    console.log(`Tic ${source}`)
+    socket.emit("request_remote_cancel_transfer", { "source": source, "session_token": window.session_token });
 }
 
 
@@ -687,14 +697,15 @@ function updateServerData(data) {
         }
         linkButton.addEventListener('click', () => {
             if (linkButton.dataset.connected == "true") {
-                console.log("Try to disconnect")
-                msg = { "session_token": window.session_token }
+                console.log("Try to disconnect")                
+                msg = { "session_token": window.session_token, "address": window.serverData.server }
                 socket.emit("server_disconnect", msg)
             } else {
                 const selectOption = selectElement.value;
                 window.serverData.dashboard_file_server = {};
                 console.log("Try to connect to ", selectOption)
                 socket.emit("server_connect", { "address": selectOption })
+                window.serverData.server = selectOption
                 document.getElementById("server_link_status").innerHTML = ""
             }
         });
@@ -705,8 +716,8 @@ function updateServerData(data) {
         refreshButton.textContent = "Refresh";
         refreshButton.disabled = !data.remote_connected;
         refreshButton.addEventListener('click', () => {
-            msg = { "session_token": window.session_token }
-            socket.emit("server_refresh");
+            msg = { "session_token": window.session_token, "address": window.serverData.server }
+            socket.emit("server_refresh", msg);
         })
 
         const spanSyncStatus = document.createElement("span");
@@ -799,7 +810,7 @@ function updateServerData(data) {
             cancelTransferButton.id = `cancel-${source}-${project_name}`;
             cancelTransferButton.dataset.source = source;
             cancelTransferButton.dataset.project = project_name;
-            cancelTransferButton.onclick = processServerCancelTransfer;
+            cancelTransferButton.onclick = processServerPushCancelTransfer;
             cancelTransferButton.textContent = 'Stop Push';
             div.appendChild(cancelTransferButton);
 
@@ -830,6 +841,7 @@ function updateServerRegen(data) {
 }
 
 function updateServerRemote(data) {
+    console.log(data)
     /* expects 
        { 
           "source": source name,
@@ -849,6 +861,9 @@ function updateServerRemote(data) {
     //console.log(data);
 
     source = data.source
+    if(!source) {
+        return;
+    }
 
     const project_names = Object.keys(data.entries).sort();
     const project_tabs = create_tabs(project_names, containerData, "host:Remote");
@@ -899,7 +914,7 @@ function updateServerRemote(data) {
         cancelTransferButton.id = `cancel-${source}-${project_name}`;
         cancelTransferButton.dataset.source = source;
         cancelTransferButton.dataset.project = project_name;
-        cancelTransferButton.onclick = processServerCancelTransfer;
+        cancelTransferButton.onclick = processServerPullCancelTransfer;
         cancelTransferButton.textContent = 'Stop Pull';
         div.appendChild(cancelTransferButton);
 
@@ -935,11 +950,6 @@ function updateServerRemoteYMD(data) {
 
     console.log(ymd_div)
     ymd_div.innerHTML = "";
-    {
-        const foo = document.createElement("span")
-        foo.innerHTML = "FOO"
-        ymd_div.appendChild(foo)
-    }
 
     const run_dl = document.createElement("dl");
     ymd_div.appendChild(run_dl);
@@ -1110,7 +1120,7 @@ function updateServerRemoteYMD(data) {
                     checkbox.dataset.upload_id = detail.upload_id;
                     checkbox.dataset.project = project_name;
                     checkbox.dataset.offset = detail.offset;
-                    checkbox.dataset.fullpath = detail.fullpath;
+                    checkbox.dataset.fullpath = detail.complete_relpath;
                     checkbox.dataset.remote_id = detail.remote_upload_id;
 
 
