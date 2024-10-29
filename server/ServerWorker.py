@@ -2,10 +2,11 @@
 from concurrent.futures import ThreadPoolExecutor
 import math
 import queue
+import time
 
 import requests
 from server.debug_print import debug_print
-from server.utils import SocketIORedirect, build_multipart_data, dashboard_room, get_source_by_mac_address, get_upload_id, get_datatype, pbar_thread
+from server.utils import SocketIORedirect, build_multipart_data, dashboard_room, get_source_by_mac_address, get_upload_id, get_datatype, pbar_thread, redis_pbar_thread
 from server.sqlDatabase import Database
 
 import redis
@@ -286,6 +287,8 @@ class ServerWorker:
         # entries
         elif action == "add_entry":
             self._add_entry(data)
+        elif action == "estimate_runs":
+            self._estimate_runs(data)
         elif action == "update_entry_robot":
             self._update_entry_robot(data)
         elif action == "update_entry_site":
@@ -315,6 +318,13 @@ class ServerWorker:
         # other
         elif action == "request_localpath":
             self._request_localpath(data)
+        elif action == "request_files_exist":
+            self._request_files_exist(data)
+
+        elif action == "debug_send":
+            self._debug_send(data)
+
+
         else:
             debug_print(f"Unhandled action {action}")
 
@@ -391,7 +401,7 @@ class ServerWorker:
 
         # data_for indicates an intermediatary is getting the data
         data_for = data.get("data_for")
-        debug_print(f"data_for: {data_for}")
+        # debug_print(f"data_for: {data_for}")
 
         project, ymd = names
         datasets = self.m_database.get_send_data_ymd(project, ymd)
@@ -648,35 +658,42 @@ class ServerWorker:
         rtnarr = []
         rtn = {}
         # will send up to max count entries per packet
-        max_count = 50
+        max_count = 100
         count = 0 
+        total = 0
         
         entries = self.get_all_entries_for_source(source)
         if len(entries) == 0:
             debug_print(f"Source: {source} missing")
             return 
 
+        # debug_print(f"ymd: {ymd}, len(entries): {len(entries)}")
+
         for remote_entry in entries.values():
-            date = remote_entry["datetime"].split(" ")[0]
-            if date != ymd:
-                continue
+            if ymd != remote_entry["date"]:
+                continue 
+            # date = remote_entry["datetime"].split(" ")[0]
+            # if date != ymd:
+            #     continue
 
             entry = {}
             for key in ["size", "site", "robot_name", "upload_id", "on_device", "on_server", "basename", "datetime", "topics" ]:
                 entry[key] = remote_entry[key]
 
-            entry["size"] = hf.format_size(remote_entry["size"])
+            entry["hsize"] = hf.format_size(remote_entry["size"])
             relpath = remote_entry["relpath"]
 
             rtn[relpath] = rtn.get(relpath, [])
             rtn[relpath].append(entry)
 
             count += 1
+            total += 1 
             if count >= max_count:
                 rtnarr.append(rtn)
                 rtn = {}
                 count = 0
         rtnarr.append(rtn)
+        # debug_print(f"ymd: {ymd}, total: {total}")
         return rtnarr 
 
     def _update_stat(self, source, uid, stat):
@@ -782,7 +799,11 @@ class ServerWorker:
     def _add_entry(self, data):
         entry = data.get("entry")
         self.m_database.add_entry(entry)
+        # self.m_database._set_runs()
+
+    def _estimate_runs(self, data):
         self.m_database._set_runs()
+        self.m_sio.emit("has_new_data", {"value": True}, to="all_dashboards")
 
     # robots
     def _request_robot_names(self, data={}):
@@ -868,8 +889,9 @@ class ServerWorker:
         items = [ {"project":i[0], "description":i[1]  }  for i in projects]
         for item in items:
             item["volume"] = self.m_config["volume_map"].get(item["project"], "")
+        
         debug_print(items)
-        self.m_sio.emit("project_names", {"data": items}, to=room)
+        self.m_sio.emit("project_names", {"data": items, "volume_root": self.m_config["volume_root"]}, to=room)
 
     def _add_project(self, data):
         debug_print(data)
@@ -1057,6 +1079,22 @@ class ServerWorker:
             localpath = entry["localpath"]
         
         self.redis.lpush(response_queue, localpath)
+
+    def _request_files_exist(self, data:dict):
+        rtn = []
+        room = dashboard_room(data)
+        data_for = data.get("data_for", None)
+        entries = data["entries"]
+        for entry in entries:
+            filepath = self._get_file_path_from_entry(entry)
+            entry["on_remote"] = os.path.exists(filepath)
+            rtn.append(entry)
+        msg = {
+            "entries": rtn,
+            "data_for": data_for,
+            "source": self.m_config["source"]
+        }
+        self.m_sio.emit("request_files_exist_rtn", msg, to=room) 
 
     def _remote_transfer_files(self, data):
         debug_print(f"{data}")
@@ -1248,11 +1286,36 @@ class ServerWorker:
         debug_print("Cancel transfer!")
         self.m_send_file_flag.set()
 
+    def _debug_send(self, data):
+
+        message_queue = queue.Queue()
+
+        total_size = 1000
+        chunk_size = 100
+        source = self.m_config["source"]
+        socket_events = [("local_sio", "server_status_tqdm", "all_dashboards_and_all_nodes")]
+        desc = "test"
+        max_threads = 2
+
+
+
+        thread = Thread(target=redis_pbar_thread, args=(message_queue, total_size, source, socket_events, desc, max_threads))    
+        thread.start()
+
+        name = "name" 
+        message_queue.put({"child_pbar": name, "desc": "child_" + desc, "size": total_size, "action": "start"})
+
+        for i in range( total_size // chunk_size ):            
+            message_queue.put({"main_pbar": chunk_size})
+            message_queue.put({"child_pbar": name, "size": chunk_size, "action": "update", "total_size": total_size, "desc": "child_" +desc})
+            time.sleep(2)
+
+        message_queue.put({"child_pbar": name, "action": "close"})
+        message_queue.put({"close": True})
+
+
     # node send file
     def _send_files(self, filelist, base_url):
-        local_status_event = "server_status_tqdm"
-        node_status_event = "node_status_tqdm"
-
         self.m_send_file_flag.clear()
         url = f"{base_url}/file"
 
@@ -1262,8 +1325,9 @@ class ServerWorker:
         chunk_size_mb = int(self.m_config.get("chunk_size_mb", 1))
         read_size_b = chunk_size_mb * 1024 * 1024
         total_size = 0
-        socket_events = [(self.m_sio, local_status_event, None), 
-                         (self.m_sio, node_status_event, )]
+
+        socket_events = [("local_sio", "server_status_tqdm", "all_dashboards_and_all_nodes")]
+
 
         # debug_print(f"API Key Token is {api_key_token}")
     
@@ -1293,13 +1357,14 @@ class ServerWorker:
             entry["date"] = entry["date"].strftime("%Y-%m-%d")
 
             dirroot = self.m_config["volume_map"].get(project, "/").strip("/")
-            fullpath = os.path.join( self.m_config["volume_root"], dirroot, file.strip("/"))
+            volume_root = self.m_config.get("volume_root", "/") 
+            fullpath = os.path.join( volume_root, dirroot, file.strip("/"))
 
             # fullpath = self._get_file_path_from_entry(entry)
             if not os.path.exists(fullpath):
-                fullpath =  os.path.join( self.m_config["volume_root"], file.strip("/"))
+                fullpath =  os.path.join( volume_root, file.strip("/"))
                 if not os.path.exists(fullpath):
-                    debug_print(f"File not found {self.m_config['volume_root']}, {dirroot}, {file.strip('/')} ")
+                    debug_print(f"File not found {volume_root}, {dirroot}, {file.strip('/')} ")
                     return fullpath, False
 
             name = f"{upload_id}_{idx}_{os.path.basename(file)}" 
@@ -1367,7 +1432,7 @@ class ServerWorker:
 
         pool_queue = [ (message_queue, source, project, file, upload_id, offset_b, total_size, remote_id,  idx ) for idx, (source, project, file, upload_id, offset_b, total_size, remote_id, entry ) in enumerate(filelist) ]
 
-        thread = Thread(target=pbar_thread, args=(message_queue, total_size, source, socket_events, desc, max_threads))    
+        thread = Thread(target=redis_pbar_thread, args=(message_queue, total_size, source, socket_events, desc, max_threads))    
         thread.start()
 
         files = []

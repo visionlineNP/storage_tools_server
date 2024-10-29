@@ -125,6 +125,7 @@ class SocketIORedirect:
         redis_host = os.environ.get("REDIS_HOST", "localhost")
         self.redis = redis.StrictRedis(host=redis_host, port=6379, db=0)
 
+
     def emit(self, event:str, msg:any, to=None, debug=False):
         data = {
             "event": event,
@@ -136,6 +137,28 @@ class SocketIORedirect:
 
         if debug: debug_print(data)
         self.redis.lpush("emit", json.dumps(data))
+
+class RemoteIORedirect:
+    def __init__(self) -> None:
+        redis_host = os.environ.get("REDIS_HOST", "localhost")
+        self.redis = redis.StrictRedis(host=redis_host, port=6379, db=0)
+
+    def emit(self, event:str, msg:any, to=None, debug=False):
+        data = {
+            "event": event,
+            "msg": msg,
+            "debug": debug
+            }
+        if to is not None:
+            data["to"] = to
+
+        msg = {
+            "action": "remote_emit",
+            "data": data
+        }
+
+        if debug: debug_print(data)
+        self.redis.lpush("remote_work", json.dumps(data))
 
 
 def build_multipart_data(entry, generator, total_size):
@@ -202,7 +225,24 @@ class PosMaker:
         self.m_pos[i] = False
 
 
+def redis_pbar_thread(messages:queue.Queue, total_size, source, socket_events, desc, max_threads, debug=False):
+    local_sio = None
+    remote_sio = None 
+
+    redis_events = []
+    for (sio_location, event, room) in socket_events:
+        if sio_location == "local_sio":
+            if not local_sio: local_sio = SocketIORedirect()
+            redis_events.append((local_sio, event, room))
+        elif sio_location == "remote_sio":
+            if not remote_sio: remote_sio = RemoteIORedirect()
+            redis_events.append((remote_sio, event, room))
+
+    pbar_thread(messages, total_size, source, redis_events, desc, max_threads, debug=debug)
+       
+
 def pbar_thread(messages:queue.Queue, total_size, source, socket_events, desc, max_threads, debug=False):
+    debug_print(f"debug: {debug}")
     pos_maker = PosMaker(max_threads)
 
     positions = {}

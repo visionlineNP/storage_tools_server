@@ -264,6 +264,9 @@ class Database:
         return ids
 
     def add_entry(self, entry):
+        if entry.get("upload_id") is None or entry["upload_id"] == "None":
+            return 
+
         debug_print(f"Add {entry['upload_id']}")
         # skip if entry already exists. 
         if self.check_upload_id(entry["upload_id"]):
@@ -303,7 +306,7 @@ class Database:
                 
                 cur.execute(query, (
                     entry["project"], entry["robot_name"], entry["run_name"], entry["datatype"], entry["relpath"],
-                    entry["basename"], entry["fullpath"], entry["size"], entry["site"], entry["date"], entry["datetime"],
+                    entry["basename"], entry.get("fullpath",""), entry["size"], entry["site"], entry["date"], entry["datetime"],
                     entry["start_datetime"], entry["end_datetime"], entry["upload_id"], entry["dirroot"],
                     entry["md5"], json.dumps(entry["topics"]), entry["localpath"], entry["duration"]
                 ))

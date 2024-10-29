@@ -183,8 +183,7 @@ class WebsocketServer:
                         data = msg.get("msg")
                         room = msg.get("to", None)
                         debug = msg.get("debug", False)
-                        with_nodes = msg.get("with_nodes", False)
-                        # debug_print(f"{event} to={room}")
+                        with_nodes = "all_node" in room  or msg.get("with_nodes", False)
 
                         if "all_dash" in room:                            
                             self._send_to_all_dashboards(event, data, with_nodes, debug)
@@ -287,6 +286,12 @@ class WebsocketServer:
 
     def on_request_new_data(self, data):
         self._send_server_data(data)
+
+    def on_request_files_exist(self, data):
+        self._submit_action("request_files_exist", data)
+
+    def on_request_remote_files_exist(self, data):
+        self._submit_remote_action("request_files_exist", data)
 
     def _send_server_data(self, data):
         self._submit_action("get_server_data_stub", data)
@@ -571,6 +576,9 @@ class WebsocketServer:
 
         self.redis.delete(f"device_data_blocks:{source}")
 
+    def on_estimate_runs(self, data):
+        debug_print(data)
+        self._submit_action("estimate_runs", data)
 
     def on_device_data_block(self, data):
         source = data.get("source")
@@ -620,6 +628,7 @@ class WebsocketServer:
     def on_device_cancel_transfer(self, data):
         source = data.get("source")
         self.set_cancel(source)
+        self.m_sio.emit("device_cancel_transfer", data, to=source)
 
     # handle socket connections 
     def on_connect(self, con=None):
@@ -742,7 +751,14 @@ class WebsocketServer:
         self._submit_remote_action("remote_request_files", data)
 
     def on_request_remote_cancel_tranfer(self, data):
-        self._submit_remote_action("remote_cancel_transfer", data)
+        debug_print(f"enter {data}")
+        room = data.get("source")
+        self.m_sio.emit("remote_cancel_transfer", data, to=room)
+
+    def on_request_debug_send(self, data):
+        debug_print(f"enter {data}")
+        room = data.get("source")
+        self.m_sio.emit("debug_send", data, to=room)
 
     def on_request_cancel_push_transfer(self, data):
         source = data["source"]
@@ -1004,6 +1020,7 @@ class WebsocketServer:
         # Start uploading the file in chunks
         chunk_size = 10 * 1024 * 1024  # 1MB chunks
         with open(tmp_path, open_mode) as fid:
+            os.chmod(tmp_path, 0o777 )
             debug_print(f"writing to {tmp_path}")
             while True:
 
@@ -1028,7 +1045,7 @@ class WebsocketServer:
                     break
                 fid.write(chunk)
 
-        os.chmod(tmp_path, 0o777 )
+        
 
         if os.path.exists(tmp_path) and is_last:
             current_size = os.path.getsize(tmp_path)
@@ -1168,7 +1185,7 @@ class WebsocketServer:
             complete_relpath = self._get_complete_relpath_from_entry(entry)
 
             project = entry["project"]
-            offset = entry["temp_size"]
+            offset = entry.get("temp_size", 0)
             size = entry["size"]
             # file = entry["fullpath"]
             filenames.append((project, complete_relpath, upload_id, offset, size, remote_id))
@@ -1245,4 +1262,6 @@ class WebsocketServer:
     def on_debug_scan_server(self, data=None):
         self._submit_action("server_scan", {})
 
-
+    def on_debug_send(self, data):
+        debug_print(data)
+        self._submit_action("debug_send", data)

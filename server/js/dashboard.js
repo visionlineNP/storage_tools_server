@@ -91,7 +91,13 @@ $(document).ready(function () {
   })
 
   socket.on("server_status_tqdm", function (msg) {
+    console.log(msg)
     updateProgress(msg, "server-status-tqdm");
+  })
+
+  socket.on("debug_status_tqdm", function (msg) {
+    console.log(msg);
+    updateProgress(msg, "server-status-tqdm")
   })
 
   socket.on("server_ymd_data", function (msg) {
@@ -118,6 +124,10 @@ $(document).ready(function () {
 
   socket.on("server_link_status", function (data) {
     serverLinkStatus(data);
+  })
+
+  socket.on("request_files_exist_rtn", function(data) {
+    serverUpdateFilesExist(data);
   })
 
   socket.on('node_data', function (data) {
@@ -244,7 +254,7 @@ $(document).ready(function () {
 
   // Config ----
   socket.on('project_names', function (msg) {
-    updateProjectList(msg.data);
+    updateProjectList(msg);
   });
 
   socket.on('robot_names', function (msg) {
@@ -272,6 +282,15 @@ $(document).ready(function () {
   socket.on("search_filters", function (msg) {
     updateSearchFilters(msg);
   })
+
+
+  socket.onAny((event, ...args) => {
+    // Check if there is a defined handler for the event
+    if (!socket.hasListeners(event)) {
+        console.log(`Unhandled event: ${event}`, args);
+    }
+});
+
 
   // document.getElementById('add-project-btn').addEventListener('click', function () {
   //   const projectName = document.getElementById('project-name-input').value;
@@ -609,13 +628,24 @@ function postDateTimeChange(source, upload_id) {
     });
 }
 
-function updateProjectList(projectData) {
+  
+
+function updateProjectList(msg) {
+  projectData = msg.data;
+  
+  {
+    const container = document.getElementById("volume_root")
+    container.textContent = msg.volume_root;
+  }
 
   window.projects = []
 
   {
     const tbody = document.querySelector('#projectTable tbody');
     tbody.innerHTML = '';  // Clear the table before updating
+
+
+
 
     // Create and append table rows for each project
     projectData.forEach(project => {

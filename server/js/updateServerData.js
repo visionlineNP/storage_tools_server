@@ -1,7 +1,8 @@
 window.serverData = {
     local: {},
     remote: {},
-    dashboard_file_server: {}
+    dashboard_file_server: {},
+    remote_connected: false
 }
 
 
@@ -16,9 +17,8 @@ function on_dashboard_update(data) {
 }
 
 // from remote connection
-function refresh_dashboard_file_server()
-{
-    $.each( window.serverData.dashboard_file_server, function(_, data) {
+function refresh_dashboard_file_server() {
+    $.each(window.serverData.dashboard_file_server, function (_, data) {
         on_dashboard_file_server(data);
     });
 }
@@ -28,12 +28,11 @@ function on_dashboard_file_server(data) {
     let upload_id = data.upload_id;
 
     // handle case where file does not exist on remote 
-    if( data.on_remote == null)  {
+    if (data.on_remote == null) {
         data.on_remote = false;
     }
 
-    if(data.on_local == null) 
-    {
+    if (data.on_local == null) {
         data.on_local = true;
     }
 
@@ -85,14 +84,16 @@ function on_remote_connection(msg) {
             sync_status.title = "Connected";
             link_button.dataset.connected = true;
             link_button.textContent = "Disconnect";
+            window.serverData.remote_connected = true;
 
             refresh_dashboard_file_server();
-            
+
         } else {
             sync_status.className = "bi bi-cloud grayed-out";
             sync_status.title = "Disconnected";
             link_button.dataset.connected = false;
             link_button.textContent = "Connect";
+            window.serverData.remote_connected = false;
         }
 
         const syncButtons = document.querySelectorAll(".server_button");
@@ -194,7 +195,6 @@ function processRemoteTransferSelections() {
 
 function processServerPushCancelTransfer() {
     const source = $(this)[0].dataset.source;
-    console.log(`Tic ${source}`)
     socket.emit("request_cancel_push_transfer", { "source": source, "session_token": window.session_token });
 
 }
@@ -202,7 +202,6 @@ function processServerPushCancelTransfer() {
 
 function processServerPullCancelTransfer() {
     const source = $(this)[0].dataset.source;
-    console.log(`Tic ${source}`)
     socket.emit("request_remote_cancel_transfer", { "source": source, "session_token": window.session_token });
 }
 
@@ -231,6 +230,31 @@ function serverLinkStatus(data) {
     }
 }
 
+
+function serverUpdateFilesExist(data) {
+    console.log(data);
+    for (entry of data.entries) {
+        const upload_id = entry.upload_id;
+        if (upload_id) {
+
+            let onRemote = document.getElementById("on_remote_" + upload_id);
+            if (onRemote) {
+                if (entry.on_remote) {
+                    onRemote.className = "bi bi-cloud-fill";
+                    onRemote.classList.add("remote_icon");
+                    onRemote.classList.remove("grayed-out");
+                    onRemote.title = "On Remote Server";
+                } else {
+                    onRemote.className = "bi bi-cloud";
+                    onRemote.classList.add("remote_icon");
+                    onRemote.classList.add("grayed-out");
+                    onRemote.title = "Not On Remote Server";
+                }
+            } else { console.log("didnt find ", "on_remote_" + upload_id, data) }
+
+        }
+    }
+}
 
 window.server_accumulate = {};
 
@@ -299,6 +323,7 @@ function processServerYMD(data) {
     //runs = Object.entries(projects[ymd_name]);
     runs.sort((a, b) => a[0].localeCompare(b[0]));
 
+    let name_check = []
 
     for ([run_name, run_entry] of runs) {
         //console.log(run_name);
@@ -453,6 +478,16 @@ function processServerYMD(data) {
                 const tr = document.createElement("tr");
                 tbody.appendChild(tr);
 
+                if (window.serverData.remote_connected) {
+                    name_check.push({
+                        "project": project_name,
+                        "relpath": detail.relpath,
+                        "date": ymd_name,
+                        "robot_name": detail.robot_name,
+                        "basename": detail.basename
+                    })
+                }
+
                 if (window.has_remotes) {
                     const tdCheckbox = document.createElement("td");
                     const checkbox = document.createElement("input");
@@ -498,12 +533,12 @@ function processServerYMD(data) {
 
 
 
-                        const link = document.createElement("a")   
+                        const link = document.createElement("a")
                         const upload_id = detail.upload_id;
                         const basename = detail.basename;
 
                         link.href = `/download/${upload_id}`
-                        link.download = basename 
+                        link.download = basename
 
                         const download = document.createElement("i")
                         download.className = "bi bi-download"
@@ -641,6 +676,13 @@ function processServerYMD(data) {
         }
     };
 
+    if (name_check.length > 0) {
+        msg = {
+            "entries": name_check,
+            "session_token": window.session_token
+        }
+        socket.emit("request_remote_files_exist", msg)
+    }
 }
 
 function updateServerData(data) {
@@ -697,7 +739,7 @@ function updateServerData(data) {
         }
         linkButton.addEventListener('click', () => {
             if (linkButton.dataset.connected == "true") {
-                console.log("Try to disconnect")                
+                console.log("Try to disconnect")
                 msg = { "session_token": window.session_token, "address": window.serverData.server }
                 socket.emit("server_disconnect", msg)
             } else {
@@ -728,10 +770,12 @@ function updateServerData(data) {
         if (data.remote_connected) {
             icon.className = "bi bi-cloud-fill";
             icon.title = "Connected";
+            window.serverData.remote_connected = true;
         } else {
             icon.className = "bi bi-cloud";
             icon.classList.add("grayed-out");
             icon.title = "Disconnected";
+            window.serverData.remote_connected = false;
         }
         spanSyncStatus.appendChild(icon);
 
@@ -745,14 +789,25 @@ function updateServerData(data) {
         containerData.appendChild(refreshButton)
         containerData.appendChild(linkStatusMessage)
 
-
+        // debugButton = document.createElement("button")
+        // debugButton.className = "btn btn-primary"
+        // debugButton.textContent = "debug"
+        // debugButton.addEventListener("click", () => {
+        //     msg= {"session_token": window.session_token}
+        //     socket.emit("debug_send", msg)
+        // })
+        // containerData.appendChild(debugButton)
     }
 
 
-    const host_names = ["Local", "Remote"]
+    // const host_names = ["Local", "Remote"]
+    host_names = ["Local"]
+    if( window.has_remotes) {
+        host_names.push("Remote")
+    }
     const host_tabs = create_tabs(host_names, containerData, "host")
     const local_tab = host_tabs.Local
-    const remote_tab = host_names.Remote
+    //const remote_tab = host_names.Remote
 
     const project_names = Object.keys(data.entries).sort();
     const project_tabs = create_tabs(project_names, local_tab, "host:server");
@@ -861,7 +916,7 @@ function updateServerRemote(data) {
     //console.log(data);
 
     source = data.source
-    if(!source) {
+    if (!source) {
         return;
     }
 
@@ -943,7 +998,7 @@ function updateServerRemoteYMD(data) {
     const tab_name = data.tab;
     const ymd_div = document.getElementById(tab_name);
 
-    if (!ymd_div) {      
+    if (!ymd_div) {
         console.log("---- creating new tab : " + tab_name)
         ymd_div = add_single_tab(tab_name, "request_server_ymd_data")
     }
@@ -1108,27 +1163,27 @@ function updateServerRemoteYMD(data) {
                 const tr = document.createElement("tr");
                 tbody.appendChild(tr);
 
-                    const tdCheckbox = document.createElement("td");
-                    const checkbox = document.createElement("input");
+                const tdCheckbox = document.createElement("td");
+                const checkbox = document.createElement("input");
 
-                    checkbox.dataset.source = source;
-                    checkbox.dataset.datetime = detail.datetime;
-                    checkbox.dataset.size = detail.size;
-                    checkbox.dataset.group = "table";
-                    checkbox.dataset.on_local = detail.on_local;
-                    checkbox.dataset.on_remote = detail.on_remote;
-                    checkbox.dataset.upload_id = detail.upload_id;
-                    checkbox.dataset.project = project_name;
-                    checkbox.dataset.offset = detail.offset;
-                    checkbox.dataset.fullpath = detail.complete_relpath;
-                    checkbox.dataset.remote_id = detail.remote_upload_id;
+                checkbox.dataset.source = source;
+                checkbox.dataset.datetime = detail.datetime;
+                checkbox.dataset.size = detail.size;
+                checkbox.dataset.group = "table";
+                checkbox.dataset.on_local = detail.on_local;
+                checkbox.dataset.on_remote = detail.on_remote;
+                checkbox.dataset.upload_id = detail.upload_id;
+                checkbox.dataset.project = project_name;
+                checkbox.dataset.offset = detail.offset;
+                checkbox.dataset.fullpath = detail.complete_relpath;
+                checkbox.dataset.remote_id = detail.remote_upload_id;
 
 
 
-                    checkbox.type = "checkbox";
-                    checkbox.id = "server_select_" + detail.upload_id
-                    tdCheckbox.appendChild(checkbox);
-                    tr.appendChild(tdCheckbox);
+                checkbox.type = "checkbox";
+                checkbox.id = "server_select_" + detail.upload_id
+                tdCheckbox.appendChild(checkbox);
+                tr.appendChild(tdCheckbox);
 
                 item_names.forEach((key) => {
                     const td = document.createElement("td");

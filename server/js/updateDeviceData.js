@@ -4,12 +4,15 @@ function processClearSelectionsByDate() {
   const date = $(this)[0].dataset.date;
 
   $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-date="' + date + '"]:checked').prop('checked', false);
+  updateDeviceSelectCounts(source);
+
 }
 
 function processClearSelections() {
   const source = $(this)[0].dataset.source;
 
   $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').prop('checked', false);
+  updateDeviceSelectCounts(source);
 }
 
 
@@ -56,12 +59,15 @@ function processSelectAllNewByDate() {
   //console.log(source, date);
 
   $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-date="' + date + '"][data-on-device="true"][data-on-server="false"]').prop('checked', true);
+  updateDeviceSelectCounts(source);
 
 }
 
 function processSelectAllNew() {
   const source = $(this)[0].dataset.source;
   $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-on-device="true"][data-on-server="false"]').prop('checked', true);
+  updateDeviceSelectCounts(source);
+
 }
 
 
@@ -114,6 +120,7 @@ function updateDeviceData(data) {
   container.innerHTML = "";
 
   if (Object.keys(data).length == 0) {
+    updateDeviceCount(0);
     return;
   }
 
@@ -635,6 +642,11 @@ function updateDeviceDataEntry(relpath_entries, source_name, date, tbody) {
     checkbox.dataset.group = "table";
     checkbox.dataset.onDevice = entry.on_device;
     checkbox.dataset.onServer = entry.on_server;
+    checkbox.dataset.size = entry.size;
+    checkbox.addEventListener("change", (event) => {
+      const source = event.target.dataset.source;
+      updateDeviceSelectCounts(source);
+    })
     tdCheckbox.appendChild(checkbox);
     tr.appendChild(tdCheckbox);
 
@@ -712,7 +724,7 @@ function updateDeviceDataEntry(relpath_entries, source_name, date, tbody) {
     tr.appendChild(tdDateTimeInput);
 
     const tdFileSize = document.createElement('td');
-    tdFileSize.textContent = entry.size;
+    tdFileSize.textContent = entry.hsize;
     tr.appendChild(tdFileSize);
 
     const tdStatusDiv = document.createElement('td');
@@ -788,6 +800,11 @@ function updateDeviceStats(source_name, stats) {
     drow.appendChild(td);
     td.innerHTML = datatype_name;
   }
+  
+  td = document.createElement("td")
+  td.innerHTML = "Selected"
+  drow.appendChild(td)
+
 
   let dbody = document.createElement("tbody");
   dtable.appendChild(dbody);
@@ -810,6 +827,11 @@ function updateDeviceStats(source_name, stats) {
     td.innerHTML = datatype_entry["on_server_hsize"] + " / " + datatype_entry["htotal_size"];
   }
 
+  td = document.createElement("td");
+  td.id = "device_selected_hsize"
+  td.innerHTML = "0 B"
+  drow.appendChild(td)
+
   drow = document.createElement("tr");
   dbody.appendChild(drow);
 
@@ -827,7 +849,36 @@ function updateDeviceStats(source_name, stats) {
     drow.appendChild(td);
     td.innerHTML = datatype_entry["on_server_count"] + " / " + datatype_entry["count"];
   }
+
+  td = document.createElement("td");
+  td.id = "device_selected_count"
+  td.innerHTML = "0"
+  drow.appendChild(td)
+
+
 }
+
+function updateDeviceSelectCounts(source)
+{
+  let total_size = 0;
+  let total_count = 0;
+  $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').each(function () {
+    total_count += 1;
+    total_size += parseInt($(this).attr("data-size"));
+  });
+  let hsize = formatBytes(total_size);
+  console.log(total_count, total_size, hsize)
+
+  let span = document.getElementById("device_selected_hsize")
+  if( span ) {
+    span.innerHTML = hsize;
+  }
+  span = document.getElementById("device_selected_count")
+  if( span ) {
+    span.innerHTML = total_count;
+  }
+}
+
 
 window.device_accumulate = {};
 
@@ -852,7 +903,8 @@ function accumulateDeviceYMD(data) {
     acc_data.found += 1;
 
     for ([rel_dir, entry] of reldirs) {
-      acc_data.reldir[rel_dir] = entry;
+      // acc_data.reldir[rel_dir] = entry;
+      acc_data.reldir[rel_dir] = [...(acc_data.reldir[rel_dir] || []), ...entry];
     };
   }
   window.device_accumulate[key] = acc_data;

@@ -43,7 +43,7 @@ class SocketIOTQDM(tqdm):
             if self.room:
                 self.sio.emit(self.event, msg, room=self.room, debug=self.debug)
             else:
-                self.sio.emit(self.event, msg, debug_print=self.debug)
+                self.sio.emit(self.event, msg, debug=self.debug)
             self.last_emit_time = current_time
 
     def update(self, n=1):
@@ -87,7 +87,7 @@ class SocketIOTQDM(tqdm):
         }
         try:
             if self.room:
-                self.sio.emit(self.event, msg, room=self.room)
+                self.sio.emit(self.event, msg, to=self.room)
             else:
                 self.sio.emit(self.event, msg)
         except socketio.exceptions.BadNamespaceError as e:
@@ -118,8 +118,8 @@ class MultiTargetSocketIOTQDM(tqdm):
             }
 
             try:
-                if self.room:
-                    sio.emit(event, msg, room=self.room, debug=self.debug)
+                if room:
+                    sio.emit(event, msg, to=room, debug=self.debug)
                 else:
                     sio.emit(event, msg, debug=self.debug)
             except socketio.exceptions.BadNamespaceError:
@@ -136,7 +136,7 @@ class MultiTargetSocketIOTQDM(tqdm):
             for sio, event, room in self.sio_events:
                 # debug_print((sio, event, room))
                 if room:
-                    sio.emit(event, msg, room=self.room, debug=self.debug)
+                    sio.emit(event, msg, to=room, debug=self.debug)
                 else:
                     sio.emit(event, msg, debug=self.debug)
             self.last_emit_time = current_time
@@ -178,6 +178,7 @@ class MultiTargetSocketIOTQDM(tqdm):
 
     def close(self):
         super().close()
+
         if len(self.sio_events) == 0:
             return 
 
@@ -190,12 +191,11 @@ class MultiTargetSocketIOTQDM(tqdm):
         }
 
         for sio, event, room in self.sio_events:
-            try:
+
+            for sio, event, room in self.sio_events:
                 if room:
-                    sio.emit(event, msg, room=self.room)
+                    sio.emit(event, msg, to=room, debug=self.debug)
                 else:
-                    sio.emit(event, msg)
-            except socketio.exceptions.BadNamespaceError as e:
-                # got disconnected.  
-                pass
+                    sio.emit(event, msg, debug=self.debug)
+
 

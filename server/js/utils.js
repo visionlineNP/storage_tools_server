@@ -3,8 +3,7 @@
 // parent is div element to attach the tabs
 // prefix is name for the bs-target
 
-function create_tabs(names, parent, prefix, event=null, auto_trigger=false)
-{
+function create_tabs(names, parent, prefix, event = null, auto_trigger = false) {
     session_token = window.session_token
 
     rtn = {}
@@ -15,6 +14,7 @@ function create_tabs(names, parent, prefix, event=null, auto_trigger=false)
     parent.appendChild(tablist)
 
     let first_name = true;
+    let first_tab = false;
     for (const item_name of names) {
         let li = document.createElement("li");
         li.className = "nav-item";
@@ -28,9 +28,11 @@ function create_tabs(names, parent, prefix, event=null, auto_trigger=false)
         if (first_name) {
             link.className = "nav-link active";
             link.setAttribute("aria-selected", "true")
+            link.setAttribute("data-tigger", false)
             first_name = false;
         } else {
             link.className = "nav-link";
+            link.setAttribute("data-trigger", true)
         }
         const tab_name = prefix + ":" + item_name;
         link.setAttribute("data-bs-toggle", "tab");
@@ -39,13 +41,16 @@ function create_tabs(names, parent, prefix, event=null, auto_trigger=false)
         link.role = "tab";
         link.setAttribute("aria-controls", tab_name);
 
-        if(event && !auto_trigger) {
+        if (event && !auto_trigger && !first_name) {
             // execute this function once the tab is visible for the first time
-            link.addEventListener("show.bs.tab", function(e) {
+            link.addEventListener("show.bs.tab", function (e) {
                 //console.log(e, event, tab_name, session_token);
-                socket.emit(event, {tab:tab_name, session_token: session_token})
-            },{once: true})
+                if ($(this)[0].dataset.trigger) {
+                    socket.emit(event, { tab: tab_name, session_token: session_token })
+                }
+            }, { once: true })
         }
+        first_tab = false;
     }
 
     const tab_contents = document.createElement("div");
@@ -71,10 +76,10 @@ function create_tabs(names, parent, prefix, event=null, auto_trigger=false)
 
         rtn[item_name] = tab_div;
 
-        if(event && (was_first || auto_trigger)) {
+        if (event && (was_first || auto_trigger)) {
             // always make sure the first one is triggered. 
             console.log(event, tab_name);
-            socket.emit(event, {tab:tab_name, session_token: session_token})
+            socket.emit(event, { tab: tab_name, session_token: session_token })
         }
     }
 
@@ -86,7 +91,7 @@ function add_single_tab(full_tab_name, event = null) {
     const levels = full_tab_name.split(':');
     const current_level_name = levels.shift(); // Extract the current level
     const remaining_levels = levels.join(':'); // Remaining levels after this one
-    
+
     // Assume the top-level tab is always present
     let current_parent = document.getElementById(current_level_name);
     if (!current_parent) {
@@ -191,19 +196,18 @@ function add_single_tab(full_tab_name, event = null) {
 
 
 
-function add_placeholder(div)
-{
+function add_placeholder(div) {
     const p = document.createElement("p");
     p.className = "placeholder-glow";
     p.setAttribute("aria-hidden", "true");
     div.appendChild(p);
-    const rows = [[7,4, 2], [8, 4,4],[6,9,3]];
-    $.each(rows, function(_,sizes) {
-        $.each(sizes, function(_, sz) {
+    const rows = [[7, 4, 2], [8, 4, 4], [6, 9, 3]];
+    $.each(rows, function (_, sizes) {
+        $.each(sizes, function (_, sz) {
             const span = document.createElement("span");
             p.appendChild(span);
             span.className = "placeholder col-" + sz;
-    
+
             const space = document.createElement("span");
             p.append(space);
             space.textContent = " ";
@@ -215,7 +219,7 @@ function add_placeholder(div)
 }
 
 
-function createFileSizeRangeSelector(minBytes, maxBytes, sizeSelectorDiv, name ) {
+function createFileSizeRangeSelector(minBytes, maxBytes, sizeSelectorDiv, name) {
     // Convert bytes to human-readable format
     function bytesToHumanReadable(bytes) {
         const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -279,7 +283,7 @@ function createFileSizeRangeSelector(minBytes, maxBytes, sizeSelectorDiv, name )
 
         sizeSelectorDiv.dataset.min = minSize;
         sizeSelectorDiv.dataset.max = maxSize;
-    
+
         rangeDisplay.textContent = `Selected Range: ${bytesToHumanReadable(minSize)} - ${bytesToHumanReadable(maxSize)}`;
     }
 
@@ -306,20 +310,20 @@ function createFileSizeRangeSelector(minBytes, maxBytes, sizeSelectorDiv, name )
         maxInput.value = maxBytes
 
         sizeSelectorDiv.dataset.min = minBytes;
-        sizeSelectorDiv.dataset.max = maxBytes;    
+        sizeSelectorDiv.dataset.max = maxBytes;
     }
 
     sizeSelectorDiv.reset = reset;
 
 }
 
-function createFileDurationRangeSelector(minSeconds, maxSeconds, sizeSelectorDiv, name ) {
+function createFileDurationRangeSelector(minSeconds, maxSeconds, sizeSelectorDiv, name) {
     // Convert seconds to human-readable format
     function secondsToHumanReadable(seconds) {
         const units = ['sec', 'min', 'hours', 'days'];
         let index = 0;
         let readableTime = seconds;
-    
+
         // Convert seconds to the appropriate unit
         while (readableTime >= 60 && index < units.length - 1) {
             if (index === 0) {
@@ -331,7 +335,7 @@ function createFileDurationRangeSelector(minSeconds, maxSeconds, sizeSelectorDiv
             }
             index++;
         }
-    
+
         return `${readableTime.toFixed(2)} ${units[index]}`;
     }
 
@@ -411,7 +415,7 @@ function createFileDurationRangeSelector(minSeconds, maxSeconds, sizeSelectorDiv
         maxInput.value = maxSeconds
 
         sizeSelectorDiv.dataset.min = minSeconds;
-        sizeSelectorDiv.dataset.max = maxSeconds;    
+        sizeSelectorDiv.dataset.max = maxSeconds;
     }
 
     sizeSelectorDiv.reset = reset;
@@ -421,17 +425,17 @@ function createFileDurationRangeSelector(minSeconds, maxSeconds, sizeSelectorDiv
 function getCookie(name) {
     let cookies = document.cookie.split(';');
     for (let i = 0; i < cookies.length; i++) {
-      let cookie = cookies[i].trim();
-      // Check if this cookie matches the name we are looking for
-      if (cookie.startsWith(name + '=')) {
-        return decodeURIComponent(cookie.substring(name.length + 1));
-      }
+        let cookie = cookies[i].trim();
+        // Check if this cookie matches the name we are looking for
+        if (cookie.startsWith(name + '=')) {
+            return decodeURIComponent(cookie.substring(name.length + 1));
+        }
     }
     return null;
-  }
-  
-  // Function to delete a specific cookie by name
-  function deleteCookie(name) {
+}
+
+// Function to delete a specific cookie by name
+function deleteCookie(name) {
     document.cookie = name + '=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
 }
 
@@ -459,4 +463,18 @@ function setCookie(name, value, days) {
     for (const [key, val] of Object.entries(existingCookies)) {
         document.cookie = `${key}=${val}${expires}; path=/`;
     }
+}
+
+
+function formatBytes(bytes) {
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    let unitIndex = 0;
+
+    // Convert bytes to a larger unit until it's below 1024
+    while (bytes >= 1000 && unitIndex < units.length - 1) {
+        bytes /= 1000;
+        unitIndex++;
+    }
+
+    return `${bytes.toFixed(2)} ${units[unitIndex]}`;
 }

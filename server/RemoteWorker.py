@@ -30,7 +30,7 @@ class RemoteWorker:
         self._load_keys()
         self._start_work_listener()
 
-        debug_print("Soure is "  + self.m_config["source"])
+        debug_print("Source is "  + self.m_config["source"])
 
         self.m_remote_connection = RemoteConnection(self.m_config, self)
 
@@ -73,7 +73,7 @@ class RemoteWorker:
                 # Delete the matching keys
                 self.redis.delete(*keys)    
 
-    def _get_file_path_from_entry(self, entry:dict) -> str:
+    def get_file_path_from_entry(self, entry:dict) -> str:
         project = entry.get("project")
 
         root = self.m_config.get("volume_root", "/")
@@ -174,7 +174,9 @@ class RemoteWorker:
             self._request_remote_ymd_data(data)
         elif action == "remote_refresh":
             self._remote_refresh(data)
-    
+        elif action == "request_files_exist":
+            self._request_files_exist(data)
+
         # pull from remote 
         elif action == "remote_request_files":
             self._remote_request_files(data)
@@ -185,11 +187,14 @@ class RemoteWorker:
         elif action == "server_transfer_files":
             self._server_transfer_files(data)
 
+        elif action == "remote_emit":
+            debug_print(data)
+
         # update keys
         elif action == "reload_keys":
             ## note! we are assuming there is only one 
             ## remote connection server right now. so reload keys is a 
-            ## comsumed action, not a process!
+            ## consumed action, not a process!
             self._load_keys()
         else:
             debug_print(f"unhandled action {action}")
@@ -205,6 +210,9 @@ class RemoteWorker:
 
     def _request_remote_ymd_data(self, data):
         self.m_remote_connection.request_remote_ymd_data(data)
+
+    def _request_files_exist(self, data):
+        self.m_remote_connection.request_files_exist(data)
 
     def _remote_refresh(self, data):
         self.m_remote_connection.remote_refresh(data)
@@ -301,8 +309,6 @@ class RemoteConnection:
         # maps local id to remote 
         self.m_rev_upload_id_map =  {}
 
-        
-
         sio = self._create_client()
         self.m_remote_sio = sio
 
@@ -338,13 +344,19 @@ class RemoteConnection:
         def node_send(data):
             self._on_node_send(data)
 
+        @sio.event
+        def request_files_exist_rtn(data):
+            self._on_request_files_exist_rtn(data)
+
+        @sio.event
+        def remote_cancel_transfer(data):
+            debug_print(data)
+            self._on_remote_cancel_transfer(data)
+
     def _on_connect(self):
         self.m_remote_sio.emit('join', { 'room': self.m_node_source, "type": "node" })
         self.m_upload_id_map = {}
         self.m_rev_upload_id_map = {}
-        
-
-        pass 
 
     def _on_disconnect(self):
         msg = {"source": self.m_node_source, "address": self.m_server_address, "connected": False}
@@ -362,7 +374,6 @@ class RemoteConnection:
         msg = {"source": self.m_node_source, "address": self.m_server_address, "connected": True}
         self.send_to_all_local_dashboard("remote_connection", msg)
         self.m_parent.set_remote_connection_address(self.m_server_address)
-        # self.m_remote_sio.emit("server_refresh")
 
         # send our data as node information
         self.m_parent.send_node_data()
@@ -406,7 +417,7 @@ class RemoteConnection:
 
                     file = os.path.join(item["relpath"], item["basename"])
                     local_id =  get_upload_id(self.m_config["source"], data.get("project"), file) 
-                    filepath = self.m_parent._get_file_path_from_entry(item)
+                    filepath = self.m_parent.get_file_path_from_entry(item)
                     item["localpath"] = filepath
 
                     self.m_parent.create_remote_entry(self.m_remote_source, local_id, item )
@@ -421,7 +432,7 @@ class RemoteConnection:
 
                     # debug_print(f"adding  local_id: {self.m_remote_source} {local_id} -> {upload_id}")
 
-                    filepath = self.m_parent._get_file_path_from_entry(item)
+                    filepath = self.m_parent.get_file_path_from_entry(item)
                     item["on_remote"] = True 
                     item["on_local"] =  os.path.exists(filepath)
                     if item["on_local"]:
@@ -510,6 +521,21 @@ class RemoteConnection:
             data["data_for"] = dashboard_room(data)
             debug_print(f"room: {data['data_for']}")
             self.remote_emit("request_server_ymd_data", data)
+
+    def request_files_exist(self, data):
+        debug_print(data)
+        if self.connected():
+            data["room"] = self.m_node_source
+            data["data_for"] = dashboard_room(data)
+            self.remote_emit("request_files_exist", data)
+
+    def _on_request_files_exist_rtn(self, data):
+        room = data.get("data_for")
+        self.m_parent.m_sio.emit("request_files_exist_rtn", data, to=room)
+
+    def _on_remote_cancel_transfer(self, data):
+        source = data["source"]
+        self.m_parent._submit_action("remote_cancel_transfer", data)
 
     def remote_refresh(self, data):
         if self.connected():

@@ -6,7 +6,7 @@ import datetime
 import inspect
 from typing import TextIO 
 
-def debug_print(string, file:TextIO=sys.stderr):
+def debug_print(string:any, file:TextIO=sys.stderr):
     """ Print a debug message to the console (or file object)
 
     Prints the string as "DEBUG :: {time} :: {calling_script} :: {calling_fun} :: string

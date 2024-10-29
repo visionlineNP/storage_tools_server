@@ -320,6 +320,9 @@ function updateNodeData(data) {
 
     const source_names = Object.keys(data.entries).sort();
 
+    updateNodeCount(source_names.length);
+
+
     const source_tabs = create_tabs(source_names, containerData, "node");
     $.each(source_tabs, function (source_name, source_tab) {
 
@@ -379,6 +382,16 @@ function updateNodeData(data) {
             div.appendChild(cancelTransferButton);
     
 
+            // debugButton = document.createElement("button")
+            // debugButton.className = "btn btn-primary"
+            // debugButton.textContent = "debug"
+            // debugButton.addEventListener("click", () => {
+            //     msg= {"session_token": window.session_token}
+            //     socket.emit("debug_send", msg)
+            // })
+            // div.appendChild(debugButton)
+
+
             const project_data = source_data[project_name];
 
             const ymd_names = Object.keys(project_data).sort()
@@ -423,5 +436,19 @@ function processNodeTransferSelections()
 function processNodeCancelTransfer()
 {
     const source = $(this)[0].dataset.source;
-    socket.emit("control_msg", { "source": source, "action": "cancel", "session_token": window.session_token });
+    socket.emit("request_cancel_node_pull_transfer", { "source": source, "session_token": window.session_token });
 }
+
+function updateNodeCount(count) {
+
+    const container = document.getElementById("nodes_menu_status")
+    if (container) {
+      if (count > 0) {
+        container.innerHTML = count;
+      } else {
+        container.innerHTML = "";
+      }
+    } else {
+      console.log("did not find 'node_menu_status'")
+    }
+  }

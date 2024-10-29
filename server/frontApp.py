@@ -52,11 +52,10 @@ def create_server():
 
     # # send data to ui
     socketio.on("request_new_data")(server.on_request_new_data)
+    socketio.on("request_files_exist")(server.on_request_files_exist)
+    socketio.on("request_remote_files_exist")(server.on_request_remote_files_exist)
 
-    socketio.on("request_node_ymd_data")(server.on_request_node_ymd_data)
-    socketio.on("remote_node_data")(server.on_remote_node_data)
-    socketio.on("remote_node_data_block")(server.on_remote_node_data_block)
-
+    # config
     socketio.on("request_projects")(server.on_request_projects)
     socketio.on("add_project")(server.on_add_project)
     socketio.on("set_project")(server.on_set_project)
@@ -81,6 +80,13 @@ def create_server():
     # # search
     socketio.on("request_search_filters")(server.on_request_search_filters)
     socketio.on("search")(server.on_search)
+
+    # remote node
+    socketio.on("request_node_ymd_data")(server.on_request_node_ymd_data)
+    socketio.on("remote_node_data")(server.on_remote_node_data)
+    socketio.on("remote_node_data_block")(server.on_remote_node_data_block)
+    socketio.on("request_cancel_node_pull_transfer")(server.on_request_remote_cancel_tranfer)
+    socketio.on("request_debug_send")(server.on_request_debug_send)
 
     # # remote connections
     # socketio.on("control_msg")(server.on_control_msg)
@@ -120,10 +126,12 @@ def create_server():
     socketio.on("device_cancel_transfer")(server.on_device_cancel_transfer)
     socketio.on("device_data")(server.on_device_data)
     socketio.on("device_data_block")(server.on_device_data_block)
+    socketio.on("estimate_runs")(server.on_estimate_runs)
 
     # # debug 
     # socketio.on("clear_data")(server.on_debug_clear_data)
     socketio.on("scan_server")(server.on_debug_scan_server)
+    socketio.on("debug_send")(server.on_debug_send)
 
 
 create_server()
