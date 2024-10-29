@@ -35,8 +35,10 @@ services:
       POSTGRES_DB: stsdb
     volumes:
       - pgdata1:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
+    networks:
+      - custom_network  
 
 
 
@@ -95,6 +97,7 @@ services:
       - SERVERNAME=HomeServer
       - PORT=8091
       - REDIS_HOST=redis
+      - DB_HOST=postgres
 
     volumes:
       - ./config/:/app/config
