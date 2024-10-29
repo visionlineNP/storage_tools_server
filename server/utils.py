@@ -317,3 +317,14 @@ def pbar_thread(messages:queue.Queue, total_size, source, socket_events, desc, m
     positions = pbars.keys()
     for position in positions:
         pbars[position].close()
+
+
+def get_device_name(path):
+    device_id = os.stat(path).st_dev
+    for partition in psutil.disk_partitions(all=True):
+        try:
+            if os.stat(partition.mountpoint).st_dev == device_id:
+                return partition.device
+        except PermissionError:
+            pass 
+    return None

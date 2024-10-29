@@ -43,10 +43,10 @@ def create_server():
     app.route('/downloadKeys')(server.download_keys)
     app.route("/static/js/<path:path>")(server.serve_js)
     app.route("/static/css/<path:path>")(server.serve_css)
-
+    app.route("/name")(server.get_name)
+  
 
     socketio.on("join")(server.on_join)
-    # socketio.on("leave")(server.on_leave)
     socketio.on("connect")(server.on_connect)
     socketio.on("disconnect")(server.on_disconnect)
 
@@ -65,10 +65,12 @@ def create_server():
     socketio.on("request_robots")(server.on_request_robots)
     socketio.on("add_robot")(server.on_add_robot)
     socketio.on("update_entry_robot")(server.on_update_entry_robot)
+    socketio.on("remove_robot")(server.on_remove_robot)
 
     socketio.on("request_sites")(server.on_request_sites)
     socketio.on("add_site")(server.on_add_site)
     socketio.on("update_entry_site")(server.on_update_entry_site)
+    socketio.on("remove_site")(server.on_remove_site)
 
     socketio.on("request_keys")(server.on_request_keys)
     socketio.on("generate_key")(server.on_generate_key)
@@ -76,6 +78,9 @@ def create_server():
     socketio.on("delete_key")(server.on_delete_key)
     socketio.on("set_api_key_token")(server.on_set_api_key_token)
 
+    socketio.on("request_remote_servers")(server.on_request_remote_servers)
+    socketio.on("add_remote_server")(server.on_add_remote_server)
+    socketio.on("remove_remote_server")(server.on_remove_remote_server)
 
     # # search
     socketio.on("request_search_filters")(server.on_request_search_filters)

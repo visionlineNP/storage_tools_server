@@ -126,29 +126,39 @@ class Database:
         """
         cur.execute(create_data_table_query)
 
-        create_site_table_query = """
-        CREATE TABLE IF NOT EXISTS sites (
-          name VARCHAR(255),
-          description VARCHAR(255)
-        );
-        """
-        cur.execute(create_site_table_query)
+        table_names = ["sites", "projects", "robot_names", "remote_servers"]
+        for table_name in table_names:
+            create_table_query = f"""
+            CREATE TABLE IF NOT EXISTS {table_name} (
+              name VARCHAR(255),
+              description VARCHAR(255)
+            );
+            """
+            cur.execute(create_table_query)
 
-        create_project_table_query = """
-        CREATE TABLE IF NOT EXISTS projects (
-          name VARCHAR(255),
-          description VARCHAR(255)
-        );
-        """
-        cur.execute(create_project_table_query)
+        # create_site_table_query = """
+        # CREATE TABLE IF NOT EXISTS sites (
+        #   name VARCHAR(255),
+        #   description VARCHAR(255)
+        # );
+        # """
+        # cur.execute(create_site_table_query)
 
-        create_robot_name_table_query = """
-        CREATE TABLE IF NOT EXISTS robot_names (
-          name VARCHAR(255),
-          description VARCHAR(255)
-        );
-        """
-        cur.execute(create_robot_name_table_query)
+        # create_project_table_query = """
+        # CREATE TABLE IF NOT EXISTS projects (
+        #   name VARCHAR(255),
+        #   description VARCHAR(255)
+        # );
+        # """
+        # cur.execute(create_project_table_query)
+
+        # create_robot_name_table_query = """
+        # CREATE TABLE IF NOT EXISTS robot_names (
+        #   name VARCHAR(255),
+        #   description VARCHAR(255)
+        # );
+        # """
+        # cur.execute(create_robot_name_table_query)
         
         conn.commit()
         cur.close()
@@ -353,6 +363,7 @@ class Database:
         return rtn 
 
     def _remove_name(self, table, name):
+        debug_print(f"delete from {table} {name}")
         if table in self.m_cache and name in self.m_cache[table]:
             del self.m_cache[table][name]
 
@@ -360,13 +371,14 @@ class Database:
             with conn.cursor() as cur:
                 query = f"DELETE from {table} WHERE name = %s"
                 cur.execute(query, (name,))
-
+            conn.commit()
 
     def _has_name(self, table, name):
         if table in self.m_cache and name in self.m_cache[table]:
             return True
 
-        with self.connect() as conn:
+        try:
+            conn = self.connect()
             with conn.cursor() as cur:
                 query = f"SELECT EXISTS(SELECT 1 FROM {table} WHERE name = %s)"
                 cur.execute(query, (name,))
@@ -376,6 +388,13 @@ class Database:
                 exists = False
                 if fetch and len(fetch) > 0:
                     exists = fetch[0][0]
+            conn.close()            
+            if exists:
+                self.m_cache[table] = self.m_cache.get(table, {})
+                self.m_cache[table][name] = ""
+        except psycopg2.OperationalError as e:
+            debug_print(f"error with {table} {name}: {e}")
+            exists = False
         return exists
 
     def _replace_name(self, table, name, description):
@@ -421,6 +440,9 @@ class Database:
     def update_site(self, name, description):
         self._replace_name("sites", name, description)
 
+    def remove_site(self, name):
+        self._remove_name("sites", name)
+
     # robots
     def add_robot_name(self, name, description):
         self._add_name("robot_names", name, description)
@@ -433,6 +455,19 @@ class Database:
 
     def has_robot_name(self, name):
         return self._has_name("robot_names", name)
+
+    def remove_robot_name(self, name):
+        self._remove_name("robot_names", name)
+
+    # remote servers
+    def add_remote_server(self, name, description):
+        self._add_name("remote_servers", name, description)
+
+    def get_remote_servers(self):
+        return self._get_names("remote_servers")
+
+    def remove_remote_server(self, name):
+        self._remove_name("remote_servers", name)
 
     # runs
     def _set_runs(self):

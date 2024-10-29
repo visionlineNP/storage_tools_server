@@ -6,7 +6,7 @@ import time
 
 import requests
 from server.debug_print import debug_print
-from server.utils import SocketIORedirect, build_multipart_data, dashboard_room, get_source_by_mac_address, get_upload_id, get_datatype, pbar_thread, redis_pbar_thread
+from server.utils import SocketIORedirect, build_multipart_data, dashboard_room, get_device_name, get_source_by_mac_address, get_upload_id, get_datatype, pbar_thread, redis_pbar_thread
 from server.sqlDatabase import Database
 
 import redis
@@ -78,7 +78,7 @@ class ServerWorker:
 
     def _load_config(self):
         config_filename = os.environ.get("CONFIG", "config/config.yaml")
-
+        
         volume_map = None
         if os.path.exists(self.m_volume_map_filename):
             with open(self.m_volume_map_filename, "r") as f:
@@ -91,39 +91,19 @@ class ServerWorker:
         with open(config_filename, "r") as f:
             self.m_config = yaml.safe_load(f)
 
-            self.m_config["volume_map"] = volume_map.get("volume_map", {})
-            self.m_config["source"] = get_source_by_mac_address() + "_" + str(self.m_config["port"])
-            debug_print(f"Setting source name to {self.m_config['source']}")
+        self.m_config["volume_map"] = volume_map.get("volume_map", {})
+        self.m_config["source"] = get_source_by_mac_address() + "_" + str(self.m_config["port"])
+        debug_print(f"Setting source name to {self.m_config['source']}")
 
-            self.m_upload_dir = self.m_config["upload_dir"]
-            os.makedirs(self.m_upload_dir, exist_ok=True)
+        self.m_config["volume_root"] = os.environ.get("VOLUME_ROOT", "/")
 
-            v_root = self.m_config.get("volume_root", "/")
-            v_map = self.m_config.get("volume_map", {}).copy()
-            for name in v_map:
-                v_map[ name ] = os.path.join(v_root,  v_map.get(name, "").strip("/"))
+        v_root = self.m_config.get("volume_root", "/")
+        v_map = self.m_config.get("volume_map", {}).copy()
+        for name in v_map:
+            v_map[ name ] = os.path.join(v_root,  v_map.get(name, "").strip("/"))
 
-            blackout = self.m_config.get("blackout", [])
-            self.m_database = Database(v_map, blackout)
-
-    # def _reload_volume_map(self):
-    #     volume_map = None
-    #     if os.path.exists(self.m_volume_map_filename):
-    #         with open(self.m_volume_map_filename, "r") as f:
-    #             volume_map = yaml.safe_load(f)
-
-    #     if volume_map is None:
-    #         volume_map = {"volume_map": {}}
-
-    #     self.m_config["volume_map"] = volume_map.get("volume_map", {})
-
-    #     v_root = self.m_config.get("volume_root", "/")
-    #     v_map = self.m_config.get("volume_map", {}).copy()
-    #     for name in v_map:
-    #         v_map[ name ] = os.path.join(v_root,  v_map.get(name, "").strip("/"))
-
-    #     self.m_database.update_volume_map(v_map)
-
+        blackout = self.m_config.get("blackout", [])
+        self.m_database = Database(v_map, blackout)
 
 
     # handle the remote entries redis data.
@@ -273,16 +253,30 @@ class ServerWorker:
             self._set_project(data)
         elif action == "edit_project":
             self._edit_project(data)
+
         # robot names
         elif action == "request_robot_names":
             self._request_robot_names(data)
         elif action == "add_robot_name":
             self._add_robot_name(data)
+        elif action == "remove_robot_name":
+            self._remove_robot_name(data)
+
         # sites
         elif action == "request_sites":
             self._request_sites(data)
         elif action == "add_site":
             self._add_site(data)
+        elif action == "remove_site":
+            self._remove_site(data)
+
+        # remote entries
+        elif action == "request_remote_servers":
+            self._request_remote_servers(data)
+        elif action == "add_remote_server":
+            self._add_remote_server(data)
+        elif action == "remove_remote_server":
+            self._remove_remote_server(data)
 
         # entries
         elif action == "add_entry":
@@ -352,11 +346,16 @@ class ServerWorker:
 
     def _get_fs_info(self):
         # todo: update this to use volume map
+        rtn = {}
+        for volume in self.m_config["volume_map"].values():
+            volume_path = os.path.join(self.m_config["volume_root"], volume.strip("/"))
+            if os.path.exists(volume_path):
+                # dev = os.stat(volume_path).st_dev
+                dev = get_device_name(volume_path)
+                total, used, free = shutil.disk_usage(volume_path)
+                free_percentage = (free / total) * 100
+                rtn[dev] = (dev, f"{free_percentage:0.2f}")
 
-        dev = os.stat(self.m_upload_dir).st_dev
-        total, used, free = shutil.disk_usage(self.m_upload_dir)
-        free_percentage = (free / total) * 100
-        rtn = {dev: (self.m_upload_dir, f"{free_percentage:0.2f}")}
         return rtn
 
 
@@ -376,12 +375,14 @@ class ServerWorker:
         remote_address = self.get_remote_connection_address()
         remote_connected = remote_address != None
 
+        remotes = self.m_database.get_remote_servers()
+
         server_data = {
             "entries": data,
             "fs_info": fs_info,
             "stats": stats,
             "source": self.m_config["source"],
-            "remotes": self.m_config.get("remote", []),
+            "remotes": remotes,
             "remote_connected": remote_connected,
             "remote_address": remote_address,
         }
@@ -477,6 +478,7 @@ class ServerWorker:
         robot_name = entry.get("robot_name")
         if robot_name and len(robot_name) > 0:
             if not self.m_database.has_robot_name(robot_name):
+                debug_print("=================== adding " + robot_name)
                 self.m_database.add_robot_name(robot_name, "")
                 self._request_robot_names({"room":"all_dashboards"})
                 
@@ -805,6 +807,25 @@ class ServerWorker:
         self.m_database._set_runs()
         self.m_sio.emit("has_new_data", {"value": True}, to="all_dashboards")
 
+    # remote server:
+    def _request_remote_servers(self, data={}):
+        room = data.get("room")
+        servers = self.m_database.get_remote_servers()
+        servers = sorted(servers)
+        self.m_sio.emit("remote_server_names", {"data": servers}, to=room)
+
+    def _add_remote_server(self, data):
+        server = data.get("server")
+        desc = data.get("desc", "")
+        self.m_database.add_remote_server(server, desc)
+        self._request_remote_servers({"room": "all_dashboards"})
+
+    def _remove_remote_server(self, data):
+        server = data.get("robot")
+        self.m_database.server("server")
+        self._request_remote_servers({"room": "all_dashboards"})
+
+
     # robots
     def _request_robot_names(self, data={}):
         room = data.get("room")
@@ -816,8 +837,14 @@ class ServerWorker:
         robot_name = data.get("robot")
         desc = data.get("desc", "")
         self.m_database.add_robot_name(robot_name, desc)
-        # self._request_robot_names({"room": "all_dashboards"})
-        self._request_robot_names()
+        self._request_robot_names({"room": "all_dashboards"})
+        # self._request_robot_names()
+
+    def _remove_robot_name(self, data):
+        robot_name = data.get("robot_name")
+        self.m_database.remove_robot_name(robot_name)
+        self._request_robot_names({"room": "all_dashboards"})
+        
 
     def _update_entry_robot(self, data):
         source = data.get("source")
@@ -852,6 +879,11 @@ class ServerWorker:
         site = data.get("site")
         desc = data.get("desc", "")
         self.m_database.add_site(site, desc)
+        self._request_sites({"room": "all_dashboards"})
+
+    def _remove_site(self, data):
+        site = data.get("site")
+        self.m_database.remove_site(site)
         self._request_sites({"room": "all_dashboards"})
 
     def _update_site(self, data):

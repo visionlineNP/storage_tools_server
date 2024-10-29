@@ -309,6 +309,11 @@
                                     type="button" role="tab" aria-controls="config-sites-tab">Sites</a>
                             </li>
                             <li class="nav-item" role="presentation">
+                                <a class="nav-link" data-bs-toggle="tab" data-bs-target="#config-remote-servers-tab"
+                                    type="button" role="tab" aria-controls="config-remote-servers-tab">Remote Servers</a>
+                            </li>
+
+                            <li class="nav-item" role="presentation">
                                 <a class="nav-link" data-bs-toggle="tab" data-bs-target="#config-keys-tab" type="button"
                                     role="tab" aria-controls="config-keys-tab">Keys</a>
                             </li>
@@ -353,7 +358,7 @@
                                 aria-labelledby="config-robots-tab" tabindex="0">
                                 <div class="list-container">
                                     <h3>Robots</h3>
-                                    <div class="card" id="robot-list"></div>
+                                    <div class="card card-fit" id="robot-list"></div><br>
                                     <input type="text" id="robot-name-input" placeholder="Add new robot name">
                                     <button id="add-robot-btn">Add Robot</button>
                                 </div>
@@ -363,7 +368,7 @@
                                 aria-labelledby="config-sites-tab" tabindex="0">
                                 <div class="list-container">
                                     <h3>Sites</h3>
-                                    <div class="card" id="site-list"></div>
+                                    <div class="card card-fit" id="site-list"></div><br>
                                     <input type="text" id="site-name-input" placeholder="Add new site name">
                                     <button id="add-site-btn">Add Site</button>
                                 </div>
@@ -401,6 +406,17 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <div id="config-remote-servers-tab" class="tab-pane fade" role="tabpanel"
+                                aria-labelledby="config-remote-servers-tab" tabindex="0">
+                                <div class="list-container">
+                                    <h3>Remote Servers</h3>
+                                    <div class="card card-fit" id="remote-servers-list"></div><br>
+                                    <input type="text" id="remote-server-name-input" placeholder="Add new remote server (hostname:port)">
+                                    <button id="add-remote-server-btn">Add Remote Server</button>
+                                </div>
+                            </div>
+
 
                             <div id="config-user-tab" class="tab-pane fade" role="tabpanel"
                                 aria-labelledby="config-user-tab" tabindex="0">

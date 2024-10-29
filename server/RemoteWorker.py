@@ -128,6 +128,8 @@ class RemoteWorker:
             self.m_config = yaml.safe_load(f)
             self.m_config["source"] = get_source_by_mac_address() + "_" + str(self.m_config["port"])
             self.m_config["volume_map"] = volume_map.get("volume_map", {})
+            self.m_config["volume_root"] = os.environ.get("VOLUME_ROOT", "/")
+
 
         v_root = self.m_config.get("volume_root", "/")
         v_map = self.m_config.get("volume_map", {}).copy()

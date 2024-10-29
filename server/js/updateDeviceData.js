@@ -105,7 +105,7 @@ function updateDeviceData(data) {
 
   let valid = true
   $.each(data, function (source_name, source_item) {
-    console.log(source_name, source_item)
+    //console.log(source_name, source_item)
     if (source_item.project && source_item.stats == null) {
       console.log(source_name + " is invalid")
       valid = false;
@@ -137,7 +137,7 @@ function updateDeviceData(data) {
   $.each(source_tabs, function (source_name, source_tab) {
     const source_item = data[source_name];
 
-    console.log(source_item)
+    //console.log(source_item)
 
     window.device_data[source_name] = {};
     const project = source_item.project;
@@ -145,7 +145,7 @@ function updateDeviceData(data) {
     const header = document.createElement("div");
     source_tab.appendChild(header);
 
-    console.log(project)
+    // console.log(project)
 
     // handle case where device does not have project set. 
     if (project == null) {
@@ -190,7 +190,7 @@ function updateDeviceData(data) {
     });
 
 
-    console.log(source_item);
+    // console.log(source_item);
 
     updateDeviceStats(source_name, source_item.stats["total"]);
 
@@ -300,7 +300,7 @@ function updateDeviceData(data) {
 }
 
 function populateDeviceYMDTab(source_item) {
-  console.log(source_item)
+  // console.log(source_item)
 
   const date = source_item.ymd
   const ymd_tab = document.getElementById(source_item.tab)
@@ -326,7 +326,7 @@ function populateDeviceYMDTab(source_item) {
 
 
   stats = source_item.stats[source_name].stats[date];
-  console.log(stats)
+  // console.log(stats)
 
   start_time = stats["start_datetime"];
   end_time = stats["end_datetime"];
@@ -523,7 +523,6 @@ function populateDeviceYMDTab(source_item) {
   const tbody = document.createElement('tbody');
   table.appendChild(tbody);
 
-  console.log(date_items)
   date_entries = Object.entries(date_items);
   date_entries.sort((a, b) => a[0].localeCompare(b[0]));
 
@@ -867,7 +866,7 @@ function updateDeviceSelectCounts(source)
     total_size += parseInt($(this).attr("data-size"));
   });
   let hsize = formatBytes(total_size);
-  console.log(total_count, total_size, hsize)
+  //console.log(total_count, total_size, hsize)
 
   let span = document.getElementById("device_selected_hsize")
   if( span ) {
@@ -883,7 +882,7 @@ function updateDeviceSelectCounts(source)
 window.device_accumulate = {};
 
 function accumulateDeviceYMD(data) {
-  console.log(data)
+  //console.log(data)
 
   const ymd_name = data.ymd;
   const reldirs = Object.entries(data.reldir);

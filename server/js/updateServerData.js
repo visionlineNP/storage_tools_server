@@ -504,8 +504,6 @@ function processServerYMD(data) {
                     checkbox.dataset.fullpath = detail.fullpath;
                     checkbox.dataset.remote_id = detail.remote_upload_id;
 
-
-
                     checkbox.type = "checkbox";
                     checkbox.id = "server_select_" + detail.upload_id
                     tdCheckbox.appendChild(checkbox);
@@ -531,8 +529,6 @@ function processServerYMD(data) {
 
                         td.appendChild(icon)
 
-
-
                         const link = document.createElement("a")
                         const upload_id = detail.upload_id;
                         const basename = detail.basename;
@@ -549,28 +545,6 @@ function processServerYMD(data) {
                         download.setAttribute("data-bs-toggle", "tooltip");
                         link.appendChild(download)
 
-
-                        // const download = document.createElement("i")
-                        // download.className = "bi bi-download"
-                        // download.title = "Download "
-                        // download.id = `download_${detail.upload_id}`;
-                        // download.dataset.upload_id = detail.upload_id;
-                        // download.dataset.basename = detail.basename;
-                        // download.setAttribute("data-bs-toggle", "tooltip");
-                        // download.addEventListener("click", function () {
-                        //     const upload_id = $(this)[0].dataset.upload_id;
-                        //     const basename = $(this)[0].dataset.basename;
-
-                        //     const link = document.createElement("a")
-                        //     link.href = `/download/${upload_id}`
-                        //     link.download = basename;
-                        //     link.style.display = 'none';
-
-                        //     document.body.appendChild(link);
-                        //     link.click()
-                        //     document.body.removeChild(link);
-
-                        // })
                         const spacer = document.createElement("span");
                         spacer.innerHTML = "&nbsp;&nbsp;"
                         td.appendChild(spacer)

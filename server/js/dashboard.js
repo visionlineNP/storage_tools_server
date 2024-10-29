@@ -258,12 +258,17 @@ $(document).ready(function () {
   });
 
   socket.on('robot_names', function (msg) {
+    console.log(msg)
     updateRobotList(msg.data);
   });
 
   socket.on('site_names', function (msg) {
     updateSiteList(msg.data);
   });
+
+  socket.on("remote_server_names", function (msg) {
+    updateRemoteServersList(msg.data);
+  })
 
   socket.on('key_values', function (msg) {
     updateKeyValues(msg);
@@ -292,15 +297,6 @@ $(document).ready(function () {
 });
 
 
-  // document.getElementById('add-project-btn').addEventListener('click', function () {
-  //   const projectName = document.getElementById('project-name-input').value;
-  //   if (projectName) {
-  //     socket.emit('add_project', { project: projectName, "session_token": window.session_token });
-  //     document.getElementById('project-name-input').value = '';
-  //   }
-  //   populateEditMenus();
-  // });
-
 
   document.getElementById('add-robot-btn').addEventListener('click', function () {
     const robotName = document.getElementById('robot-name-input').value;
@@ -317,6 +313,15 @@ $(document).ready(function () {
       document.getElementById('site-name-input').value = '';
     }
   });
+
+  document.getElementById('add-remote-server-btn').addEventListener('click', function () {
+    const serverName = document.getElementById('remote-server-name-input').value;
+    if (serverName) {
+      socket.emit('add_remote_server', { server: serverName, "session_token": window.session_token });
+      document.getElementById('remote-server-name-input').value = '';
+    }
+  });
+
 
   document.getElementById('make-key-btn').addEventListener('click', function () {
     const input = document.getElementById('keys-name-input')
@@ -414,114 +419,6 @@ function updateAllRobotSelects() {
 
 
 
-function updateServerDataOld(data) {
-  let container = $("#server-fs-info-container");
-  container.empty();
-  sourceHtml = "<ul>";
-
-  $.each(data.fs_info, function (_, info) {
-    sourceHtml += '<li>' + info[0] + ' : <b>' + info[1] + '%</b> free</li>';
-  });
-
-  sourceHtml += "</ul>";
-  container.append(sourceHtml);
-
-  container = $('#server-data-container');
-  container.empty(); // Clear previous data
-
-  entries = data.entries;
-
-  $.each(entries, function (project_name, projects) {
-    let projectHtml = '<h2>' + project_name + '</h2>';
-
-    $.each(projects, function (robot_name, robots) {
-      projectHtml += '<h3>' + robot_name + '</h3>'
-        + '<table class="table table-striped"><thead><tr>' +
-        '<th>Select</th>' +
-        '<th>Site</th>' +
-        '<th>Date</th>' +
-        '<th>Run</th>' +
-        '<th>Relpath</th>' +
-        '<th>Basename</th>' +
-        '<th>Size</th>' +
-        '<th>Status</th>' +
-        '</tr></thead><tbody>';
-
-      $.each(robots, function (_, run_details) {
-        $.each(run_details, function (_, detail) {
-          // console.log(detail);
-          projectHtml += '<tr>' +
-            '<td><input type="checkbox"></td>' +
-            '<td>' + detail.site + '</td>' +
-            '<td>' + detail.datetime + '</td>' +
-            '<td>' + detail.run_name + '</td>' +
-            '<td>' + detail.relpath + '</td>' +
-            '<td>' + detail.basename + '</td>' +
-            '<td>' + detail.size + '</td>' +
-            '<td><div id="status_' + detail.upload_id + '" class="status-div">' + detail.status + '</div></td>' +
-            '</tr>';
-        });
-      });
-
-      projectHtml += '</tbody></table>';
-    });
-
-    container.append(projectHtml);
-  });
-}
-
-
-function updateReportHostData(data) {
-  container = $('#report-host-container');
-  container.empty(); // Clear previous data
-
-  reportHTML = "<ul>"
-  $.each(data.hosts, function (_, hostname) {
-    let buttons = "";
-    buttons += "<button onclick='debug_countto(\"" + hostname + "\")' >Count</button>";
-    buttons += "<button onclick='debug_count_to_next_task(\"" + hostname + "\")' >Count Next Task</button>";
-    buttons += "<button onclick='task_reindex_all(\"" + hostname + "\")' >Reindex</button>";
-
-    reportHTML += "<li>" + hostname + buttons + "</li>";
-  });
-  reportHTML += "</ul>"
-
-  container.append(reportHTML);
-}
-
-function debug_countto(source) {
-  socket.emit("debug_count_to", { "count_to": 10, "source": source })
-}
-
-function debug_count_to_next_task(source) {
-  console.log("tick");
-  socket.emit("debug_count_to_next_task", { "count_to": 10, "source": source })
-}
-
-
-function task_reindex_all(source) {
-  socket.emit("task_reindex_all", { "source": source });
-}
-
-function updateReportNodeData(data) {
-  container = $('#report-node-container');
-  container.empty(); // Clear previous data
-
-  reportHTML = "<ul>"
-  $.each(data.nodes, function (hostname, entry) {
-    reportHTML += "<li>";
-    reportHTML += hostname;
-    reportHTML += "<ul><li>Threads: " + entry.threads + "</li></ul>";
-    reportHTML += "</li>";
-  });
-  reportHTML += "</ul>"
-
-  container.append(reportHTML);
-}
-
-
-
-
 function processAddNewSite() {
   let source = $(this).data('source');
   let uploadId = $(this).data('upload-id');
@@ -556,18 +453,6 @@ function transferFiles(selectedUpdateIds, source) {
   if (selectedUpdateIds.length > 0) {
     data = { "source": source, "files": selectedUpdateIds }
     socket.emit('device_request_files', data)
-    // $.ajax({
-    //   type: 'POST',
-    //   url: '/transfer-selected',
-    //   data: JSON.stringify({ "source": source, "files": selectedUpdateIds }),
-    //   contentType: 'application/json',
-    //   success: function (data) {
-    //     console.log('Files transferred successfully');
-    //   },
-    //   error: function (xhr, status, error) {
-    //     console.error('Error transferring files:', error);
-    //   }
-    // });
   } else {
     alert('No files selected');
   }
@@ -584,7 +469,7 @@ function removeFiles(selectedUpdateIds, source) {
     if( confirm(`Remove ${selectedUpdateIds.length} files from ${source}?`))
     msg = { "source": source, "files": selectedUpdateIds, "session_token": window.session_token };
     console.log(msg);
-    //socket.emit("device_remove", msg);
+    socket.emit("device_remove", msg);
   } else {
     alert('No files selected');
   }
@@ -792,21 +677,56 @@ function updateRobotList(robotData) {
   robotList.innerHTML = ''; // Clear existing list
   window.robots = []; // clear the robot lists 
 
-  // Create the <ul> element with class "list-group"
-  const ul = document.createElement('ul');
-  ul.className = 'list-group';
+  const table = document.createElement("table");
+  table.classList.add("table-fit")
+  robotList.appendChild(table)
+  
+  const tbody = document.createElement("tbody")
+  table.appendChild(tbody)
 
-  // Create and append <li> elements for each project
   robotData.forEach(item => {
-    const li = document.createElement('li');
-    li.className = 'list-group-item';
-    li.textContent = item;
-    ul.appendChild(li);
     window.robots.push(item);
-  });
+    const tr = document.createElement("tr");
+    tbody.appendChild(tr);
 
-  // Append the <ul> to the project list container
-  robotList.appendChild(ul);
+    let td = document.createElement("td");
+    td.textContent = item;
+    tr.appendChild(td)
+
+    td = document.createElement("td")
+    tr.appendChild(td)
+    const trash = document.createElement("i");
+    trash.className = "bi bi-trash3";
+    trash.title = "Delete Robot Name";
+    trash.dataset.name = item;
+    td.appendChild(trash);
+
+    trash.addEventListener('click', function () {
+      const robot_name = $(this)[0].dataset.name;
+      const msg = "Do you want to delete the Robot Name  '" + robot_name + "'. This does not remove the database entries for this name. The name may be reinserted by uploading a file.";
+      const do_it = confirm(msg);
+      if (do_it) {
+        socket.emit("remove_robot", { "robot_name": robot_name, "session_token": window.session_token })
+      }
+    })
+
+  })
+
+  // // Create the <ul> element with class "list-group"
+  // const ul = document.createElement('ul');
+  // ul.className = 'list-group';
+
+  // // Create and append <li> elements for each project
+  // robotData.forEach(item => {
+  //   const li = document.createElement('li');
+  //   li.className = 'list-group-item';
+  //   li.textContent = item;
+  //   ul.appendChild(li);
+  //   window.robots.push(item);
+  // });
+
+  // // Append the <ul> to the project list container
+  // robotList.appendChild(ul);
 
   updateAllRobotSelects();
   populateEditMenus();
@@ -817,19 +737,83 @@ function updateSiteList(siteData) {
   siteList.innerHTML = ''; // Clear existing list
   window.sites = [];
 
-  // Create the <ul> element with class "list-group"
-  const ul = document.createElement('ul');
-  ul.className = 'list-group';
+  const table = document.createElement("table");
+  table.classList.add("table-fit")
+  siteList.appendChild(table)
+  
+  const tbody = document.createElement("tbody")
+  table.appendChild(tbody)
 
   siteData.forEach(item => {
-    const li = document.createElement('li');
-    li.className = 'list-group-item';
-    li.textContent = item;
-    ul.appendChild(li);
     window.sites.push(item);
-  });
+    const tr = document.createElement("tr");
+    tbody.appendChild(tr);
 
-  siteList.appendChild(ul);
+    let td = document.createElement("td");
+    td.textContent = item;
+    tr.appendChild(td)
+
+    td = document.createElement("td")
+    tr.appendChild(td)
+    const trash = document.createElement("i");
+    trash.className = "bi bi-trash3";
+    trash.title = "Delete Site Name";
+    trash.dataset.name = item;
+    td.appendChild(trash);
+
+    trash.addEventListener('click', function () {
+      const site = $(this)[0].dataset.name;
+      const msg = "Do you want to delete the Site Name  '" + site + "'. This does not remove the database entries for this name. The name may be reinserted by uploading a file.";
+      const do_it = confirm(msg);
+      if (do_it) {
+        socket.emit("remove_site", { "site": site, "session_token": window.session_token })
+      }
+    })
+
+  })
+
+  updateAllSiteSelects();
+  populateEditMenus();
+}
+
+
+function updateRemoteServersList(serverData) {
+  let serverList = document.getElementById('remote-servers-list');
+  serverList.innerHTML = ''; // Clear existing list
+
+  const table = document.createElement("table");
+  table.classList.add("table-fit")
+  serverList.appendChild(table)
+  
+  const tbody = document.createElement("tbody")
+  table.appendChild(tbody)
+
+  serverData.forEach(item => {
+    const tr = document.createElement("tr");
+    tbody.appendChild(tr);
+
+    let td = document.createElement("td");
+    td.textContent = item;
+    tr.appendChild(td)
+
+    td = document.createElement("td")
+    tr.appendChild(td)
+    const trash = document.createElement("i");
+    trash.className = "bi bi-trash3";
+    trash.title = "Delete Remote Server Address";
+    trash.dataset.name = item;
+    td.appendChild(trash);
+
+    trash.addEventListener('click', function () {
+      const serverName = $(this)[0].dataset.name;
+      const msg = "Do you want to delete remote server  '" + serverName + "'. This will not disconnect a currently existing connection";
+      const do_it = confirm(msg);
+      if (do_it) {
+        socket.emit("remove_remote_server", { "server": serverName, "session_token": window.session_token })
+      }
+    })
+
+  })
 
   updateAllSiteSelects();
   populateEditMenus();
@@ -876,12 +860,12 @@ function updateKeyValues(keyValues) {
   let entries = Object.entries(keyValues.data);
   entries = entries.sort((a, b) => a[1].localeCompare(b[1]));
 
-  for (const [key, name] of entries) {
+  for (const [key, key_name] of entries) {
     const tr = document.createElement("tr")
     tbody.appendChild(tr);
 
     let td = document.createElement("td")
-    td.textContent = name
+    td.textContent = key_name
     tr.appendChild(td);
 
     td = document.createElement("td")
@@ -901,7 +885,7 @@ function updateKeyValues(keyValues) {
     trash.title = "Delete Key";
     trash.dataset.key = key;
     trash.dataset.source = source;
-    trash.dataset.name = name;
+    trash.dataset.name = key_name;
     trash.onclick = deleteKey;
     td.appendChild(trash);
 

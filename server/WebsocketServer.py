@@ -1,9 +1,12 @@
 import hashlib
 import secrets
+import socket
 import time
+
+from zeroconf import NonUniqueNameException, ServiceInfo, Zeroconf
 from server.ServerWorker import get_source_by_mac_address
 from server.debug_print import debug_print
-from server.utils import dashboard_room
+from server.utils import dashboard_room, get_ip_addresses
 
 
 import redis
@@ -37,10 +40,12 @@ class WebsocketServer:
         self.m_thread = None
         self.m_config = None
 
+        self.m_zeroconf = None
         self.m_device_files_buffer = {}
 
         self.pubsub = self.redis.pubsub()
-        self._load_config()        
+        self._load_config()    
+        self._setup_zeroconf()    
         self._load_keys()
         self._load_volume_map()
         self._emit_listener()
@@ -54,6 +59,7 @@ class WebsocketServer:
             self.m_config = yaml.safe_load(f)
 
             self.m_config["source"] = get_source_by_mac_address() + "_" + str(self.m_config["port"])
+            self.m_config["volume_root"] = os.environ.get("VOLUME_ROOT", "/")
 
     def _submit_remote_action(self, action, data):
         msg = {
@@ -61,6 +67,39 @@ class WebsocketServer:
             "data": data
         }
         self.redis.lpush("remote_work", json.dumps(msg))
+
+    def _setup_zeroconf(self):
+        if not self.m_config.get("provide_zeroconf", False):
+            return 
+        
+        this_claimed = self.redis.set("zero_conf", "claimed",  nx=True, ex=5)
+        if not this_claimed:
+            debug_print(f"{self.m_id}:  zero conf already claimed")
+            return 
+
+        self.m_zeroconf = Zeroconf()
+        debug_print("enter")
+
+        ip_addresses = get_ip_addresses()
+        addresses = [socket.inet_aton(ip) for ip in ip_addresses]
+
+        debug_print(f"using address: {ip_addresses}")
+        desc = {"source": self.m_config["source"].encode("utf-8")}
+
+        info = ServiceInfo(
+            "_http._tcp.local.",
+            "Airlab_storage._http._tcp.local.",
+            addresses=addresses,
+            port=self.m_config["port"],
+            properties=desc,
+        )
+
+        try:
+            self.m_zeroconf.unregister_service(info)
+            self.m_zeroconf.register_service(info)
+        except NonUniqueNameException as e:
+            debug_print("Zeroconf already set up? Is there a dupilcate process?")
+
 
     def everyone_reload_keys(self):
         self.redis.publish("websocket_action", json.dumps({'action': 'reload_keys'}))
@@ -278,6 +317,7 @@ class WebsocketServer:
         self.on_request_sites(data)
         self.on_request_keys(data)
         self.on_request_search_filters(data)
+        self.on_request_remote_servers(data)
         debug_print("Sent all data")
 
         # after this, there should be no new data!
@@ -331,6 +371,10 @@ class WebsocketServer:
     def on_add_robot(self, data):
         self._submit_action("add_robot_name", data)
 
+    def on_remove_robot(self, data):
+        debug_print(data)
+        self._submit_action("remove_robot_name", data)
+
     def on_update_entry_robot(self, data):
         self._submit_action("update_entry_robot", data)
 
@@ -341,8 +385,22 @@ class WebsocketServer:
     def on_add_site(self, data):
         self._submit_action("add_site", data)
 
+    def on_remove_site(self, data):
+        self._submit_action("remove_site", data)
+
     def on_update_entry_site(self, data):
         self._submit_action("update_entry_site", data)
+
+    # remote servers
+    def on_request_remote_servers(self, data):
+        self._submit_action("request_remote_servers", data)
+
+    def on_add_remote_server(self, data):
+        self._submit_action("add_remote_server", data)
+
+    def on_remove_remote_server(self, data):
+        self._submit_action("remove_remote_server", data)
+
 
     # key master
     def on_request_keys(self, data=None):
@@ -461,7 +519,19 @@ class WebsocketServer:
             except Exception as e:
                 return jsonify({'message': f'Error saving file: {str(e)}'}), 500            
 
+    # zero config
 
+    # get the list of addresses that could be used, plus
+    # the manually selected one. 
+    def on_request_zeroconf_address(self, data):
+        pass 
+
+    def on_select_zeroconf_address(self, data):
+        pass 
+
+    # toggle on and off
+    def on_set_zeroconf(self, data):
+        pass
 
     # searching 
     def on_request_search_filters(self, data):
@@ -709,7 +779,8 @@ class WebsocketServer:
 
     def on_disconnect(self):
         remove = None
-        for source, con in self.m_connections.items():
+
+        for source, con in self.m_connections.copy().items():
             debug_print(f"request.sid: {request.sid} / con['sid']: {con['sid']}")
             if con["sid"] == request.sid:
                 remove = source
@@ -894,6 +965,10 @@ class WebsocketServer:
             response.set_cookie("username", user)
 
         return response
+    
+    def get_name(self):
+        msg = {"source": self.m_config["source"]}
+        return jsonify(msg)
 
     def serve_js(self, path):
         return send_from_directory("js", path)
