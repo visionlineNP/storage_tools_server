@@ -1,3 +1,4 @@
 #!/usr/bin/env bash
-HOSTNAME=airlab-storage docker-compose down 
-HOSTNAME=airlab-storage docker-compose up --build --remove-orphans
+
+docker-compose --env-file config.prod.env down
+docker-compose --env-file config.prod.env up --build --remove-orphans
