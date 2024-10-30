@@ -804,7 +804,7 @@ function updateServerData(data) {
             selectAllButton.dataset.source = source;
             selectAllButton.dataset.project = project_name;
             selectAllButton.onclick = processServerSelectAllNew;
-            selectAllButton.textContent = 'Select All New';
+            selectAllButton.textContent = 'Select All New for Date';
             div.appendChild(selectAllButton);
 
             const clearSelectionsButton = document.createElement('button');
@@ -849,7 +849,7 @@ function updateServerData(data) {
         const projects = data.entries[project_name];
         ymd_names = Object.keys(projects).sort()
 
-        const ymd_tabs = create_tabs(ymd_names, project_tab, "host:server:" + project_name, "request_server_ymd_data");
+        const ymd_tabs = create_tabs(ymd_names, project_tab, "host:server:" + project_name, "request_server_ymd_data", true);
 
         $.each(ymd_tabs, function (_, ymd_div) {
 
@@ -952,7 +952,7 @@ function updateServerRemote(data) {
         const project_data = data.entries[project_name];
 
         const ymd_names = Object.keys(project_data).sort()
-        const ymd_tabs = create_tabs(ymd_names, project_tab, "host:Remote" + ":" + project_name, "request_remote_ymd_data");
+        const ymd_tabs = create_tabs(ymd_names, project_tab, "host:Remote" + ":" + project_name, "request_remote_ymd_data", true);
         $.each(ymd_tabs, function (_, ymd_tab) {
             add_placeholder(ymd_tab);
         })

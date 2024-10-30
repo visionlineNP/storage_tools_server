@@ -52,17 +52,13 @@ All interactions are by **DATE**.
 
 On the **Server** tab, first ![alt text](imgs/DataFlow.Server.Connect.png) to a **Remote Server**. Select the **Remote** tab.
 
-All interactions are by **DATE**.  
-
-![alt text](imgs/DataFlow.SelectAllNew.png) to select all files for that **date** that are new to the **Local Server**.
+![alt text](imgs/DataFlow.SelectAllNew.png) to select all files on the **Node** that are new to the **Local Server**.
 ![alt text](imgs/DataFlow.PullSelected.png) to pull all of the selected files to the **Local Server**.
 
 ### Pull Data from a Node
 
 Select the **Nodes** tab.
 
-All interactions are by **DATE**.  
-
-![alt text](imgs/DataFlow.SelectAllNew.png) to select all files for the selected **date** that are new to the **Local Server**.
+![alt text](imgs/DataFlow.SelectAllNew.png) to select all files on the **Node**  that are new to the **Local Server**.
 
 ![alt text](imgs/DataFlow.PullSelected.png) to pull all of the selected files to the **Local Server**.

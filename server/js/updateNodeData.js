@@ -395,7 +395,7 @@ function updateNodeData(data) {
             const project_data = source_data[project_name];
 
             const ymd_names = Object.keys(project_data).sort()
-            const ymd_tabs = create_tabs(ymd_names, project_tab, "node:" + source_name + ":" + project_name, "request_node_ymd_data");
+            const ymd_tabs = create_tabs(ymd_names, project_tab, "node:" + source_name + ":" + project_name, "request_node_ymd_data", true);
             $.each(ymd_tabs, function (_, ymd_tab) {
                 add_placeholder(ymd_tab);
             })

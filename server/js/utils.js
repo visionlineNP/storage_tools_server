@@ -1,8 +1,20 @@
 
-// tab_names is list of names
-// parent is div element to attach the tabs
-// prefix is name for the bs-target
-
+/**
+ * Creates a tabbed interface with specified tab names.
+ * 
+ * @param {Array} names - List of tab names.
+ * @param {HTMLElement} parent - Parent element where tabs will be appended.
+ * @param {string} prefix - Prefix to add to each tab name for unique identification.
+ * @param {string|null} event - Optional event name for socket emission on tab visibility.
+ * @param {boolean} auto_trigger - If true, automatically emits the event for each tab.
+ * 
+ * @returns {Object} - A dictionary of tab content elements keyed by tab names.
+ * 
+ * - Creates a Bootstrap-styled tab list and tab content sections.
+ * - Adds each tab to the provided parent element.
+ * - Optionally triggers an event via socket for the first tab and upon first viewing of other tabs.
+ * - Tabs can emit a socket event with the `session_token` for backend processing.
+ */
 function create_tabs(names, parent, prefix, event = null, auto_trigger = false) {
     session_token = window.session_token
 
