@@ -234,6 +234,7 @@ function updateSearchResults(msg) {
 
                 td.appendChild(icon)
 
+                // console.log(searchRow)
 
                 const download = document.createElement("i")
                 download.className = "bi bi-download"
@@ -259,6 +260,21 @@ function updateSearchResults(msg) {
                 spacer.innerHTML = "&nbsp;&nbsp;"
                 td.appendChild(spacer)
                 td.appendChild(download);
+
+                const mount = getCookie("mount_" + searchRow.project)
+                if (mount && (searchRow.basename.endsWith(".mcap") || searchRow.basename.endsWith(".bag"))) {
+                    //console.log(project_name, mount)
+
+                    const link = document.createElement("a")
+                    td.appendChild(link)
+
+                    link.href = "foxglovecli://" + mount + "/" + searchRow.fullpath;
+                    link.target = "_blank";
+                    const foxglove = document.createElement("i")
+                    link.appendChild(foxglove);
+                    foxglove.className = "icon-foxglove-bw-logo-icon-round"
+                    foxglove.title = "foxglove-studio " + mount + "/" + searchRow.fullpath;
+                }
 
 
             } else {
