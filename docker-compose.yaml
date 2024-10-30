@@ -15,7 +15,7 @@ services:
 
     depends_on:
       - storage_tools_server  # Ensure Nginx starts after the Flask app service
-      
+
     networks:
       - custom_network  # Attach to the custom network
 
@@ -50,18 +50,19 @@ services:
     container_name: storage_tools_server
 
     environment:
-      - CONFIG=/app/config/config.yaml
-      - REDIS_URL=redis://redis:6379/0
-      - SERVERNAME=HomeServer
-      - PORT=8091
-      - REDIS_HOST=redis
+      - SERVERNAME=${SERVERNAME}
+      - CONFIG=${CONFIG}
+      - PORT=${PORT}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_URL=${REDIS_URL}
+      - VOLUME_ROOT=${VOLUME_ROOT}
+
 
     expose:
       - "8091"  # Expose port 8091 to the internal Docker network
     volumes:
       - ./config/:/app/config
       - ./config/keys.yaml:/app/config/keys.yaml
-      - ./uploads:/mnt/uploads  # Volume mount for uploads directory
       - /volume1:/volume1
       - /volume2:/volume2
       - /volume3:/volume3
@@ -88,17 +89,17 @@ services:
     container_name: storage_tools_server_backend
 
     environment:
-      - CONFIG=/app/config/config.yaml
-      - REDIS_URL=redis://redis:6379/0
-      - SERVERNAME=HomeServer
-      - PORT=8091
-      - REDIS_HOST=redis
-      - DB_HOST=postgres
+      - SERVERNAME=${SERVERNAME}
+      - CONFIG=${CONFIG}
+      - PORT=${PORT}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_URL=${REDIS_URL}
+      - VOLUME_ROOT=${VOLUME_ROOT}
+      - DB_HOST=${DB_HOST}
 
     volumes:
       - ./config/:/app/config
       - ./config/keys.yaml:/app/config/keys.yaml
-      - ./uploads:/mnt/uploads  # Volume mount for uploads directory
       - /volume1:/volume1
       - /volume2:/volume2
       - /volume3:/volume3
