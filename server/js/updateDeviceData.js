@@ -149,29 +149,25 @@ function updateDeviceData(data) {
 
     // handle case where device does not have project set. 
     if (project == null) {
-      let sourceHtml = '<h2> Unknown Project </h2>';
-      header.innerHTML = sourceHtml;
+      let sourceHTML= "<H2> Missing Information! </h2><p> Verify that";
+      sourceHTML += "<ul><li>On Device: <b>Project Name</b> is set</li>";
+      sourceHTML += "<li>On Server:Configure:Projects, that the <b>Project</b> is listed and has a <B>Volume</b></li> "
+      sourceHTML += "</ul><p>When that is done, press the [Refresh] button"
 
-      const editProjectDropdownDiv = document.createElement('div');
-      editProjectDropdownDiv.className = 'dropdown';
+      header.innerHTML = sourceHTML;
 
-      const editProjectButton = document.createElement('button');
-      editProjectButton.type = 'button';
-      editProjectButton.className = 'btn btn-info dropdown-toggle';
-      editProjectButton.dataset.toggle = 'dropdown';
-      editProjectButton.ariaHaspopup = true;
-      editProjectButton.ariaExpanded = false;
-      editProjectButton.textContent = 'Set Project';
+      const refreshButton = document.createElement('button');
+      refreshButton.type = "button"
+      refreshButton.className = 'btn btn-info';
+      refreshButton.textContent = 'Refresh';
+      refreshButton.dataset.source = source_name
 
-      const projectMenuDiv = document.createElement('div');
-      projectMenuDiv.className = 'dropdown-menu project-menu';
-      projectMenuDiv.dataset.source = source_name;
+      refreshButton.addEventListener("click",(event) => {
+        const source = event.target.dataset.source;
+         rescanSource(source);
+      })
+      container.append(refreshButton)
 
-      editProjectDropdownDiv.appendChild(editProjectButton);
-      editProjectDropdownDiv.appendChild(projectMenuDiv);
-      container.append(editProjectDropdownDiv)
-
-      populateEditMenus();
       return;
     }
 
