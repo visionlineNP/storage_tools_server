@@ -213,7 +213,7 @@ function add_placeholder(div) {
     p.className = "placeholder-glow";
     p.setAttribute("aria-hidden", "true");
     div.appendChild(p);
-    const rows = [[7, 4, 2], [8, 4, 4], [6, 9, 3]];
+    const rows = [[2, 4, 2], [3, 1, 4], [2, 3, 2]];
     $.each(rows, function (_, sizes) {
         $.each(sizes, function (_, sz) {
             const span = document.createElement("span");
@@ -489,4 +489,19 @@ function formatBytes(bytes) {
     }
 
     return `${bytes.toFixed(2)} ${units[unitIndex]}`;
+}
+
+
+/**
+ * Converts YYYY-MM-DD to YYYY-MM, DD
+ * 
+ * @param {string} ymd "YYYY-MM-DD"
+ * @returns YYYY-MM, DD
+ */
+function splitYMD(ymd) 
+{
+    const parts = ymd.split("-");
+    const ym = parts.slice(0, 2).join("-");
+    const day = parts[2]
+    return {ym, day};
 }

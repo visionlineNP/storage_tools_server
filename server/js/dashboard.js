@@ -316,9 +316,12 @@ $(document).ready(function () {
 
   document.getElementById('add-remote-server-btn').addEventListener('click', function () {
     const serverName = document.getElementById('remote-server-name-input').value;
-    if (serverName) {
-      socket.emit('add_remote_server', { server: serverName, "session_token": window.session_token });
+    const serverPort = document.getElementById('remote-server-port-input').value;
+    if (serverName && serverPort) {
+      const fullName = serverName + ":" + serverPort
+      socket.emit('add_remote_server', { server: fullName, "session_token": window.session_token });
       document.getElementById('remote-server-name-input').value = '';
+      document.getElementById('remote-server-port-input').value = 8091;
     }
   });
 

@@ -280,17 +280,24 @@ function updateDeviceData(data) {
     }
 
     ymd_names = Object.keys(source_item.entries).sort();
-    ymd_tabs = create_tabs(ymd_names, source_tab, "device:" + source_name, "request_device_ymd_data", true);
 
-    $.each(ymd_tabs, function (date, ymd_tab) {
-
-      add_placeholder(ymd_tab);
-
-
-      //populateDeviceYMDTab(source_item, date, ymd_tab, source_name);
-
+    const levels = {}
+    ymd_names.forEach(ymd => {
+        const { ym, day } = splitYMD(ymd);
+        if (levels[ym] == null) { levels[ym] = [ymd] }
+        else { levels[ym].push(ymd) }
     });
 
+    ym_names = Object.keys(levels).sort()
+    const ym_tabs = create_tabs(ym_names, source_tab, "device:" + source_name + ":ym")
+
+    $.each(ym_tabs, function (ym_name, ym_div) {
+        const ymd_names = levels[ym_name];
+        const ymd_tabs = create_tabs(ymd_names, ym_div, "device:" + source_name, "request_device_ymd_data", true);
+        $.each(ymd_tabs, function (_, ymd_div) {
+            add_placeholder(ymd_div);
+        })
+    })    
   });
 
 }

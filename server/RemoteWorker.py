@@ -525,7 +525,7 @@ class RemoteConnection:
             self.remote_emit("request_server_ymd_data", data)
 
     def request_files_exist(self, data):
-        debug_print(data)
+        # debug_print(data)
         if self.connected():
             data["room"] = self.m_node_source
             data["data_for"] = dashboard_room(data)

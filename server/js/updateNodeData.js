@@ -381,25 +381,26 @@ function updateNodeData(data) {
             cancelTransferButton.textContent = 'Stop Pull';
             div.appendChild(cancelTransferButton);
     
-
-            // debugButton = document.createElement("button")
-            // debugButton.className = "btn btn-primary"
-            // debugButton.textContent = "debug"
-            // debugButton.addEventListener("click", () => {
-            //     msg= {"session_token": window.session_token}
-            //     socket.emit("debug_send", msg)
-            // })
-            // div.appendChild(debugButton)
-
-
             const project_data = source_data[project_name];
-
             const ymd_names = Object.keys(project_data).sort()
-            const ymd_tabs = create_tabs(ymd_names, project_tab, "node:" + source_name + ":" + project_name, "request_node_ymd_data", true);
-            $.each(ymd_tabs, function (_, ymd_tab) {
-                add_placeholder(ymd_tab);
+            const levels = {}
+            ymd_names.forEach(ymd => {
+                const { ym, day } = splitYMD(ymd);
+                if (levels[ym] == null) { levels[ym] = [ymd] }
+                else { levels[ym].push(ymd) }
+            });
+    
+            const ym_names = Object.keys(levels).sort()
+            const ym_tabs = create_tabs(ym_names, project_tab, "node:" + source_name + ":" + project_name + ":ym")
+    
+            $.each(ym_tabs, function (ym_name, ym_div) {
+                const ymd_names = levels[ym_name];
+                const ymd_tabs = create_tabs(ymd_names, ym_div,  "node:" + source_name + ":" + project_name, "request_node_ymd_data", true);
+                $.each(ymd_tabs, function (_, ymd_div) {
+                    add_placeholder(ymd_div);
+                })
             })
-
+    
         });
     })
 

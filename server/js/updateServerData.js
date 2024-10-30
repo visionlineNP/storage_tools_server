@@ -763,20 +763,12 @@ function updateServerData(data) {
         containerData.appendChild(refreshButton)
         containerData.appendChild(linkStatusMessage)
 
-        // debugButton = document.createElement("button")
-        // debugButton.className = "btn btn-primary"
-        // debugButton.textContent = "debug"
-        // debugButton.addEventListener("click", () => {
-        //     msg= {"session_token": window.session_token}
-        //     socket.emit("debug_send", msg)
-        // })
-        // containerData.appendChild(debugButton)
     }
 
 
     // const host_names = ["Local", "Remote"]
     host_names = ["Local"]
-    if( window.has_remotes) {
+    if (window.has_remotes) {
         host_names.push("Remote")
     }
     const host_tabs = create_tabs(host_names, containerData, "host")
@@ -804,7 +796,7 @@ function updateServerData(data) {
             selectAllButton.dataset.source = source;
             selectAllButton.dataset.project = project_name;
             selectAllButton.onclick = processServerSelectAllNew;
-            selectAllButton.textContent = 'Select All New for Date';
+            selectAllButton.textContent = 'Select All New';
             div.appendChild(selectAllButton);
 
             const clearSelectionsButton = document.createElement('button');
@@ -842,21 +834,27 @@ function updateServerData(data) {
             cancelTransferButton.onclick = processServerPushCancelTransfer;
             cancelTransferButton.textContent = 'Stop Push';
             div.appendChild(cancelTransferButton);
-
-
         }
 
         const projects = data.entries[project_name];
-        ymd_names = Object.keys(projects).sort()
+        const ymd_names = Object.keys(projects).sort()
+        const levels = {}
+        ymd_names.forEach(ymd => {
+            const { ym, day } = splitYMD(ymd);
+            if (levels[ym] == null) { levels[ym] = [ymd] }
+            else { levels[ym].push(ymd) }
+        });
 
-        const ymd_tabs = create_tabs(ymd_names, project_tab, "host:server:" + project_name, "request_server_ymd_data", true);
+        const ym_names = Object.keys(levels).sort()
+        const ym_tabs = create_tabs(ym_names, project_tab, "host:server:" + project_name + ":ym")
 
-        $.each(ymd_tabs, function (_, ymd_div) {
-
-            add_placeholder(ymd_div);
-
+        $.each(ym_tabs, function (ym_name, ym_div) {
+            const ymd_names = levels[ym_name];
+            const ymd_tabs = create_tabs(ymd_names, ym_div, "host:server:" + project_name, "request_server_ymd_data", true);
+            $.each(ymd_tabs, function (_, ymd_div) {
+                add_placeholder(ymd_div);
+            })
         })
-
     });
 
 }
@@ -947,15 +945,26 @@ function updateServerRemote(data) {
         cancelTransferButton.textContent = 'Stop Pull';
         div.appendChild(cancelTransferButton);
 
-
-
         const project_data = data.entries[project_name];
-
         const ymd_names = Object.keys(project_data).sort()
-        const ymd_tabs = create_tabs(ymd_names, project_tab, "host:Remote" + ":" + project_name, "request_remote_ymd_data", true);
-        $.each(ymd_tabs, function (_, ymd_tab) {
-            add_placeholder(ymd_tab);
+        const levels = {}
+        ymd_names.forEach(ymd => {
+            const { ym, day } = splitYMD(ymd);
+            if (levels[ym] == null) { levels[ym] = [ymd] }
+            else { levels[ym].push(ymd) }
+        });
+
+        const ym_names = Object.keys(levels).sort()
+        const ym_tabs = create_tabs(ym_names, project_tab, "host:Remote:" + project_name + ":ym")
+
+        $.each(ym_tabs, function (ym_name, ym_div) {
+            const ymd_names = levels[ym_name];
+            const ymd_tabs = create_tabs(ymd_names, ym_div, "host:Remote:" + project_name, "request_remote_ymd_data", true);
+            $.each(ymd_tabs, function (_, ymd_div) {
+                add_placeholder(ymd_div);
+            })
         })
+
 
     });
 }
