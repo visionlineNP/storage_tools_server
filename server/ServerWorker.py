@@ -46,6 +46,9 @@ class ServerWorker:
         self._load_keys()
 
         debug_print("Soure is "  + self.m_config["source"])
+        max_workers = self.m_config["threads"] * 2
+
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
 
         self._start_pubsub_listener()
         self._start_work_listener()
@@ -214,9 +217,10 @@ class ServerWorker:
         listener_thread.start()
 
     def _run_action_in_background(self, action, data):
-        action_thread = Thread(target=self._run_action, args=(action, data))
-        action_thread.daemon = True
-        action_thread.start()
+        self.executor.submit(self._run_action, action, data)
+        # action_thread = Thread(target=self._run_action, args=(action, data))
+        # action_thread.daemon = True
+        # action_thread.start()
 
     def _run_action(self, action, data):
         # debug_print(f"action: {action}, data: {data}")
@@ -478,7 +482,7 @@ class ServerWorker:
         robot_name = entry.get("robot_name")
         if robot_name and len(robot_name) > 0:
             if not self.m_database.has_robot_name(robot_name):
-                debug_print("=================== adding " + robot_name)
+                # debug_print("=================== adding " + robot_name)
                 self.m_database.add_robot_name(robot_name, "")
                 self._request_robot_names({"room":"all_dashboards"})
                 

@@ -130,35 +130,11 @@ class Database:
         for table_name in table_names:
             create_table_query = f"""
             CREATE TABLE IF NOT EXISTS {table_name} (
-              name VARCHAR(255),
+              name VARCHAR(255) PRIMARY KEY,
               description VARCHAR(255)
             );
             """
             cur.execute(create_table_query)
-
-        # create_site_table_query = """
-        # CREATE TABLE IF NOT EXISTS sites (
-        #   name VARCHAR(255),
-        #   description VARCHAR(255)
-        # );
-        # """
-        # cur.execute(create_site_table_query)
-
-        # create_project_table_query = """
-        # CREATE TABLE IF NOT EXISTS projects (
-        #   name VARCHAR(255),
-        #   description VARCHAR(255)
-        # );
-        # """
-        # cur.execute(create_project_table_query)
-
-        # create_robot_name_table_query = """
-        # CREATE TABLE IF NOT EXISTS robot_names (
-        #   name VARCHAR(255),
-        #   description VARCHAR(255)
-        # );
-        # """
-        # cur.execute(create_robot_name_table_query)
         
         conn.commit()
         cur.close()
@@ -347,11 +323,14 @@ class Database:
         self.m_cache[table] = self.m_cache.get(table, {})
         self.m_cache[table][name] = description
 
-        with self.connect() as conn:
-            with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                query = "INSERT INTO "  + f"{table}"  + "(name, description) VALUES (%s, %s)"
-                cur.execute(query, (name, description))
-                conn.commit()
+        try:
+            with self.connect() as conn:            
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:                
+                    query = "INSERT INTO "  + f"{table}"  + "(name, description) VALUES (%s, %s)"
+                    cur.execute(query, (name, description))
+                    conn.commit()
+        except psycopg2.errors.UniqueViolation:
+            pass
 
     def _get_names(self, table):
         with self.connect() as conn:
@@ -376,6 +355,8 @@ class Database:
     def _has_name(self, table, name):
         if table in self.m_cache and name in self.m_cache[table]:
             return True
+
+        # debug_print(self.m_cache)
 
         try:
             conn = self.connect()

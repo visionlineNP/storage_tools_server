@@ -1,5 +1,5 @@
 # Use an official Python 3.9 image as a base
-FROM python:3.9-slim
+FROM python:3.12-slim
 
 WORKDIR /tmp
 COPY requirements.txt /tmp/
