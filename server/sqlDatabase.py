@@ -1,4 +1,3 @@
-
 from datetime import datetime, timedelta
 import json
 import os
@@ -12,7 +11,9 @@ from server.debug_print import debug_print
 from server.throttledEmit import RedisThrottledEmit
 
 
-def build_paginated_query(filters: dict, order_by: str, offset: int, page_size: int, reverse:bool) -> str:
+def build_paginated_query(
+    filters: dict, order_by: str, offset: int, page_size: int, reverse: bool
+) -> str:
     query = "SELECT * FROM data WHERE "
     conditions = []
 
@@ -32,12 +33,15 @@ def build_paginated_query(filters: dict, order_by: str, offset: int, page_size: 
     # Add conditions for JSON if needed
     if "topics" in filters:
         for key, val in filters["topics"]["keys"].items():
-            conditions.append(f"topics @> '{{\"{key}\": \"{val}\"}}'")
+            conditions.append(f'topics @> \'{{"{key}": "{val}"}}\'')
 
     query += " AND ".join(conditions)
     order_direction = "DESC" if reverse else "ASC"
-    query += f" ORDER BY {order_by} {order_direction} LIMIT {page_size} OFFSET {offset};"
+    query += (
+        f" ORDER BY {order_by} {order_direction} LIMIT {page_size} OFFSET {offset};"
+    )
     return query
+
 
 def build_count_query(filters: dict):
     query = "SELECT COUNT(*) FROM data WHERE "
@@ -59,15 +63,15 @@ def build_count_query(filters: dict):
     # Add conditions for JSON if needed
     if "topics" in filters:
         for key, val in filters["topics"]["keys"].items():
-            conditions.append(f"topics @> '{{\"{key}\": \"{val}\"}}'")
+            conditions.append(f'topics @> \'{{"{key}": "{val}"}}\'')
 
     # Combine conditions with "AND"
     query += " AND ".join(conditions) + ";"
-    return query 
+    return query
 
 
 class Database:
-    def __init__(self, volume_map:dict, blackout:list) -> None:
+    def __init__(self, volume_map: dict, blackout: list) -> None:
         self.m_username = "sts"
         self.m_password = "mypassword"
         self.m_db_name = "stsdb"
@@ -79,7 +83,7 @@ class Database:
             "date": "%Y-%m-%d",
             "datetime": "%Y-%m-%d %H:%M:%S",
             "start_datetime": "%Y-%m-%d %H:%M:%S",
-            "end_datetime": "%Y-%m-%d %H:%M:%S"
+            "end_datetime": "%Y-%m-%d %H:%M:%S",
         }
 
         self.init_db()
@@ -87,11 +91,15 @@ class Database:
 
     def connect(self):
         db_host = os.environ.get("DB_HOST", "localhost")
+        db_port = os.environ.get("DB_PORT", 5432)
         conn = psycopg2.connect(
-            dbname=self.m_db_name, 
-            user=self.m_username, 
-            password=self.m_password, host=db_host)
-        return conn 
+            dbname=self.m_db_name,
+            user=self.m_username,
+            password=self.m_password,
+            host=db_host,
+            port=db_port
+        )
+        return conn
 
     def init_db(self):
         conn = self.connect()
@@ -135,7 +143,7 @@ class Database:
             );
             """
             cur.execute(create_table_query)
-        
+
         conn.commit()
         cur.close()
         conn.close()
@@ -159,13 +167,12 @@ class Database:
                 cur.execute(query)
                 conn.commit()
 
-
     def regenerate(self, event=None, room=None):
         # init db without file to create new db.
         self._drop_data_table()
         self.init_db()
 
-        emit = None 
+        emit = None
         if event:
             emit = RedisThrottledEmit(event, room=room)
 
@@ -178,7 +185,7 @@ class Database:
                 skip = False
                 for b in self.m_blackout:
                     if b in root:
-                        skip = True 
+                        skip = True
                 if skip:
                     continue
 
@@ -199,7 +206,9 @@ class Database:
                         entry = json.load(open(os.path.join(root, basename), "r"))
                         entry["localpath"] = filename
                         entry["dirroot"] = volume_root
-                        entry["date"] = entry.get("date", entry["datetime"].split(" ")[0])
+                        entry["date"] = entry.get(
+                            "date", entry["datetime"].split(" ")[0]
+                        )
                         entry["md5"] = entry.get("md5", "0")
                         # entry["reldir"] = root.replace(volume_root, "").strip()
                         # entry["upload_id"] = str(hex(abs(hash(filename))))
@@ -213,7 +222,7 @@ class Database:
     def update_volume_map(self, volume_map):
         self.m_volume_map = volume_map
 
-    def check_upload_id(self, upload_id:str) -> bool:
+    def check_upload_id(self, upload_id: str) -> bool:
         with self.connect() as conn:
             with conn.cursor() as cur:
                 query = "SELECT EXISTS(SELECT 1 FROM data WHERE upload_id = %s)"
@@ -235,13 +244,13 @@ class Database:
 
         existing_ids_list = [row[0] for row in existing_ids]
         return existing_ids_list
-    
-    def find_upload_ids(self, names:List[Tuple[str,str]]):
+
+    def find_upload_ids(self, names: List[Tuple[str, str]]):
         ids = []
         with self.connect() as conn:
             with conn.cursor() as cur:
                 for project, filename in names:
-                    filename= filename.strip("/")
+                    filename = filename.strip("/")
                     query = "SELECT upload_id FROM data WHERE project = %s AND fullpath = %s"
                     cur.execute(query, (project, filename))
                     results = cur.fetchall()
@@ -251,17 +260,17 @@ class Database:
 
     def add_entry(self, entry):
         if entry.get("upload_id") is None or entry["upload_id"] == "None":
-            return 
+            return
 
         debug_print(f"Add {entry['upload_id']}")
-        # skip if entry already exists. 
+        # skip if entry already exists.
         if self.check_upload_id(entry["upload_id"]):
-            return 
+            return
 
         self.add_robot_name(entry["robot_name"], "")
         self.add_project(entry["project"], "")
 
-        if entry["site"] and len(entry["site"])> 0:
+        if entry["site"] and len(entry["site"]) > 0:
             self.add_site(entry["site"], "")
 
         entry["datatype"] = entry.get("datatype").replace(".", "")
@@ -277,7 +286,7 @@ class Database:
 
         duration = datetime.strptime(
             entry["end_datetime"], "%Y-%m-%d %H:%M:%S"
-        ) - datetime.strptime(entry["start_datetime"], "%Y-%m-%d %H:%M:%S")        
+        ) - datetime.strptime(entry["start_datetime"], "%Y-%m-%d %H:%M:%S")
         entry["duration"] = duration.seconds
 
         with self.connect() as conn:
@@ -289,14 +298,32 @@ class Database:
                         dirroot, md5, topics, localpath, duration
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
-                
-                cur.execute(query, (
-                    entry["project"], entry["robot_name"], entry["run_name"], entry["datatype"], entry["relpath"],
-                    entry["basename"], entry.get("fullpath",""), entry["size"], entry["site"], entry["date"], entry["datetime"],
-                    entry["start_datetime"], entry["end_datetime"], entry["upload_id"], entry["dirroot"],
-                    entry["md5"], json.dumps(entry["topics"]), entry["localpath"], entry["duration"]
-                ))
-                
+
+                cur.execute(
+                    query,
+                    (
+                        entry["project"],
+                        entry["robot_name"],
+                        entry["run_name"],
+                        entry["datatype"],
+                        entry["relpath"],
+                        entry["basename"],
+                        entry.get("fullpath", ""),
+                        entry["size"],
+                        entry["site"],
+                        entry["date"],
+                        entry["datetime"],
+                        entry["start_datetime"],
+                        entry["end_datetime"],
+                        entry["upload_id"],
+                        entry["dirroot"],
+                        entry["md5"],
+                        json.dumps(entry["topics"]),
+                        entry["localpath"],
+                        entry["duration"],
+                    ),
+                )
+
                 conn.commit()
 
     def get_entry(self, upload_id):
@@ -304,9 +331,8 @@ class Database:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 query = "SELECT * FROM data WHERE upload_id = %s"
                 cur.execute(query, (upload_id,))
-                result = cur.fetchone() 
+                result = cur.fetchone()
         return result
-
 
     def get_all_entries(self):
         with self.connect() as conn:
@@ -318,15 +344,19 @@ class Database:
 
     def _add_name(self, table, name, description):
         if self._has_name(table, name):
-            return 
+            return
 
         self.m_cache[table] = self.m_cache.get(table, {})
         self.m_cache[table][name] = description
 
         try:
-            with self.connect() as conn:            
-                with conn.cursor(cursor_factory=RealDictCursor) as cur:                
-                    query = "INSERT INTO "  + f"{table}"  + "(name, description) VALUES (%s, %s)"
+            with self.connect() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    query = (
+                        "INSERT INTO "
+                        + f"{table}"
+                        + "(name, description) VALUES (%s, %s)"
+                    )
                     cur.execute(query, (name, description))
                     conn.commit()
         except psycopg2.errors.UniqueViolation:
@@ -339,7 +369,7 @@ class Database:
                 cur.execute(query)
                 result = cur.fetchall()  # Fetch all entries as a list of dictionaries
         rtn = [(item["name"]) for item in result if item["name"] is not None]
-        return rtn 
+        return rtn
 
     def _remove_name(self, table, name):
         debug_print(f"delete from {table} {name}")
@@ -369,7 +399,7 @@ class Database:
                 exists = False
                 if fetch and len(fetch) > 0:
                     exists = fetch[0][0]
-            conn.close()            
+            conn.close()
             if exists:
                 self.m_cache[table] = self.m_cache.get(table, {})
                 self.m_cache[table][name] = ""
@@ -393,7 +423,7 @@ class Database:
         conn.close()
 
         rtn = [(item["name"], item["description"]) for item in result]
-        return rtn 
+        return rtn
 
     # projects
     def add_project(self, name, description):
@@ -407,10 +437,10 @@ class Database:
 
     def get_projects(self):
         return self._get_names("projects")
-    
+
     def get_projects_and_desc(self):
         return self._get_names_and_desc("projects")
-    
+
     # sites
     def add_site(self, name, description):
         self._add_name("sites", name, description)
@@ -471,7 +501,7 @@ class Database:
             date = item["date"].strftime("%Y-%m-%d")
             robot_name = item["robot_name"]
             key = (site, date, robot_name)
-            start_time= item["start_datetime"]
+            start_time = item["start_datetime"]
             end_time = item["end_datetime"]
             times[key] = times.get(key, [])
             times[key].append((start_time, end_time))
@@ -484,7 +514,10 @@ class Database:
                 if not merged[key] or merged[key][-1][1] < current[0]:
                     merged[key].append(current)
                 else:
-                    merged[key][-1] = (merged[key][-1][0], max(merged[key][-1][1], current[1]))
+                    merged[key][-1] = (
+                        merged[key][-1][0],
+                        max(merged[key][-1][1], current[1]),
+                    )
 
         with self.connect() as conn:
             with conn.cursor() as cur:
@@ -515,7 +548,7 @@ class Database:
     def get_run_stats(self, send_project=None, send_ymd=None):
         with self.connect() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                if send_project: 
+                if send_project:
                     if send_ymd:
                         query = "SELECT * from data where project = %s and date = %s"
                         cur.execute(query, (send_project, send_ymd))
@@ -527,20 +560,20 @@ class Database:
                     cur.execute(query)
                 results = cur.fetchall()
 
-        stats = {}
+        stats = {
+            "total": {
+                "total_size": 0,
+                "count": 0,
+                "start_datetime": None,
+                "end_datetime": None,
+                "datatype": {}
+            }
+        }
         for entry in results:
             project = entry.get("project")
             ymd = entry.get("date").strftime("%Y-%m-%d")
             run = entry["run_name"]
-            datatype = entry["datatype"]
-            start_time = entry.get("start_datetime")
-            end_time = entry.get("end_datetime")
-            size = entry["size"]
 
-            if start_time:
-                start_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
-            if end_time:
-                end_time = end_time.strftime("%Y-%m-%d %H:%M:%S")
 
             stats[project] = stats.get(project, {})
             stats[project][ymd] = stats[project].get(ymd, {})
@@ -555,45 +588,53 @@ class Database:
                 },
             )
 
-            stat = stats[project][ymd][run]
-            stat["total_size"] += size
-            stat["htotal_size"] = humanfriendly.format_size(stat["total_size"])
-            stat["count"] += 1
+            self._update_stats_for_entry(entry, stats[project][ymd][run])
+            self._update_stats_for_entry(entry, stats["total"])
 
-            if stat["start_datetime"]:
-                stat["start_datetime"] = min(start_time, stat["start_datetime"])
-            else:
-                stat["start_datetime"] = start_time
+        return stats
 
-            if stat["end_datetime"]:
-                stat["end_datetime"] = max(end_time, stat["end_datetime"])
-            else:
-                stat["end_datetime"] = end_time
+    def _update_stats_for_entry(self, entry, stat):
+        size = entry["size"]
+        start_time = entry.get("start_datetime")
+        end_time = entry.get("end_datetime")
+        datatype = entry["datatype"]
 
-            duration = datetime.strptime(
+        if start_time:
+            start_time = start_time.strftime("%Y-%m-%d %H:%M:%S")
+        if end_time:
+            end_time = end_time.strftime("%Y-%m-%d %H:%M:%S")
+
+        stat["total_size"] += size
+        stat["htotal_size"] = humanfriendly.format_size(stat["total_size"])
+        stat["count"] += 1
+
+        if stat["start_datetime"]:
+            stat["start_datetime"] = min(start_time, stat["start_datetime"])
+        else:
+            stat["start_datetime"] = start_time
+
+        if stat["end_datetime"]:
+            stat["end_datetime"] = max(end_time, stat["end_datetime"])
+        else:
+            stat["end_datetime"] = end_time
+
+        duration = datetime.strptime(
                 stat["end_datetime"], "%Y-%m-%d %H:%M:%S"
             ) - datetime.strptime(stat["start_datetime"], "%Y-%m-%d %H:%M:%S")
 
+        assert isinstance(duration, timedelta)
+        stat["duration"] = duration.seconds
+        stat["hduration"] = humanfriendly.format_timespan(duration.seconds)
 
-            assert isinstance(duration, timedelta)
-            stat["duration"] = duration.seconds
-            stat["hduration"] = humanfriendly.format_timespan(duration.seconds)
-
-            stat["datatype"][datatype] = stat["datatype"].get(
+        stat["datatype"][datatype] = stat["datatype"].get(
                 datatype, {"total_size": 0, "count": 0}
             )
-            stat["datatype"][datatype]["total_size"] += size
-            stat["datatype"][datatype]["htotal_size"] = humanfriendly.format_size(
+        stat["datatype"][datatype]["total_size"] += size
+        stat["datatype"][datatype]["htotal_size"] = humanfriendly.format_size(
                 stat["datatype"][datatype]["total_size"]
             )
 
-            stat["datatype"][datatype]["count"] += 1
-            # stat["start_datetime"] = stat["start_datetime"].strftime("%Y-%m-%d %H:%M:%S")
-            # stat["end_datetime"] = stat["end_datetime"].strftime("%Y-%m-%d %H:%M:%S")
-
-            stats[project][ymd][run] = stat
-
-        return stats
+        stat["datatype"][datatype]["count"] += 1
 
     def get_send_data_ymd(self, send_project, send_ymd):
         rtnarr = []
@@ -603,7 +644,7 @@ class Database:
 
         with self.connect() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                if send_project: 
+                if send_project:
                     if send_ymd:
                         query = "SELECT * from data where project = %s and date = %s"
                         cur.execute(query, (send_project, send_ymd))
@@ -625,15 +666,14 @@ class Database:
             topics = entry.get("topics", [])
             upload_id = entry["upload_id"]
             localpath = entry["localpath"]
-            fullpath = entry.get("fullpath","")
+            fullpath = entry.get("fullpath", "")
             datatype = entry["datatype"]
             date = entry["datetime"].strftime("%Y-%m-%d %H:%M:%S")
             ymd = entry["date"].strftime("%Y-%m-%d")
-            
 
             if site is None:
                 site = "default"
-            complete_relpath = os.path.join(ymd, site, robot, relpath, basename )
+            complete_relpath = os.path.join(ymd, site, robot, relpath, basename)
 
             rtn[run] = rtn.get(run, {})
             rtn[run][relpath] = rtn[run].get(relpath, [])
@@ -654,7 +694,9 @@ class Database:
                     "run_name": run,
                     "site": site,
                     "size": size,
-                    "start_datetime": entry["start_datetime"].strftime("%Y-%m-%d %H:%M:%S"),
+                    "start_datetime": entry["start_datetime"].strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
                     "topics": topics,
                     "upload_id": upload_id,
                 }
@@ -679,7 +721,7 @@ class Database:
                 query = "SELECT * FROM data"
                 cur.execute(query)
 
-                for entry in cur:   
+                for entry in cur:
                     for key, format in self.m_time_format.items():
                         if key in entry:
                             entry[key] = entry[key].strftime(format)
@@ -692,8 +734,7 @@ class Database:
             blocks.append(block)
         return blocks
 
-
-    # search 
+    # search
     def get_search_filters(self):
         discrete_keys = ["project", "site", "robot_name", "topics", "datatype"]
         range_keys = ["datetime", "size", "duration"]
@@ -710,7 +751,9 @@ class Database:
                     entry["duration"] = duration.seconds
 
                     for key in discrete_keys:
-                        filters[key] = filters.get(key, {"type": "discrete", "keys":set()})
+                        filters[key] = filters.get(
+                            key, {"type": "discrete", "keys": set()}
+                        )
 
                         if isinstance(entry[key], list):
                             for item in entry[key]:
@@ -729,10 +772,12 @@ class Database:
                             if entry[key]:
                                 filters[key]["keys"].add(entry[key])
                             else:
-                                filters[key]["keys"].add("None")                        
-                        
+                                filters[key]["keys"].add("None")
+
                     for key in range_keys:
-                        filters[key] = filters.get(key, {"type": "range", "min": entry[key], "max": entry[key]})
+                        filters[key] = filters.get(
+                            key, {"type": "range", "min": entry[key], "max": entry[key]}
+                        )
                         filters[key]["min"] = min(filters[key]["min"], entry[key])
                         filters[key]["max"] = max(filters[key]["max"], entry[key])
 
@@ -744,9 +789,13 @@ class Database:
                 filters[key]["keys"] = list(filters[key]["keys"])
 
         return filters
-    
-    def search(self, filters: dict, order_by: str, offset: int, page_size: int, reverse:bool):
-        search_query = build_paginated_query(filters, order_by, offset, page_size, reverse)
+
+    def search(
+        self, filters: dict, order_by: str, offset: int, page_size: int, reverse: bool
+    ):
+        search_query = build_paginated_query(
+            filters, order_by, offset, page_size, reverse
+        )
         count_query = build_count_query(filters)
 
         rtn = []
@@ -766,5 +815,4 @@ class Database:
                     entry[key] = entry[key].strftime(format)
 
             rtn.append(entry)
-        return rtn, count 
-    
+        return rtn, count

@@ -10,10 +10,6 @@ body {
     border-right: 1px solid #ddd;
 }
 
-.main-content {
-    padding: 20px;
-}
-
 .btn-group {
     flex-grow: 0;
     /* Prevents flex items from growing */
@@ -28,17 +24,6 @@ body {
     /* Adjust padding to ensure buttons are not too large or small */
 }
 
-/* #connection_status {
-    padding: 0.5em;
-    color: white;
-    background-color: green;
-    flex-grow: 0;
-}
-
-#connection_status.offline {
-    background-color: red;
-    flex-grow: 0;
-} */
 
 #logoff-button {
     align-items: center;
@@ -207,11 +192,11 @@ dd {
     padding: 15px; /* Add some padding */
     overflow-x: auto; /* Enable horizontal scrolling if needed */
     overflow-y: auto;
+    height: 100vh;
 }
 
 .tab-content {
     white-space: nowrap; /* Prevent line breaks to ensure horizontal scrolling */
-    overflow-y: auto;
 }
 
 

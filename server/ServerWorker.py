@@ -160,7 +160,6 @@ class ServerWorker:
 
     def get_node_data_stats(self, source):
         stats_json = self.redis.get(f"node_data_stats:{source}")
-        # debug_print(stats_json)
         if stats_json:
             return json.loads(stats_json)
         return None
@@ -1237,10 +1236,18 @@ class ServerWorker:
                 rtn[source_name][project][ymd] = rtn[source_name][project].get(ymd, {})
         return rtn 
 
+
     def _send_node_data(self, msg=None):
+
+        stats = {}
+        for source in self.get_sources("node"):
+            full_stats = self.get_node_data_stats(source)
+            stats[source] = {"total": full_stats.get("total", {})}
+
         node_data = {
             "entries": self._create_node_data_stub(),
             "fs_info": {},
+            "stats": stats
             }
         
         if msg:

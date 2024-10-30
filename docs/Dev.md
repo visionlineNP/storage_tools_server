@@ -8,6 +8,9 @@ The Database/Redis must always be started before the Back End. The Front End and
 
 This example will create a server named "LocalServer" on port 8091.
 
+> Notice!
+> Make sure to set `VOLUME_ROOT` to the same value in your `config.local.env`
+
 ## Terminal 1. Database / Redis
 
 ```bash
@@ -27,11 +30,11 @@ docker compose -f docker-compose-redis.yaml up --build --remove-orphans
 
 ```bash
 cd ~/src/storage_tools_server/
-SERVERNAME="LocalServer" REDIS_URL="http://localhost:6397" CONFIG="config/config.local.yaml" python -m server.backApp
+VOLUME_ROOT="/media/norm/Extreme SSD1/uploads/" SERVERNAME="LocalServer" REDIS_URL="http://localhost:6397" CONFIG="config/config.local.yaml" python -m server.backApp
 ```
 
 ## Terminal 3. Front End
 
 ```bash
-gunicorn -k gthread -w 4 --threads 8 -b 0.0.0.0:8091 --timeout 30 server.frontApp:app --env SERVERNAME="LocalServer" --env CONFIG="config/config.local.yaml"
+gunicorn -k gthread -w 4 --threads 8 -b 0.0.0.0:8091 --timeout 30 server.frontApp:app --env SERVERNAME="LocalServer" --env CONFIG="config/config.local.yaml" --env VOLUME_ROOT="/media/norm/Extreme SSD1/uploads/"
 ```

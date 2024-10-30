@@ -124,12 +124,15 @@ function on_remote_connection(msg) {
 function processServerSelectAllNew() {
     const source = $(this)[0].dataset.source;
     $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-on_local="true"][data-on_remote="false"]').prop('checked', true);
+    updateServerSelectCounts(source, "host:local");
+
 }
 
 function processRemoteSelectAllNew() {
     const source = $(this)[0].dataset.source;
     const project = $(this)[0].dataset.project;
     $('input[type="checkbox"][data-group="table"][data-project="' + project + '"][data-source="' + source + '"][data-on_local="false"][data-on_remote="true"]').prop('checked', true);
+    updateServerSelectCounts(source, "host:Remote");
 
 }
 
@@ -494,7 +497,7 @@ function processServerYMD(data) {
 
                     checkbox.dataset.source = source;
                     checkbox.dataset.datetime = detail.datetime;
-                    checkbox.dataset.size = detail.size;
+                    checkbox.dataset.size = detail.size;                    
                     checkbox.dataset.group = "table";
                     checkbox.dataset.on_local = detail.on_local;
                     checkbox.dataset.on_remote = detail.on_remote;
@@ -504,6 +507,11 @@ function processServerYMD(data) {
                     checkbox.dataset.fullpath = detail.fullpath;
                     checkbox.dataset.remote_id = detail.remote_upload_id;
 
+                    checkbox.addEventListener("change", (event) => {
+                        const source = event.target.dataset.source;
+                        updateServerSelectCounts(source, "host:local");
+                      })
+                  
                     checkbox.type = "checkbox";
                     checkbox.id = "server_select_" + detail.upload_id
                     tdCheckbox.appendChild(checkbox);
@@ -773,7 +781,8 @@ function updateServerData(data) {
     }
     const host_tabs = create_tabs(host_names, containerData, "host")
     const local_tab = host_tabs.Local
-    //const remote_tab = host_names.Remote
+
+    updateServerStats("host:local", local_tab, data.stats["total"])
 
     const project_names = Object.keys(data.entries).sort();
     const project_tabs = create_tabs(project_names, local_tab, "host:server");
@@ -807,7 +816,7 @@ function updateServerData(data) {
             clearSelectionsButton.id = `clear-all-${source}-${project_name}`;
             clearSelectionsButton.dataset.source = source;
             clearSelectionsButton.dataset.project = project_name;
-            clearSelectionsButton.onclick = processClearSelections;
+            clearSelectionsButton.onclick = processServerClearSelections;
             clearSelectionsButton.textContent = 'Clear Selections';
             div.appendChild(clearSelectionsButton);
 
@@ -892,6 +901,8 @@ function updateServerRemote(data) {
         return;
     }
 
+    updateServerStats("host:Remote", containerData, data.stats["total"])
+
     const project_names = Object.keys(data.entries).sort();
     const project_tabs = create_tabs(project_names, containerData, "host:Remote");
     $.each(project_tabs, function (project_name, project_tab) {
@@ -919,7 +930,7 @@ function updateServerRemote(data) {
         clearSelectionsButton.id = `clear-all-${source}-${project_name}`;
         clearSelectionsButton.dataset.source = source;
         clearSelectionsButton.dataset.project = project_name;
-        clearSelectionsButton.onclick = processClearSelections;
+        clearSelectionsButton.onclick = processServerClearSelections;
         clearSelectionsButton.textContent = 'Clear Selections';
         div.appendChild(clearSelectionsButton);
 
@@ -1160,9 +1171,11 @@ function updateServerRemoteYMD(data) {
                 checkbox.dataset.offset = detail.offset;
                 checkbox.dataset.fullpath = detail.complete_relpath;
                 checkbox.dataset.remote_id = detail.remote_upload_id;
-
-
-
+                checkbox.addEventListener("change", (event) => {
+                    const source = event.target.dataset.source;
+                    updateServerSelectCounts(source, "host:Remote");
+                  })
+              
                 checkbox.type = "checkbox";
                 checkbox.id = "server_select_" + detail.upload_id
                 tdCheckbox.appendChild(checkbox);
@@ -1286,7 +1299,6 @@ function updateServerRemoteYMD(data) {
                     statusDiv.appendChild(onRemote);
                 }
 
-
                 tdStatus.appendChild(statusDiv);
                 tr.appendChild(tdStatus);
             });
@@ -1294,3 +1306,144 @@ function updateServerRemoteYMD(data) {
         }
     };
 }
+
+/**
+ * 
+ * @param {string} tab_name one of [host:local | host:Remote]
+ * @param {div} source_tab The parent tab
+ * @param {Object} stats 
+ */
+function updateServerStats(tab_name, source_tab, stats) {
+    //const source_tab = document.getElementById(tab_name)
+
+    let div = document.getElementById(tab_name + "_server_file_stats");
+
+    if (div == null) {
+        div = document.createElement("div");
+        div.id = tab_name + "_server_file_stats";
+        source_tab.append(div);
+    } else {
+        div.innerHTML = "";
+    }
+
+    const dtable = document.createElement("table");
+    div.appendChild(dtable);
+
+    dtable.className = "table table-striped";
+
+    let dhead = document.createElement("thead");
+    dtable.appendChild(dhead);
+
+    let drow = document.createElement("tr");
+    dhead.appendChild(drow);
+
+
+    drow.appendChild(document.createElement("td"));
+
+    let td = document.createElement("td");
+    drow.appendChild(td);
+    td.innerHTML = "Total";
+
+    datatypes = Object.entries(stats["datatype"]);
+    datatypes.sort((a, b) => a[0].localeCompare(b[0]));
+
+    for ([datatype_name, _] of datatypes) {
+        let td = document.createElement("td");
+        drow.appendChild(td);
+        td.innerHTML = datatype_name;
+    }
+
+    td = document.createElement("td")
+    td.innerHTML = "Selected"
+    drow.appendChild(td)
+
+
+    let dbody = document.createElement("tbody");
+    dtable.appendChild(dbody);
+
+    drow = document.createElement("tr");
+    dbody.appendChild(drow);
+
+    td = document.createElement("td");
+    td.innerHTML = "<b>Size</b>";
+    drow.appendChild(td);
+
+    td = document.createElement("td");
+
+    td.innerHTML = stats["htotal_size"];
+    drow.appendChild(td);
+
+    for ([_, datatype_entry] of datatypes) {
+        let td = document.createElement("td");
+        drow.appendChild(td);
+        td.innerHTML = datatype_entry["htotal_size"];
+    }
+
+    td = document.createElement("td");
+    td.id = tab_name + "_selected_hsize"
+    td.innerHTML = "0 B"
+    drow.appendChild(td)
+
+    drow = document.createElement("tr");
+    dbody.appendChild(drow);
+
+    td = document.createElement("td");
+    td.innerHTML = "<b>Count</b>";
+    drow.appendChild(td);
+
+    td = document.createElement("td");
+    td.innerHTML = stats["count"];
+    drow.appendChild(td);
+
+
+    for ([_, datatype_entry] of datatypes) {
+        let td = document.createElement("td");
+        drow.appendChild(td);
+        td.innerHTML = datatype_entry["count"];
+    }
+
+    td = document.createElement("td");
+    td.id = tab_name + "_selected_count"
+    td.innerHTML = "0"
+    drow.appendChild(td)
+}
+
+/**
+ * 
+ * @param {string} source source name 
+ * @param {string} tab_name one of ["host:local" or "host:Remote"]
+ */
+function updateServerSelectCounts(source, tab_name) {
+    let total_size = 0;
+    let total_count = 0;
+    $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').each(function () {
+        total_count += 1;
+        total_size += parseInt($(this).attr("data-size"));
+    });
+    let hsize = formatBytes(total_size);
+    console.log(total_count, total_size, hsize)
+
+    let span = document.getElementById(tab_name +"_selected_hsize")
+    if (span) {
+        span.innerHTML = hsize;
+    } else {
+        const tn = tab_name +"_selected_hsize"
+        console.log("did not find " + tn)
+    }
+
+    span = document.getElementById(tab_name +"_selected_count")
+    if (span) {
+        span.innerHTML = total_count;
+    }
+}
+
+
+function processServerClearSelections() {
+    const source = $(this)[0].dataset.source;
+  
+    $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').prop('checked', false);
+    updateServerSelectCounts(source, "host:local");
+    updateServerSelectCounts(source, "host:Remote");
+
+  }
+  

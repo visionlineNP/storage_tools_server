@@ -32,7 +32,7 @@ function sync_files_by_source(event) {
 
 function processNodeYMD(data) {
     console.log(data)
-    
+
 
     const tab_name = data.tab;
     const ymd_div = document.getElementById(tab_name);
@@ -153,7 +153,7 @@ function processNodeYMD(data) {
         run_entry.sort((a, b) => a[0].localeCompare(b[0]));
 
         const header_names = ["Select", "Site", "Robot", "Date", "Basename", "Size", "Status"]
-        const item_names = ["site", "robot_name" , "datetime", "basename", "hsize"]
+        const item_names = ["site", "robot_name", "datetime", "basename", "hsize"]
 
         const table = document.createElement("table");
         table.className = "table table-striped";
@@ -189,7 +189,7 @@ function processNodeYMD(data) {
             relpath_tag.className = "table_relpath";
             relpath_tag.innerHTML = relpath;
             run_header_td.appendChild(relpath_tag);
-        
+
             items.sort((a, b) => a["datetime"].localeCompare(b["datetime"]))
 
             $.each(items, function (_, detail) {
@@ -212,6 +212,11 @@ function processNodeYMD(data) {
                 checkbox.dataset.offset = detail.offset;
                 checkbox.dataset.fullpath = detail.fullpath;
                 checkbox.dataset.remote_id = detail.remote_id;
+
+                checkbox.addEventListener("change", (event) => {
+                    const source = event.target.dataset.source;
+                    updateNodeSelectCounts(source);
+                })
 
                 checkbox.type = "checkbox";
                 checkbox.id = "server_select_" + detail.upload_id
@@ -328,15 +333,18 @@ function updateNodeData(data) {
 
         const source_data = data.entries[source_name];
         console.log(source_name, source_data);
+
+        updateNodeStats(source_name, source_tab, data.stats[source_name]["total"])
+
         const project_names = Object.keys(source_data);
         const project_tabs = create_tabs(project_names, source_tab, "node:" + source_name);
         $.each(project_tabs, function (project_name, project_tab) {
 
             const div = document.createElement("div");
             project_tab.append(div)
-    
+
             div.className = 'btn-group';
-    
+
             const selectAllButton = document.createElement('button');
             selectAllButton.type = 'button';
             selectAllButton.className = 'btn btn-primary';
@@ -347,7 +355,7 @@ function updateNodeData(data) {
             selectAllButton.onclick = processNodeSelectAllNew;
             selectAllButton.textContent = 'Select All New';
             div.appendChild(selectAllButton);
-    
+
             const clearSelectionsButton = document.createElement('button');
             clearSelectionsButton.type = 'button';
             clearSelectionsButton.className = 'btn btn-secondary';
@@ -358,7 +366,7 @@ function updateNodeData(data) {
             clearSelectionsButton.onclick = processClearSelections;
             clearSelectionsButton.textContent = 'Clear Selections';
             div.appendChild(clearSelectionsButton);
-    
+
             const transferSelectedButton = document.createElement('button');
             transferSelectedButton.type = 'button';
             transferSelectedButton.className = 'btn btn-success';
@@ -369,7 +377,7 @@ function updateNodeData(data) {
             transferSelectedButton.onclick = processNodeTransferSelections;
             transferSelectedButton.textContent = 'Pull Selected';
             div.appendChild(transferSelectedButton);
-    
+
             const cancelTransferButton = document.createElement('button');
             cancelTransferButton.type = 'button';
             cancelTransferButton.className = 'btn btn-danger';
@@ -380,7 +388,7 @@ function updateNodeData(data) {
             cancelTransferButton.onclick = processNodeCancelTransfer;
             cancelTransferButton.textContent = 'Stop Pull';
             div.appendChild(cancelTransferButton);
-    
+
             const project_data = source_data[project_name];
             const ymd_names = Object.keys(project_data).sort()
             const levels = {}
@@ -389,32 +397,32 @@ function updateNodeData(data) {
                 if (levels[ym] == null) { levels[ym] = [ymd] }
                 else { levels[ym].push(ymd) }
             });
-    
+
             const ym_names = Object.keys(levels).sort()
             const ym_tabs = create_tabs(ym_names, project_tab, "node:" + source_name + ":" + project_name + ":ym")
-    
+
             $.each(ym_tabs, function (ym_name, ym_div) {
                 const ymd_names = levels[ym_name];
-                const ymd_tabs = create_tabs(ymd_names, ym_div,  "node:" + source_name + ":" + project_name, "request_node_ymd_data", true);
+                const ymd_tabs = create_tabs(ymd_names, ym_div, "node:" + source_name + ":" + project_name, "request_node_ymd_data", true);
                 $.each(ymd_tabs, function (_, ymd_div) {
                     add_placeholder(ymd_div);
                 })
             })
-    
+
         });
     })
 
 }
 
-function processNodeSelectAllNew()
-{
+function processNodeSelectAllNew() {
     const source = $(this)[0].dataset.source;
     $('input[type="checkbox"][data-group="table"][data-source="' + source + '"][data-on_local="true"][data-on_remote="false"]').prop('checked', true);
+    updateServerSelectCounts(source, "host:Remote");
+
 }
 
 
-function processNodeTransferSelections()
-{
+function processNodeTransferSelections() {
     // pull data from remote server to local server.  
     const source = $(this)[0].dataset.source;
 
@@ -434,8 +442,7 @@ function processNodeTransferSelections()
 
 }
 
-function processNodeCancelTransfer()
-{
+function processNodeCancelTransfer() {
     const source = $(this)[0].dataset.source;
     socket.emit("request_cancel_node_pull_transfer", { "source": source, "session_token": window.session_token });
 }
@@ -444,12 +451,144 @@ function updateNodeCount(count) {
 
     const container = document.getElementById("nodes_menu_status")
     if (container) {
-      if (count > 0) {
-        container.innerHTML = count;
-      } else {
-        container.innerHTML = "";
-      }
+        if (count > 0) {
+            container.innerHTML = count;
+        } else {
+            container.innerHTML = "";
+        }
     } else {
-      console.log("did not find 'node_menu_status'")
+        console.log("did not find 'node_menu_status'")
     }
-  }
+}
+
+
+function updateNodeStats(source_name, source_tab, stats) {
+    //const source_tab = document.getElementById(tab_name)
+
+    let div = document.getElementById(source_name + "_node_file_stats");
+
+    if (div == null) {
+        div = document.createElement("div");
+        div.id = source_name + "_node_file_stats";
+        source_tab.append(div);
+    } else {
+        div.innerHTML = "";
+    }
+
+    const dtable = document.createElement("table");
+    div.appendChild(dtable);
+
+    dtable.className = "table table-striped";
+
+    let dhead = document.createElement("thead");
+    dtable.appendChild(dhead);
+
+    let drow = document.createElement("tr");
+    dhead.appendChild(drow);
+
+
+    drow.appendChild(document.createElement("td"));
+
+    let td = document.createElement("td");
+    drow.appendChild(td);
+    td.innerHTML = "Total";
+
+    datatypes = Object.entries(stats["datatype"]);
+    datatypes.sort((a, b) => a[0].localeCompare(b[0]));
+
+    for ([datatype_name, _] of datatypes) {
+        let td = document.createElement("td");
+        drow.appendChild(td);
+        td.innerHTML = datatype_name;
+    }
+
+    td = document.createElement("td")
+    td.innerHTML = "Selected"
+    drow.appendChild(td)
+
+
+    let dbody = document.createElement("tbody");
+    dtable.appendChild(dbody);
+
+    drow = document.createElement("tr");
+    dbody.appendChild(drow);
+
+    td = document.createElement("td");
+    td.innerHTML = "<b>Size</b>";
+    drow.appendChild(td);
+
+    td = document.createElement("td");
+
+    td.innerHTML = stats["htotal_size"];
+    drow.appendChild(td);
+
+    for ([_, datatype_entry] of datatypes) {
+        let td = document.createElement("td");
+        drow.appendChild(td);
+        td.innerHTML = datatype_entry["htotal_size"];
+    }
+
+    td = document.createElement("td");
+    td.id = source_name + "_selected_hsize"
+    td.innerHTML = "0 B"
+    drow.appendChild(td)
+
+    drow = document.createElement("tr");
+    dbody.appendChild(drow);
+
+    td = document.createElement("td");
+    td.innerHTML = "<b>Count</b>";
+    drow.appendChild(td);
+
+    td = document.createElement("td");
+    td.innerHTML = stats["count"];
+    drow.appendChild(td);
+
+
+    for ([_, datatype_entry] of datatypes) {
+        let td = document.createElement("td");
+        drow.appendChild(td);
+        td.innerHTML = datatype_entry["count"];
+    }
+
+    td = document.createElement("td");
+    td.id = source_name + "_selected_count"
+    td.innerHTML = "0"
+    drow.appendChild(td)
+}
+
+/**
+ * 
+ * @param {string} source source name 
+ */
+function updateNodeSelectCounts(source) {
+    let total_size = 0;
+    let total_count = 0;
+    $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').each(function () {
+        total_count += 1;
+        total_size += parseInt($(this).attr("data-size"));
+    });
+    let hsize = formatBytes(total_size);
+    console.log(total_count, total_size, hsize)
+
+    let span = document.getElementById(source + "_selected_hsize")
+    if (span) {
+        span.innerHTML = hsize;
+    } else {
+        const tn = source + "_selected_hsize"
+        console.log("did not find " + tn)
+    }
+
+    span = document.getElementById(source + "_selected_count")
+    if (span) {
+        span.innerHTML = total_count;
+    }
+}
+
+function processNodeClearSelections() {
+    const source = $(this)[0].dataset.source;
+
+    $('input[type="checkbox"][data-group="table"][data-source="' + source + '"]:checked').prop('checked', false);
+    updateNodeSelectCounts(source)
+
+}
