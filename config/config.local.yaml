@@ -1,0 +1,47 @@
+#
+# Storage Tools Config file 
+# 
+  
+# ----------------------------------------------
+# Optional updates
+# ----------------------------------------------
+
+# The port that the server will run on
+port: 8091
+
+# How many parallel processing threads to run per connection at a time. 
+threads: 4
+ 
+# ----------------------------------------------
+# Server Optional updates
+# ----------------------------------------------
+
+
+provide_zeroconf: true
+
+# ----------------------------------------------
+# Remote mode configuration
+# ----------------------------------------------
+
+# use LDAP for authentication.  
+# ONLY FOR THE PRODUCTION SERVER, unless you are also
+# running nginx with ldap support.  
+use_ldap: false
+
+# Look for the main servers at these address
+# Can be a host name, or a remote tunnel
+# Uncomment when running this server in the field
+# or when syncing with main server
+
+
+# # how long to wait before checking again
+# wait_s: 2
+
+# Remote connection send settings.
+# Spilt large logs into smaller blocks during sending
+# Whole numbers. Range between 1 and 20.  
+split_size_gb: 2 
+
+# Read loop buffer size.  
+# Whole numbers, range between 1 and 32
+chunk_size_mb: 16
