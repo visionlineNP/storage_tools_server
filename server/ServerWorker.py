@@ -821,8 +821,8 @@ class ServerWorker:
         self._request_remote_servers({"room": "all_dashboards"})
 
     def _remove_remote_server(self, data):
-        server = data.get("robot")
-        self.m_database.server("server")
+        server = data.get("server")
+        self.m_database.remove_remote_server(server)
         self._request_remote_servers({"room": "all_dashboards"})
 
 

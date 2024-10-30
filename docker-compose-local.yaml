@@ -1,0 +1,91 @@
+services:
+  redis:
+    image: "redis:alpine"
+    expose:
+      - "6379"
+
+    network_mode: host
+    restart: always
+
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: sts
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: stsdb
+    volumes:
+      - pgdata1:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: always
+
+  storage_tools_server:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      network: host 
+    image: storage_tools_server
+    container_name: storage_tools_server
+    expose:
+     - "8091"  # Expose port 8091 to the internal Docker network
+    environment:
+      - SERVERNAME=${SERVERNAME}
+      - CONFIG=${CONFIG}
+      - PORT=${PORT}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_URL=${REDIS_URL}
+      - VOLUME_ROOT=${VOLUME_ROOT}
+
+    tty: true
+    stdin_open: true
+    restart: always
+
+    network_mode: host
+    depends_on:
+      - redis
+      - storage_tools_server_backend
+      - postgres
+
+    volumes:
+      - ./config/:/app/config
+      - ./config/keys.yaml:/app/config/keys.yaml
+      - ${VOLUME_ROOT}:${VOLUME_ROOT}
+
+  storage_tools_server_backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+      network: host 
+    image: storage_tools_server_backend
+    container_name: storage_tools_server_backend
+
+    expose:
+     - "8091"  # Expose port 8091 to the internal Docker network
+
+    tty: true
+    stdin_open: true
+    restart: always
+    network_mode: host
+
+    depends_on:
+      - redis
+      - postgres
+
+    environment:
+      - SERVERNAME=${SERVERNAME}
+      - CONFIG=${CONFIG}
+      - PORT=${PORT}
+      - REDIS_HOST=${REDIS_HOST}
+      - REDIS_URL=${REDIS_URL}
+      - VOLUME_ROOT=${VOLUME_ROOT}
+
+    volumes:
+      - ./config/:/app/config
+      - ./config/keys.yaml:/app/config/keys.yaml
+      - ${VOLUME_ROOT}:${VOLUME_ROOT}
+
+
+
+volumes:
+  pgdata1:
+    driver: local 

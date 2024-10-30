@@ -7,23 +7,19 @@
 # ----------------------------------------------
 
 
-# Set the upload_dir to a path that is read/write for
-# the user running the server.  
-# When running as Docker, make sure the docker user
-# has read/write permissions for the directory
 
-upload_dir: "/mnt/uploads/"
-
-# The volume_root is a prefix that is added to volume mapping entry 
-# for a given project. This allows each project to go into a different
-# directory, or different mounted location.  
-# The volume_root does not have to be the same as the upload_dir.  
-volume_root: "/mnt/uploads/"
+# production should just be "/"
+volume_root: "/"
 
 
-blackout: 
- - /volume4/dsta/datasets/match_anything/kubric4d/
+blackout:
+ - /volume3/chiron/datasets/experiments/20240610_je_backup
+ - je_backup/blue_orin_data_james_20240610
+ - /volume4/dsta/datasets/match_anything/
+ - /volume4/dsta/datasets/ego-exo4d/
+ - /volume4/dsta/datasets/old-autel-project-datasets
  
+
 # ----------------------------------------------
 # Optional updates
 # ----------------------------------------------
@@ -34,9 +30,12 @@ port: 8091
 # How many parallel processing threads to run per connection at a time. 
 threads: 4
 
-# Preloads the database with  project, robot names and sites.
+# Preloads the database with project, robot names and sites.
 # This is optional because the Config interface will allow 
 # for the addition of new entries. 
+projects:
+ - chiron
+ - dsta
 
 robots:
  - RC_car
@@ -47,7 +46,6 @@ sites:
  - data_workshop
  - sqi
  - shelter
- - default
 
 
 # what kinds of files to search for
@@ -64,6 +62,11 @@ include_suffix:
 
 
 
+# ----------------------------------------------
+# Server Optional updates
+# ----------------------------------------------
+
+
 # set to true for production server
 # set to false for local or field server. 
 use_ldap: true
@@ -77,24 +80,9 @@ use_ldap: true
 # Uncomment when running this server in the field
 # or when syncing with main server
 
-#remote:
-#  - "airlab-storage.andrew.cmu.edu:8091"
+# remote:
+#   - "airlab-share-01.andrew.cmu.edu:8091"
 #   - "localhost:8092"
 
-# The server key to use when acting as remote
-# uncomment the next line and set it to the 
-# correct API key.  
-# API_KEY_TOKEN: "server_1_key_asfaa9"
 
-# # how long to wait before checking again
-# wait_s: 2
-
-# Remote connection send settings.
-# Spilt large logs into smaller blocks during sending
-# Whole numbers. Range between 1 and 20.  
-# split_size_gb: 2 
-
-# Read loop buffer size.  
-# Whole numbers, range between 1 and 32
-# chunk_size_mb: 16
 

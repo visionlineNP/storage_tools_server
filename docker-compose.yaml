@@ -13,10 +13,9 @@ services:
       - ./server/css:/etc/nginx/html/static/css 
       - ./server/static/favicon.ico:/etc/nginx/html/static/favicon.ico
 
-
     depends_on:
       - storage_tools_server  # Ensure Nginx starts after the Flask app service
-
+      
     networks:
       - custom_network  # Attach to the custom network
 
@@ -50,9 +49,6 @@ services:
     image: storage_tools_server
     container_name: storage_tools_server
 
-    # for extra security, set the Cross Site Origins hostname
-    # environment:
-    # - HOSTNAME=${HOSTNAME}
     environment:
       - CONFIG=/app/config/config.yaml
       - REDIS_URL=redis://redis:6379/0

@@ -636,7 +636,7 @@ class WebsocketServer:
 
         if project and project not in self.m_config["volume_map"]:
             self.m_sio.emit("server_error", {"msg": f"Project: {project} does not have a volume mapping"})
-            debug_print("Error")
+            debug_print(f"Project: {project} does not have a volume mapping")
             return 
         
         self.clear_cancel(source)

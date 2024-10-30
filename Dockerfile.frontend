@@ -13,10 +13,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 WORKDIR /app
 
 # Copy the source files file
-COPY . .
+COPY server server
+
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+ENTRYPOINT ["/app/entrypoint.sh"]
 
 
 EXPOSE 8091
 
-# Run the command to start the app when the container starts
-CMD ["gunicorn", "-k", "gthread", "-w", "1", "--threads", "20", "-b", "0.0.0.0:8091", "--timeout", "240", "server.frontApp:app"]
+# # Run the command to start the app when the container starts
+# CMD ["gunicorn", "-k", "gthread", "-w", "1", "--threads", "20", "-b", "0.0.0.0:8091", "--timeout", "240", "server.frontApp:app"]

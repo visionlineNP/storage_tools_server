@@ -1,19 +1,21 @@
 # Server Page
 
-![Dashboard Server Projects](imgs/Dashboard.Server.Projects.png)
+![Dashboard Server Projects](imgs/Dashboard.Server.Local.Projects.png)
 
-The Server Page will have a top level tab for each uploaded project.  Each project will have a tab for each day that has been uploaded.  
+The Server Page *Local* will have a top level tab for each uploaded project.  Each project will have a tab for each day that has been uploaded.  
 
 ## Remote Actions
 
-![alt text](imgs/Dashboard.Server.RemoteActions.png)
+![alt text](imgs/Dashboard.Server.Local.RemoteActions.png)
 
 Remote Actions are enabled when the Local server is connected to a Remote server.  
 
 * **Select All New**: Select all files on the **Local** server that are not on the **Remote** server.
 * **Clear Selections**: Clear all of the selected files.
-* **Transfer Selected**: Start copying each of the selected files from **Local** to **Remote**.  The *Progress* section will indicate the status of each ongoing copy, as well as the total status.  Progress bars will update no faster than once per second.
-* **Stop Transfer**: Stop any ongoing transfer and dequeue any selected transfers.  Partial transfers are retained on the **Local** server, and will be reused when restarted.  These files have the suffix ".tmp".  
+* **Push Selected**: Start a file push of the selected files from **Local** to **Remote**.  The *Progress* section will indicate the status of each ongoing copy, as well as the total status.  Progress bars will update no faster than once per second.
+  > Notice!
+  > There can only be one push operation at a time.  The system does not "queue" up additional operations if you push the button before the transfer is complete.  
+* **Stop Push**: Stop any ongoing transfer and dequeue any selected transfers.  Partial transfers are retained on the **Remote** server, and will be reused when restarted.  These files have the suffix ".tmp".  
 
 ## Server Per Run
 
@@ -44,3 +46,22 @@ Remote Status
 
 * ![alt text](imgs/Dashboard.Copy.png) Hover to display the full path of the file on the serve. Click to copy this path to the clipboard.  
 * ![alt text](imgs/Dashboard.Download.png) Download the current file to Web Browser machine.
+
+## Foxglove Icons
+
+* ![alt text](imgs/Dashboard.Server.Foxglove.png) This file can be run with your locally installed copy of [Foxglove Studio.](https://foxglove.dev/)  Refer to the **User Setttings* in the [Configure](Configure.md) documentation.
+
+Refer to the [Linux Handler](LinuxHandler.md) or the [MacOS Handler](MacOSHandler.md) to configure your system to use these links.
+
+## Remote Files
+
+![alt text](imgs/Dashboard.Server.Remote.png)
+
+These are the files that are on the remotely connected server.  These files can be pulled onto the local server.
+
+* **Select All New**: Select all files on the **Remote** server that are not on the **Local** server.
+* **Clear Selections**: Clear all of the selected files.
+* **Pull Selected**: Start a file pull of the selected files from **Remote** to **Local**.  The *Progress* section will indicate the status of each ongoing copy, as well as the total status.  Progress bars will update no faster than once per second.
+  > Notice!
+  > There can only be one push operation at a time.  The system does not "queue" up additional operations if you push the button before the transfer is complete.  
+* **Stop Pull**: Stop any ongoing transfer and dequeue any selected transfers.  Partial transfers are retained on the **Local** server, and will be reused when restarted.  These files have the suffix ".tmp".  

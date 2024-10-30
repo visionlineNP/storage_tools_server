@@ -1,6 +1,6 @@
 # Understanding The Dashboard
 
-![Dashboard Overview](imgs/Dashboard.png)
+![Dashboard Overview](imgs/Dashboard.Intro.png)
 
 ## Online Status
 
@@ -10,6 +10,7 @@
 **Offline**: The dashboard is not connected to the server.  Check that the server is running, or that the internet connection is up.  
 
 [Logout].  Log out of the Admin account. This only works for locally installed servers, not servers running with LDAP.
+[Refresh]. Refresh the Server listings. This will show [New Data] when new data has arrived.
 
 ## Server Name
 

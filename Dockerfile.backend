@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 WORKDIR /app
 
 # Copy the source files file
-COPY . .
+COPY server server
 
 
 EXPOSE 8091
