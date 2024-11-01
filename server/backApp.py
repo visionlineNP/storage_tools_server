@@ -1,6 +1,6 @@
 from server.ServerWorker import ServerWorker
 from server.RemoteWorker import RemoteWorker
-from  server.debug_print import debug_print
+from server.debug_print import debug_print
 from multiprocessing import Pool 
 import time
 
@@ -19,15 +19,15 @@ def remote_worker_fn(worker_id):
         time.sleep(1)
 
 
-# debug_print(__name__)
-threads = 2
-pool = Pool(processes=threads)
-pool.map_async(worker_fn, range(threads))
+def main():
+    threads = 4
+    pool = Pool(processes=threads)
+    pool.map_async(worker_fn, range(threads))
 
-remote_worker_fn(threads)
+    remote_worker_fn(threads)
 
-pool.close()
-pool.join()
+    pool.close()
+    pool.join()
 
-
-#  worker_fn(0)
+if __name__ == "__main__":
+    main()

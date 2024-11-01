@@ -2,6 +2,7 @@ import json
 import socket
 from threading import Event, Thread
 import time
+import redis.exceptions
 import socketio
 import os 
 import redis 
@@ -12,13 +13,43 @@ from server.debug_print import debug_print
 from server.sqlDatabase import Database
 from server.utils import SocketIORedirect, dashboard_room, get_ip_addresses, get_upload_id, pbar_thread
 
-
-
 class RemoteWorker:
+    """
+    The RemoteWorker class encapsulates the connection between this server 
+    and a remote server. It is intended to be run as a single process
+    from the bacpApp.py script.  
+
+    It uses the same config file as WebsocketServer and ServerWorker.
+
+    It can submit actions to the "work" queue.
+    It receives actions from the "remote_work" queue. 
+
+    Actions:
+        - "remote_connect": Establish a connection to a remote service.
+        - "remote_disconnect": Disconnect from a remote service.
+        - "request_remote_ymd_data": Request year-month-day-specific data from the remote service.
+        - "remote_refresh": Refresh remote service data.
+        - "request_files_exist": Check if specified files exist on the remote.
+        - "remote_request_files": Initiate file transfer request from remote to local.
+        - "remote_cancel_transfer": Cancel an ongoing file transfer from the remote.
+        - "server_transfer_files": Push specified files to the remote server.
+        - "remote_emit": Emits a debug message for logging.
+        - "reload_keys": Reload authentication or API keys for remote access.
+
+    Env Variables:
+    - REDIS_HOST. Default: "localhost". 
+    - VOLUME_MAP. Default: "config/volumeMap.yaml"
+    - KEYSFILE. Default: "config/keys.yaml"
+    - CONFIG. Default: "config/config.yaml"
+    - SERVERNAME. Defaults: "Server"
+
+    The RemoteConnection implements the connection to the remote server.
+    It handles all of the websocket functions. 
+    """
     def __init__(self) -> None:
 
-        redis_host = os.environ.get("REDIS_HOST", "localhost")
-        self.redis = redis.StrictRedis(host=redis_host, port=6379, db=0)
+        self.m_redis_host = os.environ.get("REDIS_HOST", "localhost")
+        self.redis = redis.StrictRedis(host=self.m_redis_host, port=6379, db=0)
         self.m_exit_flag = Event()
         self.m_volume_map_filename = os.environ.get("VOLUME_MAP", "config/volumeMap.yaml")
         self.m_keys_filename = os.environ.get("KEYSFILE", "config/keys.yaml")
@@ -30,9 +61,8 @@ class RemoteWorker:
         self._load_keys()
         self._start_work_listener()
 
-        debug_print("Source is "  + self.m_config["source"])
-
         self.m_remote_connection = RemoteConnection(self.m_config, self)
+        debug_print("--  RemoteWorker is ready -- ")
 
     def _load_keys(self):
         debug_print(f"- loading {self.m_keys_filename}")
@@ -163,11 +193,35 @@ class RemoteWorker:
                 except TypeError:
                     # Handle timeout (when no message is received within the timeout period)
                     pass
+                except redis.exceptions.ConnectionError as e:
+                    debug_print(f"Error reading from {self.m_redis_host}")
+                    raise e
+                
         work_thread = Thread(target=work_listen)
         work_thread.daemon = True
         work_thread.start()
 
-    def _run_action(self, action, data):
+    def _run_action(self, action:str, data:dict):
+        """
+        Executes a specified action based on the provided action identifier and data.
+
+        Args:
+            action (str): The action to perform. Supported actions are listed below.
+            data (dict): Data required to execute the specified action.
+
+        Actions:
+            - "remote_connect": Establish a connection to a remote service.
+            - "remote_disconnect": Disconnect from a remote service.
+            - "request_remote_ymd_data": Request year-month-day-specific data from the remote service.
+            - "remote_refresh": Refresh remote service data.
+            - "request_files_exist": Check if specified files exist on the remote.
+            - "remote_request_files": Initiate file transfer request from remote to local.
+            - "remote_cancel_transfer": Cancel an ongoing file transfer from the remote.
+            - "server_transfer_files": Push specified files to the remote server.
+            - "remote_emit": Emits a debug message for logging.
+            - "reload_keys": Reload authentication or API keys for remote access.
+        """
+
         if action == "remote_connect":
             self._remote_connect(data)
         elif action == "remote_disconnect":

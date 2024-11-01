@@ -1,26 +1,106 @@
-# from server.database import Database
-from concurrent.futures import ThreadPoolExecutor
+import humanfriendly as hf
+import json
 import math
+import os
 import queue
-import time
-
+import redis
 import requests
+import shutil
+import time
+import uuid
+import yaml
+
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from threading import Event, Thread
+
 from server.debug_print import debug_print
 from server.utils import SocketIORedirect, build_multipart_data, dashboard_room, get_device_name, get_source_by_mac_address, get_upload_id, get_datatype, pbar_thread, redis_pbar_thread
 from server.sqlDatabase import Database
 
-import redis
-import yaml
-import humanfriendly as hf
-from datetime import datetime, timedelta
-import json
-import os
-import shutil
-import uuid
-from threading import Event, Thread
-
 
 class ServerWorker:
+    """Abstracts away database and related calls to prevent the UI from hanging
+
+    It is intended to be run in a process pool.  
+    It uses the same config file as WebsocketServer and RemoteWorker.
+
+    Any message intended for the Websocket interface are put in the "emit" queue.  
+
+    It can receive broadcast messages on the "broadcast" channel.  Each worker will receive a broadcast message.
+        Broadcast:
+            - "reload_keys": Reload key map and API_KEY_TOKEN
+            - "update_volume_map": Reload the volume map
+
+    It can receive actions from the "work" queue. Only one worker will process a queued action.
+        Actions:
+            - **Server Data**:
+                - "get_server_data_stub": Send summary data about the server.
+                - "get_server_data_ymd": Send year-month-day specific data from the server.
+                - "get_node_data_stub": Send summary data about the node.
+                - "server_scan": Perform a scan on the server.
+
+            - **Device Processing**:
+                - "device_revise_stats": Revise device statistics.
+                - "device_add_entry": Add an entry to the device.
+                - "get_device_data_stub": Send summary data for the device.
+                - "get_device_data_ymd": Send year-month-day specific data for the device.
+                - "device_request_files": Request files from the device.
+
+            - **Project Management**:
+                - "request_projects_and_desc": Request list of projects and descriptions.
+                - "delete_project": Delete a specified project.
+                - "add_project": Add a new project.
+                - "set_project": Set project properties.
+                - "edit_project": Edit project details.
+
+            - **Robot Name Management**:
+                - "request_robot_names": Request list of robot names.
+                - "add_robot_name": Add a new robot name.
+                - "remove_robot_name": Remove a robot name.
+
+            - **Site Management**:
+                - "request_sites": Request list of sites.
+                - "add_site": Add a new site.
+                - "remove_site": Remove a site.
+
+            - **Remote Server Management**:
+                - "request_remote_servers": Request list of remote servers.
+                - "add_remote_server": Add a new remote server.
+                - "remove_remote_server": Remove a remote server.
+
+            - **Data Entry Management**:
+                - "add_entry": Add a new data entry.
+                - "estimate_runs": Estimate run details for data.
+                - "update_entry_robot": Update robot name for an entry.
+                - "update_entry_site": Update site name for an entry.
+
+            - **Node Management**:
+                - "remote_transfer_files": Initiate file transfer to a remote node.
+                - "remote_cancel_transfer": Cancel a file transfer.
+                - "remote_node_data": Fetch remote node data.
+                - "remote_node_data_block": Fetch a block of data from a remote node.
+                - "request_node_ymd_data": Request year-month-day specific data from a node.
+                - "check_local_ids": Check for local ID existence.
+
+            - **Search Functionality**:
+                - "request_search_filters": Request search filters.
+                - "search": Perform a search based on provided filters.
+
+            - **Other Utilities**:
+                - "request_localpath": Request the local path of a specified file.
+                - "request_files_exist": Check if specified files exist.
+                - "debug_send": Send debug data for logging.
+    
+    Env Variables:
+    - CONFIG. Default: "config/config.yaml"
+    - KEYSFILE. Default: "config/keys.yaml"
+    - REDIS_HOST. Default: "localhost". 
+    - SERVERNAME. Defaults: "Server"
+    - VOLUME_MAP. Default: "config/volumeMap.yaml"
+    - VOLUME_ROOT: defaults = "/"
+
+    """
     def __init__(self, worker_id) -> None:
         redis_host = os.environ.get("REDIS_HOST", "localhost")
         self.redis = redis.StrictRedis(host=redis_host, port=6379, db=0)
@@ -45,7 +125,7 @@ class ServerWorker:
         self._load_config()
         self._load_keys()
 
-        debug_print("Soure is "  + self.m_config["source"])
+        # debug_print("Soure is "  + self.m_config["source"])
         max_workers = self.m_config["threads"] * 2
 
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
@@ -53,6 +133,7 @@ class ServerWorker:
         self._start_pubsub_listener()
         self._start_work_listener()
 
+        debug_print(f"-- Worker {worker_id} Ready --")
 
     def _load_keys(self):
         debug_print(f"- loading {self.m_keys_filename}")
@@ -62,7 +143,21 @@ class ServerWorker:
                 self.m_config["API_KEY_TOKEN"] = keys.get("API_KEY_TOKEN", None)
 
 
-    def emit(self, event:str, msg:any, to=None):
+    def emit(self, event:str, msg:any, to:str=None):
+        """Add an event with msg to the WebsocketServer "emit" queue
+
+        room can be 
+            None: for all clients
+            source: A specific client
+            "all_dashboards": All user interfaces
+            "all_nodes": All connected servers
+            "all_dashboards_and_all_nodes": Everyone but devices
+
+        Args:
+            event (str): The name of the event
+            msg (any): The message to be sent
+            to (str, optional): The room to send the message. Defaults to None.
+        """
         data = {
             "event": event,
             "msg": msg
@@ -74,15 +169,32 @@ class ServerWorker:
 
 
     def stop(self):
+        """Stop this thread
+        """
         self.m_exit_flag.set()
 
-    def should_run(self):
+    def should_run(self) -> bool:
+        """Should this thread run?
+
+        Returns:
+            bool: True if thread can run, false if not
+        """
         return not self.m_exit_flag.is_set()
 
     def _load_config(self):
-        config_filename = os.environ.get("CONFIG", "config/config.yaml")
-        
+        """Load the config file
+
+        Sets self.m_config
+
+        Depends on: 
+            CONFIG. defult to "config/config.yaml"
+            SERVERNAME. Defaults: "Server"
+            VOLUME_MAP. defaults to "config/volumeMap.yaml"
+            VOLUME_ROOT. defaults = "/"
+        """
+        config_filename = os.environ.get("CONFIG", "config/config.yaml")        
         volume_map = None
+
         if os.path.exists(self.m_volume_map_filename):
             with open(self.m_volume_map_filename, "r") as f:
                 volume_map = yaml.safe_load(f)
@@ -109,9 +221,17 @@ class ServerWorker:
         self.m_database = Database(v_map, blackout)
 
 
-    # handle the remote entries redis data.
-    # all remote entries are in the form of "remote_entries:{source}:{upload_id}"
-    def create_remote_entry(self, source, upload_id, entry):
+    # redis 
+    def create_remote_entry(self, source:str, upload_id:str, entry:dict):
+        """handle the remote entries redis data.
+        
+        all remote entries are in the form of "remote_entries:{source}:{upload_id}"
+            
+        Args:
+            source (str): Source name
+            upload_id (str): Upload id
+            entry (dict): Remote Entry
+        """
         entry_json = json.dumps(entry)
         self.redis.set(f'remote_entries:{source}:{upload_id}', entry_json)
 
@@ -133,7 +253,6 @@ class ServerWorker:
         self.redis.delete(f'remote_entries:{source}:{upload_id}')
 
     def get_all_entries_for_source(self, source):
-        # debug_print(f"enter {source}")
         # Fetch all entries for a specific source
         keys = self.redis.keys(f'remote_entries:{source}:*')
         entries = {}
@@ -151,7 +270,6 @@ class ServerWorker:
             if keys:
                 # Delete the matching keys
                 self.redis.delete(*keys)    
-
 
     def set_node_data_stats(self, source, stats):
         debug_print("enter")
@@ -191,13 +309,14 @@ class ServerWorker:
     # these are run in the current thread, so make them simple, or 
     # have the run themself in the background!
     def _process_message(self, channel:str, data:dict):
-        if channel == "update_volume_map":
-            self.update_volume_map()
-    
-        if channel == "action":
+        if channel == "broadcast":
             action = data.get("action")
-            if action == "reload_key":
+            if action == "reload_keys":
                 self._load_keys()
+            elif action == "update_volume_map":
+                self.update_volume_map()
+            else:
+                debug_print(f"Unhandled action {action}")
         else:
             debug_print(f"Unhandled message {channel}")
         pass
@@ -210,20 +329,81 @@ class ServerWorker:
                     channel = message["channel"].decode("utf-8")
                     data = json.loads(message['data'])
                     self._process_message(channel, data)
-        self.pubsub.subscribe("action", "upload_volume_map")
+        self.pubsub.subscribe("broadcast")
         listener_thread = Thread(target=listen)
         listener_thread.daemon = True
         listener_thread.start()
 
     def _run_action_in_background(self, action, data):
         self.executor.submit(self._run_action, action, data)
-        # action_thread = Thread(target=self._run_action, args=(action, data))
-        # action_thread.daemon = True
-        # action_thread.start()
 
-    def _run_action(self, action, data):
-        # debug_print(f"action: {action}, data: {data}")
+    def _run_action(self, action:str, data:dict):
+        """
+        Executes a specified action based on the action identifier and data.
 
+        Args:
+            action (str): The action to perform. Supported actions are listed below.
+            data (dict): Data required to execute the specified action.
+
+        Actions:
+            - **Server Data**:
+                - "get_server_data_stub": Send summary data about the server.
+                - "get_server_data_ymd": Send year-month-day specific data from the server.
+                - "get_node_data_stub": Send summary data about the node.
+                - "server_scan": Perform a scan on the server.
+
+            - **Device Processing**:
+                - "device_revise_stats": Revise device statistics.
+                - "device_add_entry": Add an entry to the device.
+                - "get_device_data_stub": Send summary data for the device.
+                - "get_device_data_ymd": Send year-month-day specific data for the device.
+                - "device_request_files": Request files from the device.
+
+            - **Project Management**:
+                - "request_projects_and_desc": Request list of projects and descriptions.
+                - "delete_project": Delete a specified project.
+                - "add_project": Add a new project.
+                - "set_project": Set project properties.
+                - "edit_project": Edit project details.
+
+            - **Robot Name Management**:
+                - "request_robot_names": Request list of robot names.
+                - "add_robot_name": Add a new robot name.
+                - "remove_robot_name": Remove a robot name.
+
+            - **Site Management**:
+                - "request_sites": Request list of sites.
+                - "add_site": Add a new site.
+                - "remove_site": Remove a site.
+
+            - **Remote Server Management**:
+                - "request_remote_servers": Request list of remote servers.
+                - "add_remote_server": Add a new remote server.
+                - "remove_remote_server": Remove a remote server.
+
+            - **Data Entry Management**:
+                - "add_entry": Add a new data entry.
+                - "estimate_runs": Estimate run details for data.
+                - "update_entry_robot": Update robot name for an entry.
+                - "update_entry_site": Update site name for an entry.
+
+            - **Node Management**:
+                - "remote_transfer_files": Initiate file transfer to a remote node.
+                - "remote_cancel_transfer": Cancel a file transfer.
+                - "remote_node_data": Fetch remote node data.
+                - "remote_node_data_block": Fetch a block of data from a remote node.
+                - "request_node_ymd_data": Request year-month-day specific data from a node.
+                - "check_local_ids": Check for local ID existence.
+
+            - **Search Functionality**:
+                - "request_search_filters": Request search filters.
+                - "search": Perform a search based on provided filters.
+
+            - **Other Utilities**:
+                - "request_localpath": Request the local path of a specified file.
+                - "request_files_exist": Check if specified files exist.
+                - "debug_send": Send debug data for logging.
+        """        
         if action == "get_server_data_stub":
             self._send_server_data(data)
         elif action == "get_server_data_ymd":
@@ -321,7 +501,6 @@ class ServerWorker:
         elif action == "debug_send":
             self._debug_send(data)
 
-
         else:
             debug_print(f"Unhandled action {action}")
 
@@ -336,7 +515,7 @@ class ServerWorker:
                         msg = json.loads(message.decode('utf-8'))
                         action = msg.get("action")
                         data = msg.get("data")
-                        self._run_action_in_background(action, data)
+                        self.executor.submit(self._run_action, action, data)
 
                 except TypeError:
                     # Handle timeout (when no message is received within the timeout period)
@@ -941,7 +1120,7 @@ class ServerWorker:
             with open(self.m_volume_map_filename, "w") as f:
                 volume_map = {"volume_map":  self.m_config["volume_map"]}
                 yaml.dump(volume_map, open(self.m_volume_map_filename, "w"))            
-            self.redis.publish("update_volume_map", "{}")
+            self.redis.publish("broadcast", json.dumps({'action': 'update_volume_map'}))
             self.redis.publish("websocket_action", json.dumps({'action': 'reload_volume_map'}))
 
         self._request_projects_and_desc({"room":"all_dashboards"})
@@ -955,7 +1134,7 @@ class ServerWorker:
         with open(self.m_volume_map_filename, "w") as f:
             volume_map = {"volume_map":  self.m_config["volume_map"]}
             yaml.dump(volume_map, open(self.m_volume_map_filename, "w"))            
-        self.redis.publish("update_volume_map", "{}")
+        self.redis.publish("broadcast", json.dumps({'action': 'update_volume_map'}))
         self.redis.publish("websocket_action", json.dumps({'action': 'reload_volume_map'}))
         self._request_projects_and_desc({"room":"all_dashboards"})
 
@@ -977,7 +1156,7 @@ class ServerWorker:
             with open(self.m_volume_map_filename, "w") as f:
                 volume_map = {"volume_map":  self.m_config["volume_map"]}
                 yaml.dump(volume_map, open(self.m_volume_map_filename, "w"))            
-            self.redis.publish("update_volume_map", "{}")
+            self.redis.publish("broadcast", json.dumps({'action': 'update_volume_map'}))
             self.redis.publish("websocket_action", json.dumps({'action': 'reload_volume_map'}))
 
         self._request_projects_and_desc({"room":"all_dashboards"})

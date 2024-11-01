@@ -104,8 +104,9 @@ class WebsocketServer:
     def everyone_reload_keys(self):
         self.redis.publish("websocket_action", json.dumps({'action': 'reload_keys'}))
         self._submit_remote_action("reload_keys", {})
-        self.redis.publish("action", json.dumps({'action': 'reload_keys'}))
+        self.redis.publish("broadcast", json.dumps({'action': 'reload_keys'}))
         self._load_keys()
+        self.on_request_keys()
         pass 
 
     # all remote entries are in the form of "remote_entries:{source}:{upload_id}"

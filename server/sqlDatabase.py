@@ -12,8 +12,7 @@ from server.throttledEmit import RedisThrottledEmit
 
 
 def build_paginated_query(
-    filters: dict, order_by: str, offset: int, page_size: int, reverse: bool
-) -> str:
+    filters: dict, order_by: str, offset: int, page_size: int, reverse: bool) -> str:
     query = "SELECT * FROM data WHERE "
     conditions = []
 
@@ -167,7 +166,13 @@ class Database:
                 cur.execute(query)
                 conn.commit()
 
-    def regenerate(self, event=None, room=None):
+    def regenerate(self, event:str=None, room:str=None):
+        """Regenerate the database, send messages to a Redis redirection. 
+
+        Args:
+            event (str, optional): Websocket Event for ui. Defaults to None.
+            room (str, optional): room to send events, None for all. Defaults to None.
+        """
         # init db without file to create new db.
         self._drop_data_table()
         self.init_db()
@@ -190,10 +195,8 @@ class Database:
                     continue
 
                 if emit:
-                    msg = f"Scanning {root}"
-                    emit.emit(msg)
+                    emit.emit(f"Scanning {root}")
 
-                # debug_print(root)
                 for basename in files:
                     if basename == "database.json":
                         continue
@@ -210,19 +213,24 @@ class Database:
                             "date", entry["datetime"].split(" ")[0]
                         )
                         entry["md5"] = entry.get("md5", "0")
-                        # entry["reldir"] = root.replace(volume_root, "").strip()
-                        # entry["upload_id"] = str(hex(abs(hash(filename))))
                         self.add_entry(entry)
-
         if emit:
             emit.close()
 
         self._set_runs()
 
-    def update_volume_map(self, volume_map):
+    def update_volume_map(self, volume_map:dict):
         self.m_volume_map = volume_map
 
     def check_upload_id(self, upload_id: str) -> bool:
+        """Check if this upload_id exists in the database
+
+        Args:
+            upload_id (str): an upload id
+
+        Returns:
+            bool: True if it does, false if not
+        """
         with self.connect() as conn:
             with conn.cursor() as cur:
                 query = "SELECT EXISTS(SELECT 1 FROM data WHERE upload_id = %s)"
@@ -245,7 +253,15 @@ class Database:
         existing_ids_list = [row[0] for row in existing_ids]
         return existing_ids_list
 
-    def find_upload_ids(self, names: List[Tuple[str, str]]):
+    def find_upload_ids(self, names: List[Tuple[str, str]]) -> List[str]:
+        """Find the 
+
+        Args:
+            names (List[Tuple[str, str]]): _description_
+
+        Returns:
+            List[str]: _description_
+        """
         ids = []
         with self.connect() as conn:
             with conn.cursor() as cur:
@@ -258,7 +274,7 @@ class Database:
                         ids.extend(results[0])
         return ids
 
-    def add_entry(self, entry):
+    def add_entry(self, entry:dict):
         if entry.get("upload_id") is None or entry["upload_id"] == "None":
             return
 
@@ -274,7 +290,6 @@ class Database:
             self.add_site(entry["site"], "")
 
         entry["datatype"] = entry.get("datatype").replace(".", "")
-
         if entry["run_name"] is None or len(entry["run_name"]) < 1:
             entry["run_name"] = "run_no_name"
 
@@ -326,7 +341,7 @@ class Database:
 
                 conn.commit()
 
-    def get_entry(self, upload_id):
+    def get_entry(self, upload_id:str) -> dict:
         with self.connect() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 query = "SELECT * FROM data WHERE upload_id = %s"
@@ -334,7 +349,7 @@ class Database:
                 result = cur.fetchone()
         return result
 
-    def get_all_entries(self):
+    def get_all_entries(self) -> List[dict]:
         with self.connect() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 query = "SELECT * FROM data"
@@ -342,7 +357,7 @@ class Database:
                 result = cur.fetchall()  # Fetch all entries as a list of dictionaries
         return result
 
-    def _add_name(self, table, name, description):
+    def _add_name(self, table:str, name:str, description:str):
         if self._has_name(table, name):
             return
 
@@ -362,7 +377,7 @@ class Database:
         except psycopg2.errors.UniqueViolation:
             pass
 
-    def _get_names(self, table):
+    def _get_names(self, table:str) -> List[str]:
         with self.connect() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 query = f"SELECT name FROM {table} ORDER BY name"
@@ -371,7 +386,7 @@ class Database:
         rtn = [(item["name"]) for item in result if item["name"] is not None]
         return rtn
 
-    def _remove_name(self, table, name):
+    def _remove_name(self, table:str, name:str):
         debug_print(f"delete from {table} {name}")
         if table in self.m_cache and name in self.m_cache[table]:
             del self.m_cache[table][name]
@@ -382,12 +397,11 @@ class Database:
                 cur.execute(query, (name,))
             conn.commit()
 
-    def _has_name(self, table, name):
+    def _has_name(self, table:str, name:str) -> bool:
         if table in self.m_cache and name in self.m_cache[table]:
             return True
 
-        # debug_print(self.m_cache)
-
+        exists = False
         try:
             conn = self.connect()
             with conn.cursor() as cur:
@@ -396,7 +410,6 @@ class Database:
 
                 # Fetch the result (True if exists, False if not)
                 fetch = cur.fetchall()
-                exists = False
                 if fetch and len(fetch) > 0:
                     exists = fetch[0][0]
             conn.close()
@@ -408,12 +421,12 @@ class Database:
             exists = False
         return exists
 
-    def _replace_name(self, table, name, description):
+    def _replace_name(self, table:str, name:str, description:str):
         if self._has_name(table, name):
             self._remove_name(table, name)
         self._add_name(table, name, description)
 
-    def _get_names_and_desc(self, table):
+    def _get_names_and_desc(self, table:str) -> List[Tuple[str,str]]:
         with self.connect() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 query = f"SELECT * FROM {table} ORDER BY name"
@@ -426,16 +439,16 @@ class Database:
         return rtn
 
     # projects
-    def add_project(self, name, description):
+    def add_project(self, name:str, description:str):
         self._add_name("projects", name, description)
 
-    def remove_project(self, name):
+    def remove_project(self, name:str):
         self._remove_name("projects", name)
 
-    def update_project(self, name, description):
+    def update_project(self, name:str, description:str):
         self._replace_name("projects", name, description)
 
-    def get_projects(self):
+    def get_projects(self) -> List[str]:
         return self._get_names("projects")
 
     def get_projects_and_desc(self):
@@ -593,7 +606,36 @@ class Database:
 
         return stats
 
-    def _update_stats_for_entry(self, entry, stat):
+    def _update_stats_for_entry(self, entry:dict, stat:dict):
+        """
+        Updates cumulative statistics for a data entry, including total size, count, 
+        date range, and breakdown by datatype.
+
+        Args:
+            entry (dict): A dictionary representing a data entry with keys:
+                - "size" (int): Size of the entry in bytes.
+                - "start_datetime" (datetime, optional): Start timestamp.
+                - "end_datetime" (datetime, optional): End timestamp.
+                - "datatype" (str): The data type of the entry.
+            stat (dict): The cumulative statistics dictionary to update, including:
+                - "total_size" (int): Total size of entries.
+                - "htotal_size" (str): Human-readable format of total size.
+                - "count" (int): Number of entries processed.
+                - "start_datetime" (str): Earliest start time.
+                - "end_datetime" (str): Latest end time.
+                - "duration" (int): Duration in seconds between the earliest start 
+                and latest end times.
+                - "hduration" (str): Human-readable format of the duration.
+                - "datatype" (dict): Breakdown by datatype, with each datatype 
+                containing its own total size and count.
+
+        Updates:
+            - Updates `stat` to include the new `entry` data, adjusting cumulative
+            size, count, start/end times, and duration, formatted for readability.
+
+        Raises:
+            AssertionError: If duration calculation results in a non-timedelta value.
+        """
         size = entry["size"]
         start_time = entry.get("start_datetime")
         end_time = entry.get("end_datetime")
@@ -636,7 +678,42 @@ class Database:
 
         stat["datatype"][datatype]["count"] += 1
 
-    def get_send_data_ymd(self, send_project, send_ymd):
+    def get_send_data_ymd(self, send_project:str=None, send_ymd:str=None):
+        """
+        Retrieves and structures data entries from the database by project and date, 
+        grouping them in batches and including relevant metadata.
+
+        Args:
+            send_project (str, optional): Project name to filter data by. If None, data for all projects is fetched.
+            send_ymd (str, optional): Specific date (in "YYYY-MM-DD" format) to filter data by. Ignored if None.
+
+        Returns:
+            list: A list of dictionaries, where each dictionary contains up to 500 entries with metadata fields,
+                grouped by `run_name` and `relpath`. Each entry includes:
+                - "basename" (str): Base file name.
+                - "datatype" (str): Data type (e.g., file type).
+                - "datetime" (str): Timestamp for the entry.
+                - "end_datetime" (str): End datetime.
+                - "fullpath" (str): Full path to the file.
+                - "complete_relpath" (str): Complete relative path combining date, site, robot, and relpath.
+                - "hsize" (str): Human-readable file size.
+                - "localpath" (str): Local path to the file.
+                - "on_local" (bool): Flag indicating if data is available locally.
+                - "on_remote" (bool): Flag indicating if data is available remotely.
+                - "relpath" (str): Relative path within the project.
+                - "robot_name" (str): Robot associated with the entry.
+                - "run_name" (str): Run identifier.
+                - "site" (str): Site location, defaulting to "default" if None.
+                - "size" (int): File size in bytes.
+                - "start_datetime" (str): Start datetime.
+                - "topics" (list): Topics associated with the data.
+                - "upload_id" (str): Unique identifier for the upload.
+
+        Notes:
+            - Batches entries in groups of 500 to avoid large payloads.
+            - Formats date-related fields for consistency.
+            - Groups data by `run_name` and `relpath`.
+        """
         rtnarr = []
         rtn = {}
         max_count = 500
@@ -736,9 +813,34 @@ class Database:
 
     # search
     def get_search_filters(self):
+        """
+        Generates a set of filter options for search functionality based on 
+        entries in the `data` table, categorizing columns as discrete or range types.
+
+        Returns:
+            dict: A dictionary of filter options for each key, structured as:
+                - For discrete keys (e.g., "project", "site"):
+                    {
+                        "type": "discrete",
+                        "keys": list of unique values for the key
+                    }
+                - For range keys (e.g., "datetime", "size"):
+                    {
+                        "type": "range",
+                        "min": minimum value for the key,
+                        "max": maximum value for the key
+                    }
+
+        Notes:
+            - The `discrete_keys` list contains columns categorized as discrete filters.
+            - The `range_keys` list contains columns categorized as range filters.
+            - `datetime` values are formatted as strings for consistency.
+            - Filters are constructed from database values, with lists and dictionaries
+            expanded to unique values in `discrete` filters.
+        """
+
         discrete_keys = ["project", "site", "robot_name", "topics", "datatype"]
         range_keys = ["datetime", "size", "duration"]
-
         filters = {}
 
         with self.connect() as conn:
@@ -793,6 +895,26 @@ class Database:
     def search(
         self, filters: dict, order_by: str, offset: int, page_size: int, reverse: bool
     ):
+        
+        """
+        Executes a paginated search query based on provided filters, ordering, 
+        and pagination settings, and returns the results along with the total count.
+
+        Args:
+            filters (dict): A dictionary specifying search filters for the query.
+            order_by (str): Column name to sort the results by.
+            offset (int): Number of rows to skip before starting to collect the result set.
+            page_size (int): Maximum number of entries to retrieve.
+            reverse (bool): Whether to sort the results in descending order.
+
+        Returns:
+            tuple: 
+                - List[dict]: Each dictionary represents an entry with formatted 
+                size (`hsize`) and datetime fields.
+                - int: Total count of entries that match the filters without pagination.
+        Notes:
+            - Formats size and datetime fields in each entry before returning.
+        """
         search_query = build_paginated_query(
             filters, order_by, offset, page_size, reverse
         )
