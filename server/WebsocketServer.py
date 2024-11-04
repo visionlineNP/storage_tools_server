@@ -2,24 +2,23 @@ import hashlib
 import secrets
 import socket
 import time
-
-from zeroconf import NonUniqueNameException, ServiceInfo, Zeroconf
-from server.ServerWorker import get_source_by_mac_address
-from server.debug_print import debug_print
-from server.utils import dashboard_room, get_ip_addresses
-
-
-import redis
-import yaml
-from flask import flash, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
-from flask_socketio import SocketIO, disconnect, join_room
-
-
 import json
 import os
 import urllib
 import uuid
+import redis
+import yaml
+
+from flask import flash, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
+from flask_socketio import SocketIO, disconnect, join_room
 from threading import Event, Thread
+from zeroconf import NonUniqueNameException, ServiceInfo, Zeroconf
+
+from server.ServerWorker import get_source_by_mac_address
+from server.debug_print import debug_print
+from server.utils import dashboard_room, get_ip_addresses
+from server.__version__ import __version__
+
 
 
 class WebsocketServer:
@@ -752,11 +751,6 @@ class WebsocketServer:
         source = data["room"]
         source_type = data.get("type", None)
 
-        # sources = self.get_sources("node")
-        # if source in sources:
-        #     debug_print(f"already have connection to {source} of type {source_type}")
-        #     return
-
         if source_type == "node":
             # self._clear_node_data(source)
             # add a node connection worker
@@ -769,6 +763,7 @@ class WebsocketServer:
 
         if source_type == "dashboard":
             self._send_all_data({"room": source})
+            self._send_to_all_dashboards("version", __version__)
 
         if source_type == "device":
             self.clear_all_locks(source)

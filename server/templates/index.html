@@ -78,7 +78,16 @@
                     <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#debug-tab"><i class="bi bi-tools"></i> DEBUG</a>
                     </li>
+                    <hr>
+                    <li class="nav-item">
+                        <a class="nav-link" data-bs-toggle="tab" href="#about-tab"><i class="bi bi-info-circle"></i>
+                            &nbsp; About</a>
+                    </li>                    
                 </ul>
+                <div class="bottom-item">
+                    Version <b><span class="version_number">0</span></b>
+                </div>
+
             </div>
             <div class="main-content">
 
@@ -247,49 +256,6 @@
                         </div>
                     </div>
 
-
-
-
-                    <!-- <div id="report-host-tab" class="tab-pane fade">
-                        <h1>Report Host</h1>
-
-                        <div id="report-host-container"></div>
-                        <div id="task-host-queue" class="list-container"></div>
-
-                        <div class="accordion accordion-flush" id="task-node-status-accordion">
-                            <div class="accordion-item">
-
-                                <h2 class="accordion-header">
-                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
-                                        data-bs-target="#task-node-status-tqdm-div" aria-expanded="false"
-                                        aria-controls="task-node-status-tqdm-div">
-                                        <div id="task-node-status-tqdm-header"><b>Progress</b></div>
-
-                                    </button>
-                                </h2>
-                                <div id="task-node-status-tqdm-div" class="accordion-collapse collapse"
-                                    data-bs-parent="#task-node-status-accordion">
-                                    <div class="accordion-body">
-                                        <div class="card" id="task-node-status-tqdm"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-
-                        <textarea id="report-host-console" rows="10" cols="200"
-                            style="font-size: 12px; overflow: scroll;"></textarea>
-                    </div>
-
-
-
-                    <div id="report-node-tab" class="tab-pane fade">
-                        <h1>Report Node</h1>
-                        <div id="report-node-container"></div>
-
-                    </div>
- -->
-
                     <div id="config-tab" class="tab-pane fade">
 
                         <h2>Config</h2>
@@ -321,6 +287,12 @@
                                 <a class="nav-link" data-bs-toggle="tab" data-bs-target="#config-user-tab" type="button"
                                     role="tab" aria-controls="config-user-tab">User Settings</a>
                             </li>
+                            <li class="nav-item">
+                                <a class="nav-link" data-bs-toggle="tab" href="#about-tab"><i class="bi bi-info-circle"></i>
+                                    &nbsp; About</a>
+                            </li>
+        
+
                         </ul>
 
                         <div class="tab-content">
@@ -506,6 +478,37 @@
                         </script>
 
                     </div>
+
+                    <div id="about-tab" class="tab-pane fade about-section">
+                        <p><strong>AirLAB Storage Tools Server</strong></p>
+                        <p>
+                            Version: <b><span class="version_number"></span></b>
+                        </p>
+                        <p>
+                            Explore the project on <a href="https://github.com/castacks/storage_tools_server"
+                                target="_blank">GitHub</a>. 
+                        </p>
+
+                        <p><strong>Built on:</strong></p>
+                        <ul class="list-unstyled">
+                            <li>
+                                <a href="https://getbootstrap.com/" target="_blank">Bootstrap v5.3.3</a> -
+                                <a href="https://github.com/twbs/bootstrap/blob/main/LICENSE" target="_blank">MIT
+                                    License</a>
+                            </li>
+                            <li>
+                                <a href="https://jquery.com/" target="_blank">jQuery v3.6.0</a> -
+                                <a href="https://jquery.com/license/" target="_blank">License</a>
+                            </li>
+                            <li>
+                                <a href="https://socket.io/" target="_blank">Socket.io v4.0.0</a> - MIT License
+                            </li>
+                            <li>
+                                <a href="https://popper.js.org/docs/v2/" target="_blank">PopperJS v2.11.8</a> - MIT License
+                            </li>
+                        </ul>
+                    </div>
+
                 </div>
             </div>
         </div>

@@ -288,6 +288,13 @@ $(document).ready(function () {
     updateSearchFilters(msg);
   })
 
+  socket.on("version", function(version) {
+    document.querySelectorAll(".version_number").forEach( span => {
+        console.log(span)
+        span.innerText = version
+    })
+})
+
 
   socket.onAny((event, ...args) => {
     // Check if there is a defined handler for the event
