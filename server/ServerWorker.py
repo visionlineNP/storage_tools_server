@@ -121,6 +121,8 @@ class ServerWorker:
         self.m_config = {}
         self.m_volume_map_filename = os.environ.get("VOLUME_MAP", "config/volumeMap.yaml")
         self.m_keys_filename = os.environ.get("KEYSFILE", "config/keys.yaml")
+        self.m_blackout_filename = os.environ.get("BLACKOUT_LIST", "config/blackout.yaml")
+        self.m_blackout = []
 
         self._load_config()
         self._load_keys()
@@ -191,6 +193,7 @@ class ServerWorker:
             SERVERNAME. Defaults: "Server"
             VOLUME_MAP. defaults to "config/volumeMap.yaml"
             VOLUME_ROOT. defaults = "/"
+            BLACKOUT_LIST. defaults to "config/blackout.yaml"
         """
         config_filename = os.environ.get("CONFIG", "config/config.yaml")        
         volume_map = None
@@ -217,8 +220,15 @@ class ServerWorker:
         for name in v_map:
             v_map[ name ] = os.path.join(v_root,  v_map.get(name, "").strip("/"))
 
-        blackout = self.m_config.get("blackout", [])
-        self.m_database = Database(v_map, blackout)
+        # debug_print(v_map)
+
+        self.m_blackout = []
+        
+        if os.path.exists(self.m_blackout_filename):
+            with open(self.m_blackout_filename, "r") as f:
+                self.m_blackout = yaml.safe_load(f)
+
+        self.m_database = Database(v_map, self.m_blackout)
 
 
     # redis 
@@ -315,7 +325,9 @@ class ServerWorker:
                 self._load_keys()
             elif action == "update_volume_map":
                 self.update_volume_map()
-            else:
+            elif action == "update_blackout_list":
+                self.update_blackout_list()
+            else:                
                 debug_print(f"Unhandled action {action}")
         else:
             debug_print(f"Unhandled message {channel}")
@@ -380,6 +392,11 @@ class ServerWorker:
                 - "request_remote_servers": Request list of remote servers.
                 - "add_remote_server": Add a new remote server.
                 - "remove_remote_server": Remove a remote server.
+
+            - **Blackout List Management**:
+                - "request_blackout_list": Request list of blackout directories.
+                - "add_blackout_dir": Add a blackout directory.
+                - "remove_blackout_dir": Remove a blackout directory. 
 
             - **Data Entry Management**:
                 - "add_entry": Add a new data entry.
@@ -452,6 +469,14 @@ class ServerWorker:
             self._add_site(data)
         elif action == "remove_site":
             self._remove_site(data)
+
+        # Blackout
+        elif action == "request_blackout_list":
+            self._request_blackout(data)
+        elif action == "add_blackout_dir":
+            self._add_blackout(data)
+        elif action == "remove_blackout_dir":
+            self._remove_blackout(data)
 
         # remote entries
         elif action == "request_remote_servers":
@@ -577,7 +602,7 @@ class ServerWorker:
             self.m_sio.emit("server_data", server_data, to="all_dashboards")
 
     def _send_server_ymd_data(self, data):
-        debug_print(data)
+        # debug_print(data)
         tab = data.get("tab")
         names = tab.split(":")[-2:]
         session_token = data.get("session_token")
@@ -1188,10 +1213,49 @@ class ServerWorker:
                 volume_map = yaml.safe_load(f)
 
         if volume_map is None:
-            volume_map = {"volume_map": {"room":"all_dashboards"}}
+            volume_map = {}
 
         self.m_config["volume_map"] = volume_map.get("volume_map", {})
         self.m_database.update_volume_map(self.m_config["volume_map"])
+
+
+    # blackout list 
+    def _request_blackout(self, data:dict):
+        debug_print(self.m_blackout)
+        room = dashboard_room(data)
+        self.m_sio.emit("blackout_list", {"data": sorted(self.m_blackout)}, to=room)
+
+    def _add_blackout(self, data:dict):
+        item = data["blackout"]
+        if item in self.m_blackout:
+            return
+        
+        self.m_blackout.append(item)
+
+        with open(self.m_blackout_filename, "w") as fid:
+            yaml.dump(self.m_blackout, fid)
+
+        self.redis.publish("broadcast", json.dumps({'action': 'update_blackout_list'}))            
+        self._request_blackout({"room": "all_dashboards"}) 
+        
+
+    def _remove_blackout(self, data:dict):
+        item = data["blackout"]
+        self.m_blackout = [i for i in self.m_blackout if i != item]
+
+        with open(self.m_blackout_filename, "w") as fid:
+            yaml.dump(self.m_blackout, fid)
+
+        self.redis.publish("broadcast", json.dumps({'action': 'update_blackout_list'}))            
+
+        self._request_blackout({"room": "all_dashboards"}) 
+
+    def update_blackout_list(self):
+        self.m_blackout = []
+        if os.path.exists(self.m_blackout_filename):
+            with open(self.m_blackout_filename, "r") as f:
+                self.m_blackout = yaml.safe_load(f)
+        self.m_database.update_blackout_list(self.m_blackout)
 
     def _update_stat_for_entry(self, entry, stat):
         filename = self._get_file_path_from_entry(entry)
@@ -1712,6 +1776,6 @@ class ServerWorker:
     def _scan_server(self, data):
         event = "server_regen_msg"
         debug_print("Scanning server")
-        self.m_database.regenerate(event=event)
+        self.m_database.regenerate(event=event, room="all_dashboards")
 
         self._send_server_data({})

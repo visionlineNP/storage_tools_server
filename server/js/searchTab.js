@@ -8,6 +8,25 @@ var search_sort_name = "datetime";
 var search_sort_direction = "forward"
 
 
+function searchFirst() {
+    const start_idx = 0;
+
+    filter = readFilter();
+    console.log(filter);
+
+    room = "dashboard-" + window.session_token;
+    msg = {
+        "room": room,
+        "filter": filter,
+        "sort-key": search_sort_name,
+        "sort-direction": search_sort_direction,
+        "results-per-page": results_per_page,
+        "start_index": start_idx
+    }
+    socket.emit("search", msg)
+
+}
+
 function searchPrevPage() {
     console.log("Prev")
 
@@ -34,6 +53,28 @@ function searchNextPage() {
     console.log("next")
 
     const start_idx = parseInt(search_current_index) + parseInt(results_per_page);
+
+    filter = readFilter();
+    console.log(filter);
+
+    room = "dashboard-" + window.session_token;
+    msg = {
+        "room": room,
+        "filter": filter,
+        "sort-key": search_sort_name,
+        "sort-direction": search_sort_direction,
+        "results-per-page": results_per_page,
+        "start_index": start_idx
+    }
+    socket.emit("search", msg)
+}
+
+function searchLast() {
+    const start_idx = (parseInt(search_total_pages)-1)*parseInt(results_per_page)
+    if(start_idx < 0) {
+        return;
+    }
+
 
     filter = readFilter();
     console.log(filter);

@@ -2,10 +2,43 @@
 
 ## Local Server Issues
 
+## Device isn't connecting
+
+Make sure the API Key Token for the device is in the server's keychain.  This can be done by either adding the Device's key to the Server's keychain, or setting the Device's key to an existing (or generated) key.
+
+* Add the Device's key to the Server's keychain
+  * Find the IP address for the Device, and go to http://ip_address:8811/ and select the "Config" tab.
+  * Look for the value in "API Key Token" and copy it to the clipboard
+  * On the Server dashboard, go to "Configure" -> "Keys"
+  * Locate the "Insert Key" button
+  * Set the name of the device in the "Paste Key Name" field
+  * Set the key to the value in the clipboard
+  * On the Device dashboard, go to "Connection" and press "Restart Connections"
+* Set the Device's key to an existing or generated key
+  * See [Key Management](KeyManagement.md) for details.
+
 ### ZeroConf isn't working
 
 * Make sure the Multicast DNS port (5353) is not being filtered by your network.
 * Check the console logs to see which IP adresses `setup_zeroconf` is using.
+
+### The console is reporting "write() before start_response"
+
+If you see this error message on the console:
+
+```python
+Error on request:
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.12/site-packages/werkzeug/serving.py", line 370, in run_wsgi
+    execute(self.server.app)
+  File "/usr/local/lib/python3.12/site-packages/werkzeug/serving.py", line 336, in execute
+    write(b"")
+  File "/usr/local/lib/python3.12/site-packages/werkzeug/serving.py", line 261, in write
+    assert status_set is not None, "write() before start_response"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+```
+
+You can safely ignore it. This message is caused by a user reloading the dashboard.
 
 ## Back End Doesn't start
 

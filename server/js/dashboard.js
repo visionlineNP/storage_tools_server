@@ -270,6 +270,11 @@ $(document).ready(function () {
     updateRemoteServersList(msg.data);
   })
 
+  socket.on("blackout_list", function (msg) {
+    console.log(msg)
+    updateBlackoutList(msg.data);
+  })
+
   socket.on('key_values', function (msg) {
     updateKeyValues(msg);
   });
@@ -320,6 +325,15 @@ $(document).ready(function () {
       document.getElementById('site-name-input').value = '';
     }
   });
+
+  document.getElementById('add-blackout-btn').addEventListener('click', function () {
+    const blackout = document.getElementById('blackout-input').value;
+    if (blackout) {
+      socket.emit('add_blackout_dir', { blackout: blackout, "session_token": window.session_token });
+      document.getElementById('blackout-input').value = '';
+    }
+  });
+
 
   document.getElementById('add-remote-server-btn').addEventListener('click', function () {
     const serverName = document.getElementById('remote-server-name-input').value;
@@ -786,6 +800,47 @@ function updateSiteList(siteData) {
   populateEditMenus();
 }
 
+
+function updateBlackoutList(blackout_list_data) {
+  console.log("enter")
+  let blackoutList = document.getElementById('blackout-list');
+  blackoutList.innerHTML = ''; // Clear existing list
+
+  const table = document.createElement("table");
+  table.classList.add("table-fit")
+  blackoutList.appendChild(table)
+  
+  const tbody = document.createElement("tbody")
+  table.appendChild(tbody)
+
+  blackout_list_data.forEach(item => {
+    const tr = document.createElement("tr");
+    tbody.appendChild(tr);
+
+    let td = document.createElement("td");
+    td.textContent = item;
+    tr.appendChild(td)
+
+    td = document.createElement("td")
+    tr.appendChild(td)
+    const trash = document.createElement("i");
+    trash.className = "bi bi-trash3";
+    trash.title = "Delete Blackout Dir";
+    trash.dataset.name = item;
+    td.appendChild(trash);
+
+    trash.addEventListener('click', function () {
+      const blackout = $(this)[0].dataset.name;
+      const msg = "Do you want to delete the blackout dir  '" + blackout + "'. The database will need to be regenerated for this to have an effect.";
+      const do_it = confirm(msg);
+      if (do_it) {
+        socket.emit("remove_blackout_dir", { "blackout": blackout, "session_token": window.session_token })
+      }
+    })
+
+  })
+
+}
 
 function updateRemoteServersList(serverData) {
   let serverList = document.getElementById('remote-servers-list');

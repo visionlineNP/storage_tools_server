@@ -82,6 +82,10 @@ def create_server():
     socketio.on("add_remote_server")(server.on_add_remote_server)
     socketio.on("remove_remote_server")(server.on_remove_remote_server)
 
+    socketio.on("request_blackout_list")(server.on_request_blackout_list)
+    socketio.on("add_blackout_dir")(server.on_add_blackout_dir)
+    socketio.on("remove_blackout_dir")(server.on_remove_blackout_dir)
+
     # # search
     socketio.on("request_search_filters")(server.on_request_search_filters)
     socketio.on("search")(server.on_search)

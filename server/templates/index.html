@@ -21,7 +21,7 @@
     <link href="static/css/bootstrap-icons.css" rel="stylesheet">
     <link href="static/css/bootstrap.min.css" rel="stylesheet">
     <link href="static/css/icon_foxglove.css" rel="stylesheet">
-    <link href="static/css/dashboard.css" rel="stylesheet" type="text/css" >
+    <link href="static/css/dashboard.css" rel="stylesheet" type="text/css">
 
     <style>
     </style>
@@ -30,13 +30,14 @@
 
 <body>
     <div class="container-fluid">
-        <div class="row flex-row" >
+        <div class="row flex-row">
             <div class="sidebar">
                 <ul class="nav nav-pills flex-column">
                     <li class="navbar-brand"><b>AirLAB Storage</b><br>
                         <div id="connection_status">Connection: Offline </div>
                         <button type="button" class="btn btn-danger logoff-button" onclick="logout()">Log out</button>
-                        <button type="button" class="btn btn-secondary" id="new_data_button" onclick="request_new_data()">Refresh</button>
+                        <button type="button" class="btn btn-secondary" id="new_data_button"
+                            onclick="request_new_data()">Refresh</button>
                     </li>
                     <hr>
                     <li class="nav-item">
@@ -64,12 +65,6 @@
                             Search</a>
                     </li>
 
-                    <!-- <li class="nav-item">
-                        <a class="nav-link" data-bs-toggle="tab" href="#report-host-tab">Report Host</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" data-bs-toggle="tab" href="#report-node-tab">Report Node</a>
-                    </li> -->
                     <hr>
                     <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#config-tab"><i class="bi bi-gear"></i>
@@ -82,7 +77,7 @@
                     <li class="nav-item">
                         <a class="nav-link" data-bs-toggle="tab" href="#about-tab"><i class="bi bi-info-circle"></i>
                             &nbsp; About</a>
-                    </li>                    
+                    </li>
                 </ul>
                 <div class="bottom-item">
                     Version <b><span class="version_number">0</span></b>
@@ -155,18 +150,22 @@
                                         <div class="card" id="search-filter">
 
                                         </div>
-                                        <button type="button" class="btn btn-primary" onclick="clearAllFilters()">Clear Filters</button>
+                                        <button type="button" class="btn btn-primary" onclick="clearAllFilters()">Clear
+                                            Filters</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <button type="button" class="btn btn-primary" onclick="startNewSearch()">Search</button> 
-                        <select name="search-items-per-page" id="search-items-per-page" onchange="updateSearchItemsPerPage()">
+                        <button type="button" class="btn btn-primary" onclick="startNewSearch()">Search</button>
+                        <select name="search-items-per-page" id="search-items-per-page"
+                            onchange="updateSearchItemsPerPage()">
                             <option value="10">10</option>
                             <option selected value="15">15</option>
                             <option value="20">20</option>
                             <option value="25">25</option>
+                            <option value="30">30</option>
+                            <option value="35">35</option>
                         </select> Results per page
 
                         <div id="search-container">
@@ -176,13 +175,23 @@
                                 <thead>
                                     <tr>
                                         <th></th>
-                                        <th id="search-sort-project" data-name="project" data-direction="forward" onclick="setSearchSort('project')">Project <i id="search-sort-project-dir"></i></th>
-                                        <th id="search-sort-site" data-name="site" data-direction="forward" onclick="setSearchSort('site')">Site <i id="search-sort-site-dir"></i></th>
-                                        <th id="search-sort-robot_name" data-name="robot_name"  data-direction="forward" onclick="setSearchSort('robot_name')">Robot <i id="search-sort-robot_name-dir"></i></th>
-                                        <th id="search-sort-datetime" data-name="datetime" data-direction="forward" onclick="setSearchSort('datetime')">Date <i class="bi bi-caret-down-fill" id="search-sort-datetime-dir"></i></th>
-                                        <th id="search-sort-filename" data-name="basename" data-direction="forward" onclick="setSearchSort('filename')">Filename <i id="search-sort-filename-dir"></i></th>
-                                        <th >Path </th>
-                                        <th id="search-sort-size" data-name="size" data-direction="forward" onclick="setSearchSort('size')">Size <i id="search-sort-size-dir"></i></th>
+                                        <th id="search-sort-project" data-name="project" data-direction="forward"
+                                            onclick="setSearchSort('project')">Project <i
+                                                id="search-sort-project-dir"></i></th>
+                                        <th id="search-sort-site" data-name="site" data-direction="forward"
+                                            onclick="setSearchSort('site')">Site <i id="search-sort-site-dir"></i></th>
+                                        <th id="search-sort-robot_name" data-name="robot_name" data-direction="forward"
+                                            onclick="setSearchSort('robot_name')">Robot <i
+                                                id="search-sort-robot_name-dir"></i></th>
+                                        <th id="search-sort-datetime" data-name="datetime" data-direction="forward"
+                                            onclick="setSearchSort('datetime')">Date <i class="bi bi-caret-down-fill"
+                                                id="search-sort-datetime-dir"></i></th>
+                                        <th id="search-sort-filename" data-name="basename" data-direction="forward"
+                                            onclick="setSearchSort('filename')">Filename <i
+                                                id="search-sort-filename-dir"></i></th>
+                                        <th>Path </th>
+                                        <th id="search-sort-size" data-name="size" data-direction="forward"
+                                            onclick="setSearchSort('size')">Size <i id="search-sort-size-dir"></i></th>
                                     </tr>
                                 </thead>
                                 <tbody id="search-body">
@@ -193,17 +202,18 @@
                             <!-- Pagination Controls -->
                             <nav>
                                 <ul class="pagination justify-content-center">
+                                    <li class="page-item"><button class="page-link" onclick="searchFirst()">First</button> </li>
                                     <li class="page-item"><button class="page-link" id="search-prev-page"
                                             onclick="searchPrevPage()">Previous</button></li>
+
                                     <li class="page-item"><span class="page-link" id="search-current-page">1</span></li>
+
                                     <li class="page-item"><button class="page-link" id="search-next-page"
                                             onclick="searchNextPage()">Next</button></li>
+                                    <li class="page-item"><button class="page-link" onclick="searchLast()">Last</button> </li>
                                 </ul>
                             </nav>
-
-
                         </div>
-
                     </div>
 
                     <div id="server-tab" class="tab-pane fade  show active">
@@ -276,7 +286,8 @@
                             </li>
                             <li class="nav-item" role="presentation">
                                 <a class="nav-link" data-bs-toggle="tab" data-bs-target="#config-remote-servers-tab"
-                                    type="button" role="tab" aria-controls="config-remote-servers-tab">Remote Servers</a>
+                                    type="button" role="tab" aria-controls="config-remote-servers-tab">Remote
+                                    Servers</a>
                             </li>
 
                             <li class="nav-item" role="presentation">
@@ -287,11 +298,11 @@
                                 <a class="nav-link" data-bs-toggle="tab" data-bs-target="#config-user-tab" type="button"
                                     role="tab" aria-controls="config-user-tab">User Settings</a>
                             </li>
-                            <li class="nav-item">
-                                <a class="nav-link" data-bs-toggle="tab" href="#about-tab"><i class="bi bi-info-circle"></i>
-                                    &nbsp; About</a>
+                            <li class="nav-item" role="presentation">
+                                <a class="nav-link" data-bs-toggle="tab" data-bs-target="#config-blackout-tab" type="button"
+                                    role="tab" aria-controls="config-blackout-tab">Blackout Dirs</a>
                             </li>
-        
+
 
                         </ul>
 
@@ -325,7 +336,7 @@
                                 </table>
 
                             </div>
-                            
+
                             <div id="config-robots-tab" class="tab-pane fade" role="tabpanel"
                                 aria-labelledby="config-robots-tab" tabindex="0">
                                 <div class="list-container">
@@ -353,11 +364,13 @@
                                     <div class="card card-fit">
                                         <div id="keys-list"></div>
                                         <div>
-                                            <button class="btn btn-primary" onclick="downloadKeys()">Download keys.yaml</button>
+                                            <button class="btn btn-primary" onclick="downloadKeys()">Download
+                                                keys.yaml</button>
 
                                             <form id="uploadKeysForm" enctype="multipart/form-data">
                                                 <input type="file" name="file" accept=".yaml">
-                                                <button class="btn btn-primary" type="button" onclick="uploadKeys()">Upload keys.yaml</button>
+                                                <button class="btn btn-primary" type="button"
+                                                    onclick="uploadKeys()">Upload keys.yaml</button>
                                             </form>
 
                                         </div>
@@ -384,12 +397,12 @@
                                 <div class="list-container">
                                     <h3>Remote Servers</h3>
                                     <div class="card card-fit" id="remote-servers-list"></div><br>
-                                    <input type="text" id="remote-server-name-input" placeholder="Add new remote server name">
+                                    <input type="text" id="remote-server-name-input"
+                                        placeholder="Add new remote server name">
                                     <input type="int" id="remote-server-port-input" size="6" value="8091">
                                     <button id="add-remote-server-btn">Add Remote Server</button>
                                 </div>
                             </div>
-
 
                             <div id="config-user-tab" class="tab-pane fade" role="tabpanel"
                                 aria-labelledby="config-user-tab" tabindex="0">
@@ -408,9 +421,21 @@
                                             <!-- Existing projects will be dynamically inserted here -->
                                         </tbody>
                                     </table>
-    
+
                                 </div>
                             </div>
+
+                            <div id="config-blackout-tab" class="tab-pane fade" role="tabpanel"
+                                aria-labelledby="config-blackout-tab" tabindex="0">
+                                <div class="list-container">
+                                    <h3>Blackout Directories</h3>
+                                    <div class="card card-fit" id="blackout-list"></div><br>
+                                    <input type="text" id="blackout-input"
+                                        placeholder="Add new blackout directory">
+                                    <button id="add-blackout-btn">Add Blackout directory</button>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                     <div id="debug-tab" class="tab-pane fade">
@@ -427,7 +452,7 @@
 
                         <div id="server_regen_msg"></div>
 
-                        <div id="session_token">Session token is  <b>{{session.token}}</b> </div>
+                        <div id="session_token">Session token is <b>{{session.token}}</b> </div>
 
                         <div class="modal fade" id="clearDataConfirmation" tabindex="-1"
                             aria-labelledby="clearDataConfirmationLabel" aria-hidden="true">
@@ -473,40 +498,43 @@
                             };
 
                             function fakeNewData() {
-                                socket.emit("fake_new_data", {"session_token": window.session_token});
+                                socket.emit("fake_new_data", { "session_token": window.session_token });
                             }
                         </script>
 
                     </div>
 
-                    <div id="about-tab" class="tab-pane fade about-section">
-                        <p><strong>AirLAB Storage Tools Server</strong></p>
-                        <p>
-                            Version: <b><span class="version_number"></span></b>
-                        </p>
-                        <p>
-                            Explore the project on <a href="https://github.com/castacks/storage_tools_server"
-                                target="_blank">GitHub</a>. 
-                        </p>
+                    <div id="about-tab" class="tab-pane fade">
+                        <div class="about-section">
+                            <p><strong>AirLAB Storage Tools Server</strong></p>
+                            <p>
+                                Version: <b><span class="version_number"></span></b>
+                            </p>
+                            <p>
+                                Explore the project on <a href="https://github.com/castacks/storage_tools_server"
+                                    target="_blank">GitHub</a>.
+                            </p>
 
-                        <p><strong>Built on:</strong></p>
-                        <ul class="list-unstyled">
-                            <li>
-                                <a href="https://getbootstrap.com/" target="_blank">Bootstrap v5.3.3</a> -
-                                <a href="https://github.com/twbs/bootstrap/blob/main/LICENSE" target="_blank">MIT
-                                    License</a>
-                            </li>
-                            <li>
-                                <a href="https://jquery.com/" target="_blank">jQuery v3.6.0</a> -
-                                <a href="https://jquery.com/license/" target="_blank">License</a>
-                            </li>
-                            <li>
-                                <a href="https://socket.io/" target="_blank">Socket.io v4.0.0</a> - MIT License
-                            </li>
-                            <li>
-                                <a href="https://popper.js.org/docs/v2/" target="_blank">PopperJS v2.11.8</a> - MIT License
-                            </li>
-                        </ul>
+                            <p><strong>Built on:</strong></p>
+                            <ul class="list-unstyled">
+                                <li>
+                                    <a href="https://getbootstrap.com/" target="_blank">Bootstrap v5.3.3</a> -
+                                    <a href="https://github.com/twbs/bootstrap/blob/main/LICENSE" target="_blank">MIT
+                                        License</a>
+                                </li>
+                                <li>
+                                    <a href="https://jquery.com/" target="_blank">jQuery v3.6.0</a> -
+                                    <a href="https://jquery.com/license/" target="_blank">License</a>
+                                </li>
+                                <li>
+                                    <a href="https://socket.io/" target="_blank">Socket.io v4.0.0</a> - <a href="https://github.com/socketio/socket.io/blob/main/LICENSE">MIT License</a> 
+                                </li>
+                                <li>
+                                    <a href="https://popper.js.org/docs/v2/" target="_blank">PopperJS v2.11.8</a> - MIT
+                                    License
+                                </li>
+                            </ul>
+                        </div>
                     </div>
 
                 </div>

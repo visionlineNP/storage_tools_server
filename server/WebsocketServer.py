@@ -1,12 +1,12 @@
 import hashlib
+import json
+import os
+import redis
 import secrets
 import socket
 import time
-import json
-import os
 import urllib
 import uuid
-import redis
 import yaml
 
 from flask import flash, jsonify, make_response, redirect, render_template, request, send_from_directory, session, url_for
@@ -14,10 +14,10 @@ from flask_socketio import SocketIO, disconnect, join_room
 from threading import Event, Thread
 from zeroconf import NonUniqueNameException, ServiceInfo, Zeroconf
 
-from server.ServerWorker import get_source_by_mac_address
-from server.debug_print import debug_print
-from server.utils import dashboard_room, get_ip_addresses
 from server.__version__ import __version__
+from server.debug_print import debug_print
+from server.ServerWorker import get_source_by_mac_address
+from server.utils import dashboard_room, get_ip_addresses
 
 
 
@@ -318,6 +318,7 @@ class WebsocketServer:
         self.on_request_keys(data)
         self.on_request_search_filters(data)
         self.on_request_remote_servers(data)
+        self.on_request_blackout_list(data)
         debug_print("Sent all data")
 
         # after this, there should be no new data!
@@ -532,6 +533,16 @@ class WebsocketServer:
     # toggle on and off
     def on_set_zeroconf(self, data):
         pass
+
+    # blackout list
+    def on_request_blackout_list(self, data:dict):
+        self._submit_action("request_blackout_list", data)
+
+    def on_add_blackout_dir(self, data:dict):
+        self._submit_action("add_blackout_dir", data)
+
+    def on_remove_blackout_dir(self, data:dict):
+        self._submit_action("remove_blackout_dir", data)
 
     # searching 
     def on_request_search_filters(self, data):

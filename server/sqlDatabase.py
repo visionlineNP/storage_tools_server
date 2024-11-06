@@ -13,15 +13,30 @@ from server.throttledEmit import RedisThrottledEmit
 
 def build_paginated_query(
     filters: dict, order_by: str, offset: int, page_size: int, reverse: bool) -> str:
+    """
+    Builds a paginated SQL query based on the provided filters, ordering, and pagination settings.
+
+    Args:
+        filters (dict): A dictionary specifying filter conditions for the query.
+        order_by (str): Column name to sort the results by.
+        offset (int): Number of rows to skip before starting to collect the result set.
+        page_size (int): Maximum number of entries to retrieve.
+        reverse (bool): Whether to sort the results in descending order.
+
+    Returns:
+        str: A SQL query string with the specified filters, ordering, and pagination settings.
+    """
     query = "SELECT * FROM data WHERE "
     conditions = []
 
     # Add conditions based on filters
     for name, filter in filters.items():
         if filter["type"] == "discrete":
+            # For discrete filters, match any of the specified keys
             keys = "', '".join(filter["keys"])
             conditions.append(f"{name} IN ('{keys}')")
         elif filter["type"] == "range":
+            # For range filters, match values between min and max
             min_val = filter["min"]
             max_val = filter["max"]
             if name == "datetime":
@@ -32,26 +47,40 @@ def build_paginated_query(
     # Add conditions for JSON if needed
     if "topics" in filters:
         for key, val in filters["topics"]["keys"].items():
+            # For JSON fields, use the @> operator to check if key-value pairs match
             conditions.append(f'topics @> \'{{"{key}": "{val}"}}\'')
 
+    # Combine all conditions using AND
     query += " AND ".join(conditions)
     order_direction = "DESC" if reverse else "ASC"
+    # Add ordering, limit, and offset to the query
     query += (
         f" ORDER BY {order_by} {order_direction} LIMIT {page_size} OFFSET {offset};"
     )
     return query
 
 
-def build_count_query(filters: dict):
+def build_count_query(filters: dict) -> str:
+    """
+    Builds a SQL query to count the number of entries that match the provided filters.
+
+    Args:
+        filters (dict): A dictionary specifying filter conditions for the query.
+
+    Returns:
+        str: A SQL query string to count the number of matching entries.
+    """
     query = "SELECT COUNT(*) FROM data WHERE "
     conditions = []
 
     # Add conditions based on filters
     for name, filter in filters.items():
         if filter["type"] == "discrete":
+            # For discrete filters, match any of the specified keys
             keys = "', '".join(filter["keys"])
             conditions.append(f"{name} IN ('{keys}')")
         elif filter["type"] == "range":
+            # For range filters, match values between min and max
             min_val = filter["min"]
             max_val = filter["max"]
             if name == "datetime":
@@ -62,15 +91,28 @@ def build_count_query(filters: dict):
     # Add conditions for JSON if needed
     if "topics" in filters:
         for key, val in filters["topics"]["keys"].items():
+            # For JSON fields, use the @> operator to check if key-value pairs match
             conditions.append(f'topics @> \'{{"{key}": "{val}"}}\'')
 
-    # Combine conditions with "AND"
+    # Combine all conditions with AND
     query += " AND ".join(conditions) + ";"
     return query
 
 
 class Database:
+    """An interface to the SQL database.  
+
+    Environment:
+        REDIS_HOST: default "localhost"
+
+    """
     def __init__(self, volume_map: dict, blackout: list) -> None:
+        """Create an instance of the database interface
+
+        Args:
+            volume_map (dict): Mapping of project name to complete volume path
+            blackout (list): List of directories to avoid scanning. Can be a part of a directory, and will still match
+        """
         self.m_username = "sts"
         self.m_password = "mypassword"
         self.m_db_name = "stsdb"
@@ -104,48 +146,48 @@ class Database:
         conn = self.connect()
         cur = conn.cursor()
 
-        # Create the table if it doesn't exist
-        create_data_table_query = """
-        CREATE TABLE IF NOT EXISTS data (
-            upload_id VARCHAR(255) PRIMARY KEY,
-            project VARCHAR(255),
-            robot_name VARCHAR(255),
-            run_name VARCHAR(255),
-            datatype VARCHAR(10),
-            relpath TEXT,
-            basename TEXT,
-            fullpath TEXT,
-            size BIGINT,
-            site VARCHAR(255),
-            date DATE,
-            datetime TIMESTAMP,
-            start_datetime TIMESTAMP,
-            end_datetime TIMESTAMP,
-            dirroot TEXT,
-            remote_dirroot TEXT,
-            status VARCHAR(255),
-            temp_size BIGINT,
-            md5 CHAR(32),
-            topics JSONB,
-            localpath TEXT,
-            duration INTEGER
-        );
-        """
-        cur.execute(create_data_table_query)
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                # Create the table if it doesn't exist
+                create_data_table_query = """
+                CREATE TABLE IF NOT EXISTS data (
+                    upload_id VARCHAR(255) PRIMARY KEY,
+                    project VARCHAR(255),
+                    robot_name VARCHAR(255),
+                    run_name VARCHAR(255),
+                    datatype VARCHAR(10),
+                    relpath TEXT,
+                    basename TEXT,
+                    fullpath TEXT,
+                    size BIGINT,
+                    site VARCHAR(255),
+                    date DATE,
+                    datetime TIMESTAMP,
+                    start_datetime TIMESTAMP,
+                    end_datetime TIMESTAMP,
+                    dirroot TEXT,
+                    remote_dirroot TEXT,
+                    status VARCHAR(255),
+                    temp_size BIGINT,
+                    md5 CHAR(32),
+                    topics JSONB,
+                    localpath TEXT,
+                    duration INTEGER
+                );
+                """
+                cur.execute(create_data_table_query)
 
-        table_names = ["sites", "projects", "robot_names", "remote_servers"]
-        for table_name in table_names:
-            create_table_query = f"""
-            CREATE TABLE IF NOT EXISTS {table_name} (
-              name VARCHAR(255) PRIMARY KEY,
-              description VARCHAR(255)
-            );
-            """
-            cur.execute(create_table_query)
+                table_names = ["sites", "projects", "robot_names", "remote_servers"]
+                for table_name in table_names:
+                    create_table_query = f"""
+                    CREATE TABLE IF NOT EXISTS {table_name} (
+                    name VARCHAR(255) PRIMARY KEY,
+                    description VARCHAR(255)
+                    );
+                    """
+                    cur.execute(create_table_query)
 
-        conn.commit()
-        cur.close()
-        conn.close()
+            conn.commit()
 
     def load_from_json(self, root):
         filename = pathlib.Path(root) / "database.json"
@@ -186,17 +228,22 @@ class Database:
 
             debug_print((project, volume_root))
             for root, _, files in os.walk(volume_root):
-                debug_print(root)
-                skip = False
+                skip = None
                 for b in self.m_blackout:
                     if b in root:
-                        skip = True
+                        skip = b
                 if skip:
+                    # debug_print(f"Skipping because {root} matches {skip}")
+                    if emit:
+                        emit.emit(f"Skipping because {root} matches {skip}")
+
                     continue
+
+                debug_print(root)
 
                 if emit:
                     emit.emit(f"Scanning {root}")
-
+                
                 for basename in files:
                     if basename == "database.json":
                         continue
@@ -221,6 +268,9 @@ class Database:
 
     def update_volume_map(self, volume_map:dict):
         self.m_volume_map = volume_map
+
+    def update_blackout_list(self, blackout:list):
+        self.m_blackout = blackout
 
     def check_upload_id(self, upload_id: str) -> bool:
         """Check if this upload_id exists in the database
