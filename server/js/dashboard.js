@@ -126,7 +126,7 @@ $(document).ready(function () {
     serverLinkStatus(data);
   })
 
-  socket.on("request_files_exist_rtn", function(data) {
+  socket.on("request_files_exist_rtn", function (data) {
     serverUpdateFilesExist(data);
   })
 
@@ -182,7 +182,7 @@ $(document).ready(function () {
       if (on_server_status) {
         on_server_status.classList.remove("grayed-out");
         on_server_status.title = "On Server";
-      } 
+      }
 
       let on_remote_status = document.getElementById("node_on_local_" + msg.upload_id);
       if (on_remote_status) {
@@ -283,6 +283,10 @@ $(document).ready(function () {
     navigator.clipboard.writeText(msg.key);
   })
 
+  socket.on("zero_config_addresses", function (msg) {
+    updateZeroConfig(msg)
+  })
+
 
   // search
   socket.on("search_results", function (msg) {
@@ -293,20 +297,20 @@ $(document).ready(function () {
     updateSearchFilters(msg);
   })
 
-  socket.on("version", function(version) {
-    document.querySelectorAll(".version_number").forEach( span => {
-        console.log(span)
-        span.innerText = version
+  socket.on("version", function (version) {
+    document.querySelectorAll(".version_number").forEach(span => {
+      console.log(span)
+      span.innerText = version
     })
-})
+  })
 
 
   socket.onAny((event, ...args) => {
     // Check if there is a defined handler for the event
     if (!socket.hasListeners(event)) {
-        console.log(`Unhandled event: ${event}`, args);
+      console.log(`Unhandled event: ${event}`, args);
     }
-});
+  });
 
 
 
@@ -490,8 +494,8 @@ function removeFiles(selectedUpdateIds, source) {
 
 
   if (selectedUpdateIds.length > 0) {
-    if( confirm(`Remove ${selectedUpdateIds.length} files from ${source}?`))
-    msg = { "source": source, "files": selectedUpdateIds, "session_token": window.session_token };
+    if (confirm(`Remove ${selectedUpdateIds.length} files from ${source}?`))
+      msg = { "source": source, "files": selectedUpdateIds, "session_token": window.session_token };
     console.log(msg);
     socket.emit("device_remove", msg);
   } else {
@@ -537,11 +541,11 @@ function postDateTimeChange(source, upload_id) {
     });
 }
 
-  
+
 
 function updateProjectList(msg) {
   projectData = msg.data;
-  
+
   {
     const container = document.getElementById("volume_root")
     container.textContent = msg.volume_root;
@@ -653,7 +657,7 @@ function updateProjectList(msg) {
       const mountCell = document.createElement('td');
       const mountSpan = document.createElement("span")
       mountSpan.classList.add("mount")
-      if( mountPoint ) {
+      if (mountPoint) {
         mountSpan.textContent = mountPoint;
       }
       const mountEdit = document.createElement("input")
@@ -704,7 +708,7 @@ function updateRobotList(robotData) {
   const table = document.createElement("table");
   table.classList.add("table-fit")
   robotList.appendChild(table)
-  
+
   const tbody = document.createElement("tbody")
   table.appendChild(tbody)
 
@@ -736,21 +740,6 @@ function updateRobotList(robotData) {
 
   })
 
-  // // Create the <ul> element with class "list-group"
-  // const ul = document.createElement('ul');
-  // ul.className = 'list-group';
-
-  // // Create and append <li> elements for each project
-  // robotData.forEach(item => {
-  //   const li = document.createElement('li');
-  //   li.className = 'list-group-item';
-  //   li.textContent = item;
-  //   ul.appendChild(li);
-  //   window.robots.push(item);
-  // });
-
-  // // Append the <ul> to the project list container
-  // robotList.appendChild(ul);
 
   updateAllRobotSelects();
   populateEditMenus();
@@ -764,7 +753,7 @@ function updateSiteList(siteData) {
   const table = document.createElement("table");
   table.classList.add("table-fit")
   siteList.appendChild(table)
-  
+
   const tbody = document.createElement("tbody")
   table.appendChild(tbody)
 
@@ -800,6 +789,67 @@ function updateSiteList(siteData) {
   populateEditMenus();
 }
 
+function updateZeroConfig(msg) 
+{
+  addresses = msg.data
+  console.log(addresses)
+  container= document.getElementById("zeroconfig-list")
+  container.innerHTML = "";
+
+  const table = document.createElement("table");
+  table.classList.add("table-fit")
+  container.appendChild(table)
+
+  const tbody = document.createElement("tbody")
+  table.appendChild(tbody)
+
+  let count = 0;
+  $.each(addresses, function ( address, use_address) {
+    count += 1;
+    const tr = document.createElement("tr");
+    tbody.appendChild(tr);
+
+    let td = document.createElement("td");
+    tr.appendChild(td)
+    let checkbox = document.createElement("input")
+    checkbox.type = "checkbox"
+    checkbox.dataset.class = "zero_config_select"
+    checkbox.dataset.address = address
+    checkbox.checked = use_address
+    td.appendChild(checkbox)
+
+    td = document.createElement("td");
+    td.textContent = address;
+    tr.appendChild(td)
+
+  })
+
+
+  if( count > 0) {
+    let submit = document.createElement("button")
+    submit.className = "btn btn-primary"
+    submit.textContent = "Update Zero Config"
+    submit.addEventListener("click", function() {
+      let selected = []
+      $('input[type="checkbox"][data-class="zero_config_select"]:checked').each(function() {
+        address = $(this)[0].dataset.address;
+        selected.push(address);
+      })
+      console.log(selected);
+      socket.emit("select_zeroconf_address", {"addresses": selected})
+      submit.disabled = true;
+      // note!  we have a timeout here to deal with the race condition
+      // for zero_config workers.  
+      // WebsocketServer._setup_zeroconf has a lock with 5 second timeout
+      // to allow only one thread to run zeroconfig.  
+      setTimeout(function() {
+        submit.disabled = false;
+      }, 5000);
+    })
+    container.appendChild(submit);
+  }
+}
+
 
 function updateBlackoutList(blackout_list_data) {
   console.log("enter")
@@ -809,7 +859,7 @@ function updateBlackoutList(blackout_list_data) {
   const table = document.createElement("table");
   table.classList.add("table-fit")
   blackoutList.appendChild(table)
-  
+
   const tbody = document.createElement("tbody")
   table.appendChild(tbody)
 
@@ -849,7 +899,7 @@ function updateRemoteServersList(serverData) {
   const table = document.createElement("table");
   table.classList.add("table-fit")
   serverList.appendChild(table)
-  
+
   const tbody = document.createElement("tbody")
   table.appendChild(tbody)
 
@@ -1155,7 +1205,7 @@ function addProject() {
 }
 
 // Edit an existing project
-function editProject( btn) {
+function editProject(btn) {
   const row = btn.closest('tr');
   row.querySelector('.description').style.display = 'none';  // Hide description
   row.querySelector('.editDescription').style.display = '';  // Show edit field
@@ -1225,7 +1275,7 @@ function deleteEdit(btn) {
 
 
 
-function editProjectMount( btn) {
+function editProjectMount(btn) {
   const row = btn.closest('tr');
   btn.style.display = 'none';  // Hide "Edit" button
 

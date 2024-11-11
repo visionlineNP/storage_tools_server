@@ -71,17 +71,26 @@ class WebsocketServer:
         if not self.m_config.get("provide_zeroconf", False):
             return 
         
+        # has timeout of 5 seconds!
         this_claimed = self.redis.set("zero_conf", "claimed",  nx=True, ex=5)
         if not this_claimed:
             debug_print(f"{self.m_id}:  zero conf already claimed")
             return 
 
-        self.m_zeroconf = Zeroconf()
+        if self.m_zeroconf is None:
+            self.m_zeroconf = Zeroconf()
+            
         debug_print("enter")
 
-        ip_addresses = get_ip_addresses()
+        selected_json = self.redis.get("zero_config:addresses")
+        if selected_json:
+            ip_addresses = json.loads(selected_json)
+        else:
+            ip_addresses = get_ip_addresses()
+        
         addresses = [socket.inet_aton(ip) for ip in ip_addresses]
 
+            
         debug_print(f"using address: {ip_addresses}")
         desc = {"source": self.m_config["source"].encode("utf-8")}
 
@@ -96,8 +105,20 @@ class WebsocketServer:
         try:
             self.m_zeroconf.unregister_service(info)
             self.m_zeroconf.register_service(info)
+            self.m_zeroconfig_info = info
         except NonUniqueNameException as e:
             debug_print("Zeroconf already set up? Is there a dupilcate process?")
+            self.m_zeroconf = None
+
+    def _restart_zero_config(self):
+        if self.m_zeroconf is None:
+            return 
+        
+        info = self.m_zeroconfig_info
+        self.m_zeroconf.unregister_service(info)
+
+        self._setup_zeroconf()
+
 
 
     def everyone_reload_keys(self):
@@ -189,6 +210,8 @@ class WebsocketServer:
                 self._load_keys() 
             elif action == "reload_volume_map":
                 self._load_volume_map()
+            elif action == "restart_zero_config":
+                self._restart_zero_config()
             else:
                 debug_print(f"unprocessed action {action}")
 
@@ -319,6 +342,7 @@ class WebsocketServer:
         self.on_request_search_filters(data)
         self.on_request_remote_servers(data)
         self.on_request_blackout_list(data)
+        self.on_request_zeroconf_address(data)
         debug_print("Sent all data")
 
         # after this, there should be no new data!
@@ -524,11 +548,33 @@ class WebsocketServer:
 
     # get the list of addresses that could be used, plus
     # the manually selected one. 
-    def on_request_zeroconf_address(self, data):
-        pass 
+    def on_request_zeroconf_address(self, data:dict):
+        room = dashboard_room(data)
 
-    def on_select_zeroconf_address(self, data):
-        pass 
+        select_all = True
+        selected = []
+        selected_json = self.redis.get("zero_config:addresses")
+        if selected_json:
+            selected = json.loads(selected_json)
+            select_all = False
+
+        data = {"data": {}}
+        if self.m_config.get("provide_zeroconf", False):
+            ip_addresses = get_ip_addresses()
+
+            debug_print((selected, ip_addresses))
+
+            # maps address to True (for selected), or False for unselected. 
+            data["data"] = {address: (address in selected) or select_all for address in ip_addresses}
+
+        self.m_sio.emit("zero_config_addresses", data, to=room)
+
+
+    def on_select_zeroconf_address(self, data:dict):
+        addresses = json.dumps(data.get("addresses", []))
+        self.redis.set("zero_config:addresses", addresses)
+
+        self.redis.publish("websocket_action", json.dumps({'action': 'restart_zero_config'}))
 
     # toggle on and off
     def on_set_zeroconf(self, data):
@@ -867,7 +913,7 @@ class WebsocketServer:
     # handle http
     ### http commands 
     def authenticate(self):
-        # debug_print(request.endpoint)
+        #debug_print(request.endpoint)
 
         # note, the we are not geting the "Authoerizion" header for download link!
         if request.endpoint == "download_file":

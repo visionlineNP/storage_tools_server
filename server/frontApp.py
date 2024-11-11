@@ -86,6 +86,9 @@ def create_server():
     socketio.on("add_blackout_dir")(server.on_add_blackout_dir)
     socketio.on("remove_blackout_dir")(server.on_remove_blackout_dir)
 
+    socketio.on("request_zeroconf_address")(server.on_request_zeroconf_address)
+    socketio.on("select_zeroconf_address")(server.on_select_zeroconf_address)
+
     # # search
     socketio.on("request_search_filters")(server.on_request_search_filters)
     socketio.on("search")(server.on_search)
