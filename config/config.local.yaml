@@ -16,23 +16,26 @@ threads: 4
 # Server Optional updates
 # ----------------------------------------------
 
-
+# Set to true to provide the ip address via Zero Config
+# Defaults to False if not provided. 
 provide_zeroconf: true
 
-# ----------------------------------------------
-# Remote mode configuration
-# ----------------------------------------------
+# If the client hangs after login session expires, 
+# set this to false.  This is superceeded by "use_ldap"
+# Defaults to True if not provided
+use_local_auth: true
+
 
 # use LDAP for authentication.  
 # ONLY FOR THE PRODUCTION SERVER, unless you are also
 # running nginx with ldap support.  
+# Defaults to False if not provided. 
 use_ldap: false
 
 # Look for the main servers at these address
 # Can be a host name, or a remote tunnel
 # Uncomment when running this server in the field
 # or when syncing with main server
-
 
 # # how long to wait before checking again
 # wait_s: 2

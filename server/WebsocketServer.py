@@ -914,6 +914,12 @@ class WebsocketServer:
     ### http commands 
     def authenticate(self):
         #debug_print(request.endpoint)
+        use_ldap = self.m_config.get("use_ldap", False)
+        use_local_auth = self.m_config.get("use_local_auth", True)
+
+        # Only do this on networks that you trust!
+        if not use_ldap and not use_local_auth:
+            return 
 
         # note, the we are not geting the "Authoerizion" header for download link!
         if request.endpoint == "download_file":
