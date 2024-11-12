@@ -271,6 +271,8 @@ class ServerWorker:
             entry_json = self.redis.get(key)
             if entry_json:
                 entries[upload_id] = json.loads(entry_json)
+                filename = self._get_file_path_from_entry(entries[upload_id])
+                entries[upload_id]["on_server"] = os.path.exists(filename)
         return entries
     
     def delete_remote_entries_for_source(self, source):
