@@ -2,6 +2,16 @@
 
 ## Local Server Issues
 
+## Dashbaord isn't connecting to local Server
+
+* Verify
+  * Verify that the server is by looking at the console output.
+  * Verify that Devices can connect to the Server via the Device Dashboard-> Connection tab
+
+* Restart
+  * Try restarting the server with the `local_up.sh` script.
+  * If that does not resolve the issue, remove local authentication in `config.local.yaml` by setting `use_local_auth` to `false`.  Only do this on networks that you trust.
+
 ## Device isn't connecting
 
 Make sure the API Key Token for the device is in the server's keychain.  This can be done by either adding the Device's key to the Server's keychain, or setting the Device's key to an existing (or generated) key.
