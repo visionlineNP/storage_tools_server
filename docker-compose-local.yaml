@@ -93,3 +93,6 @@ volumes:
 networks:
   internal:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 10.11.15.0/24  # This subnet shouldn't conflict with the CMU network. 
